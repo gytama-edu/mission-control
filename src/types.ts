@@ -1,6 +1,7 @@
 export interface Student {
   id: string;
   name: string;
+  nickname?: string;
   lives: number;
   points: number;
   joinedAt: string;

@@ -12,8 +12,11 @@ export default function App() {
   const {
     classes,
     addClass,
+    editClass,
     deleteClass,
     addStudent,
+    editStudent,
+    deleteStudent,
     updateStudentLives,
     updateStudentPoints,
     startMeeting
@@ -29,7 +32,14 @@ export default function App() {
         <ClassDetail
           classData={activeClass}
           onBack={() => setActiveClassId(null)}
+          onEditClass={(name, level, maxLives) => editClass(activeClass.id, name, level, maxLives)}
+          onDeleteClass={() => {
+            deleteClass(activeClass.id);
+            setActiveClassId(null);
+          }}
           onAddStudent={(name) => addStudent(activeClass.id, name)}
+          onEditStudent={(studentId, name, nickname) => editStudent(activeClass.id, studentId, name, nickname)}
+          onDeleteStudent={(studentId) => deleteStudent(activeClass.id, studentId)}
           onUpdateLives={(studentId, change) => updateStudentLives(activeClass.id, studentId, change)}
           onUpdatePoints={(studentId, change) => updateStudentPoints(activeClass.id, studentId, change)}
           onStartMeeting={() => startMeeting(activeClass.id)}

@@ -104,7 +104,15 @@ export function Dashboard({ classes, onAddClass, onDeleteClass, onSelectClass }:
         <div className="text-center py-20 bg-slate-900 border border-slate-800 rounded-2xl border-dashed">
           <Rocket className="mx-auto h-12 w-12 text-slate-600 mb-4" />
           <h3 className="text-lg font-medium text-slate-300">No classes found</h3>
-          <p className="text-slate-500 mt-1">Get started by creating a new class.</p>
+          <p className="text-slate-500 mt-1 mb-6">Get started by initializing a new classroom environment.</p>
+          {!isAdding && (
+            <button
+              onClick={() => setIsAdding(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition-colors inline-flex items-center gap-2"
+            >
+              <Plus size={18} /> Create First Class
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -124,7 +132,7 @@ export function Dashboard({ classes, onAddClass, onDeleteClass, onSelectClass }:
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm('Are you sure you want to delete this class?')) {
+                    if (confirm('Are you sure you want to delete this class?\nStudents, points, and history will be removed. This cannot be undone.')) {
                       onDeleteClass(c.id);
                     }
                   }}

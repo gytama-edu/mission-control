@@ -31,6 +31,24 @@ export function useClasses() {
     setClasses([...classes, newClass]);
   };
 
+  const editClass = (id: string, name: string, level: string, maxLives: number) => {
+    setClasses(classes.map(c => {
+      if (c.id === id) {
+        return {
+          ...c,
+          name,
+          level,
+          maxLives,
+          students: c.students.map(s => ({
+            ...s,
+            lives: Math.min(s.lives, maxLives)
+          }))
+        };
+      }
+      return c;
+    }));
+  };
+
   const deleteClass = (id: string) => {
     setClasses(classes.filter(c => c.id !== id));
   };
@@ -46,6 +64,35 @@ export function useClasses() {
           joinedAt: new Date().toISOString(),
         };
         return { ...c, students: [...c.students, newStudent] };
+      }
+      return c;
+    }));
+  };
+
+  const editStudent = (classId: string, studentId: string, name: string, nickname?: string) => {
+    setClasses(classes.map(c => {
+      if (c.id === classId) {
+        return {
+          ...c,
+          students: c.students.map(s => {
+            if (s.id === studentId) {
+              return { ...s, name, nickname };
+            }
+            return s;
+          })
+        };
+      }
+      return c;
+    }));
+  };
+
+  const deleteStudent = (classId: string, studentId: string) => {
+    setClasses(classes.map(c => {
+      if (c.id === classId) {
+        return {
+          ...c,
+          students: c.students.filter(s => s.id !== studentId)
+        };
       }
       return c;
     }));
@@ -108,8 +155,11 @@ export function useClasses() {
   return {
     classes,
     addClass,
+    editClass,
     deleteClass,
     addStudent,
+    editStudent,
+    deleteStudent,
     updateStudentLives,
     updateStudentPoints,
     startMeeting
