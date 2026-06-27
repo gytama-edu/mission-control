@@ -24,3 +24,21 @@ export interface ClassData {
   joinCode: string;
   teacherId?: string | null;
 }
+
+export interface ActivityLog {
+  id: string;
+  teacher_id?: string | null;
+  class_id: string;
+  student_id?: string | null;
+  action_type: string;
+  points_delta?: number;
+  lives_delta?: number;
+  reason?: string | null;
+  metadata?: any;
+  undone: boolean;
+  undone_at?: string | null;
+  undone_by?: string | null;
+  created_at: string;
+  studentName?: string | null;
+}
+

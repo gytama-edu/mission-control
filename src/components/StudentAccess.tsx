@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClassData, Student } from '../types';
+import { ClassData, Student, ActivityLog } from '../types';
 import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2 } from 'lucide-react';
 import * as db from '../services/missionControlData';
 import { supabase } from '../lib/supabaseClient';
@@ -19,6 +19,61 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   
   const [loggedInClass, setLoggedInClass] = useState<ClassData | null>(null);
   const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null);
+
+  const [studentLogs, setStudentLogs] = useState<ActivityLog[]>([]);
+  const [isLogsLoading, setIsLogsLoading] = useState(false);
+  const [isTableMissing, setIsTableMissing] = useState(false);
+
+  const loadStudentLogs = async (classId: string, studentId: string) => {
+    setIsLogsLoading(true);
+    try {
+      const logs = await db.fetchStudentActivityLogs(classId, studentId);
+      setStudentLogs(logs);
+      setIsTableMissing(false);
+    } catch (err: any) {
+      if (err && (err.code === 'PGRST205' || (err.message && err.message.includes('activity_logs') && err.message.includes('schema cache')))) {
+        setIsTableMissing(true);
+        console.warn('Activity logs table is missing in Supabase. Student log view is disabled until migration is run.');
+      } else {
+        console.error('Failed to load student activity logs:', err);
+      }
+    } finally {
+      setIsLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loggedInClass || !loggedInStudent) {
+      setStudentLogs([]);
+      return;
+    }
+    const classId = loggedInClass.id;
+    const studentId = loggedInStudent.id;
+    loadStudentLogs(classId, studentId);
+
+    if (isTableMissing) return;
+
+    // Subscribe to realtime updates on activity_logs for this student
+    const channel = supabase
+      .channel(`student-logs-${studentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'activity_logs',
+          filter: `student_id=eq.${studentId}`
+        },
+        () => {
+          loadStudentLogs(classId, studentId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loggedInClass?.id, loggedInStudent?.id, isTableMissing]);
 
   // Auto-restore profile on refresh/mount
   useEffect(() => {
@@ -322,6 +377,85 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* My Recent Updates (Personal Timeline) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+              <h3 className="text-lg font-display font-bold text-white mb-4 flex items-center gap-2">
+                <Clock size={18} className="text-indigo-400" /> My Recent Updates
+              </h3>
+              
+              {isTableMissing ? (
+                <div className="py-4 text-center text-slate-500 text-xs italic leading-relaxed">
+                  Timeline features are disabled until the database tables are initialized in Supabase by the teacher.
+                </div>
+              ) : isLogsLoading && studentLogs.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-sm font-medium">Loading history...</div>
+              ) : studentLogs.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-sm">
+                  No point or life updates recorded yet. Keep up the good work!
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {studentLogs.map((log) => {
+                    const isPoints = log.action_type === 'points_changed';
+                    const isLives = log.action_type === 'lives_changed';
+                    const isUndone = log.undone;
+
+                    let title = '';
+                    let badgeColor = 'bg-slate-800 text-slate-400 border border-slate-750';
+
+                    if (isPoints) {
+                      const delta = log.points_delta || 0;
+                      const sign = delta > 0 ? '+' : '';
+                      title = `${sign}${delta} Points`;
+                      badgeColor = delta > 0 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20';
+                    } else if (isLives) {
+                      const delta = log.lives_delta || 0;
+                      const sign = delta > 0 ? '+' : '';
+                      title = `${sign}${delta} Lives`;
+                      badgeColor = delta > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20';
+                    } else {
+                      title = 'Update';
+                    }
+
+                    return (
+                      <div
+                        key={log.id}
+                        className={`bg-slate-950 border border-slate-800/60 rounded-xl p-3.5 flex items-center justify-between gap-4 transition-all ${
+                          isUndone ? 'opacity-45 select-none' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className={`px-2 py-0.5 rounded-md text-xs font-mono font-bold shrink-0 border ${badgeColor}`}>
+                            {title}
+                          </span>
+                          <div className="space-y-1">
+                            {log.reason ? (
+                              <p className={`text-sm font-medium text-slate-200 ${isUndone ? 'line-through' : ''}`}>
+                                "{log.reason}"
+                              </p>
+                            ) : (
+                              <p className={`text-sm text-slate-400 ${isUndone ? 'line-through' : ''}`}>
+                                {isPoints ? (log.points_delta! > 0 ? 'Earned points' : 'Lost points') : (log.lives_delta! > 0 ? 'Restored lives' : 'Lost lives')}
+                              </p>
+                            )}
+                            <span className="text-[10px] text-slate-500 font-mono block font-sans">
+                              {new Date(log.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {isUndone && (
+                          <span className="text-xs bg-red-500/10 text-red-500 border border-red-500/20 px-2.5 py-0.5 rounded-md font-bold font-mono shrink-0">
+                            UNDONE
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

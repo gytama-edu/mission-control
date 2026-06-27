@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ClassData, Student, Meeting } from '../types';
+import { ClassData, Student, Meeting, ActivityLog } from '../types';
 import * as db from '../services/missionControlData';
+import { supabase } from '../lib/supabaseClient';
 
 const STORAGE_KEY = 'mission_control_classes';
 
@@ -28,6 +29,37 @@ export function useClasses(teacherId: string | null) {
 
   useEffect(() => {
     loadData();
+
+    if (!teacherId) return;
+
+    // Listen to changes on classes, students, meetings, and activity_logs
+    const channel = supabase
+      .channel('teacher-dashboard-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'classes' },
+        () => { loadData(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'students' },
+        () => { loadData(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meetings' },
+        () => { loadData(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'activity_logs' },
+        () => { loadData(); }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [teacherId]);
 
   const importLocalData = async () => {
@@ -127,18 +159,18 @@ export function useClasses(teacherId: string | null) {
     } catch (err: any) { alert(err.message); }
   };
 
-  const updateStudentLives = async (classId: string, studentId: string, change: number) => {
+  const updateStudentLives = async (classId: string, studentId: string, change: number, reason?: string | null) => {
     try {
       const c = classes.find(cl => cl.id === classId);
       if (!c) return;
-      await db.updateStudentLives(studentId, change, c.maxLives);
+      await db.updateStudentLives(studentId, change, c.maxLives, reason);
       await loadData();
     } catch (err: any) { alert(err.message); }
   };
 
-  const updateStudentPoints = async (classId: string, studentId: string, change: number) => {
+  const updateStudentPoints = async (classId: string, studentId: string, change: number, reason?: string | null) => {
     try {
-      await db.updateStudentPoints(studentId, change);
+      await db.updateStudentPoints(studentId, change, reason);
       await loadData();
     } catch (err: any) { alert(err.message); }
   };

@@ -167,8 +167,8 @@ export default function App() {
           onEditStudent={(studentId, name, nickname) => editStudent(activeClass.id, studentId, name, nickname)}
           onDeleteStudent={(studentId) => deleteStudent(activeClass.id, studentId)}
           onRegenerateStudentPin={(studentId) => regenerateStudentPin(activeClass.id, studentId)}
-          onUpdateLives={(studentId, change) => updateStudentLives(activeClass.id, studentId, change)}
-          onUpdatePoints={(studentId, change) => updateStudentPoints(activeClass.id, studentId, change)}
+          onUpdateLives={(studentId, change, reason) => updateStudentLives(activeClass.id, studentId, change, reason)}
+          onUpdatePoints={(studentId, change, reason) => updateStudentPoints(activeClass.id, studentId, change, reason)}
           onStartMeeting={() => startMeeting(activeClass.id)}
         />
       ) : (

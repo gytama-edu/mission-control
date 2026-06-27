@@ -104,3 +104,72 @@ alter publication supabase_realtime add table public.classes;
 alter publication supabase_realtime add table public.students;
 alter publication supabase_realtime add table public.meetings;
 
+-- ==============================================================================
+-- PHASE 6: ACTIVITY LOGS & CLASSROOM HISTORY
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.activity_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  student_id uuid REFERENCES public.students(id) ON DELETE SET NULL,
+  action_type text NOT NULL,
+  points_delta integer DEFAULT 0,
+  lives_delta integer DEFAULT 0,
+  reason text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  undone boolean DEFAULT false,
+  undone_at timestamptz,
+  undone_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+
+-- Select policy: teachers can read logs for classes they own, or unowned classes
+CREATE POLICY "Allow teachers to select activity logs for owned classes" ON public.activity_logs
+  FOR SELECT TO authenticated USING (
+    EXISTS (
+      SELECT 1 FROM public.classes
+      WHERE classes.id = activity_logs.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  );
+
+-- Select policy: students (anon) can read student-specific logs
+CREATE POLICY "Allow students to select their own logs" ON public.activity_logs
+  FOR SELECT TO anon USING (
+    student_id IS NOT NULL
+  );
+
+-- Insert policy: teachers can insert logs for classes they own
+CREATE POLICY "Allow teachers to insert activity logs for owned classes" ON public.activity_logs
+  FOR INSERT TO authenticated WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.classes
+      WHERE classes.id = activity_logs.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  );
+
+-- Update policy: teachers can update logs for classes they own (for undo)
+CREATE POLICY "Allow teachers to update activity logs for owned classes" ON public.activity_logs
+  FOR UPDATE TO authenticated USING (
+    EXISTS (
+      SELECT 1 FROM public.classes
+      WHERE classes.id = activity_logs.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  ) WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.classes
+      WHERE classes.id = activity_logs.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  );
+
+-- Enable Realtime for activity_logs table
+alter publication supabase_realtime add table public.activity_logs;
+
+
