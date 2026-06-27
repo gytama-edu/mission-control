@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ClassData } from '../types';
-import { Users, Plus, Shield, Trash2, Rocket, Loader2, Download } from 'lucide-react';
+import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download } from 'lucide-react';
 
 interface DashboardProps {
   classes: ClassData[];
