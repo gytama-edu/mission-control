@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ClassData, Student, Meeting } from '../types';
+import * as db from '../services/missionControlData';
 
 const STORAGE_KEY = 'mission_control_classes';
 
@@ -7,214 +8,147 @@ export function useClasses() {
   const generateJoinCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
   const generatePin = () => Math.floor(1000 + Math.random() * 9000).toString();
 
-  const [classes, setClasses] = useState<ClassData[]>(() => {
+  const [classes, setClasses] = useState<ClassData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      const item = window.localStorage.getItem(STORAGE_KEY);
-      if (item) {
-        const parsed = JSON.parse(item);
-        let migrated = false;
-        const updated = parsed.map((c: any) => {
-          let cMigrated = false;
-          if (!c.joinCode) {
-            c.joinCode = generateJoinCode();
-            cMigrated = true;
-          }
-          const updatedStudents = c.students.map((s: any) => {
-            if (!s.pin) {
-              s.pin = generatePin();
-              cMigrated = true;
-            } else if (typeof s.pin !== 'string') {
-              s.pin = String(s.pin);
-              cMigrated = true;
-            }
-            return s;
-          });
-          if (cMigrated) {
-             migrated = true;
-             return { ...c, students: updatedStudents };
-          }
-          return c;
-        });
-        if (migrated) {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        }
-        return updated;
-      }
-      return [];
-    } catch (error) {
-      console.error(error);
-      return [];
+      const data = await db.fetchClasses();
+      setClasses(data);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to load data');
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(classes));
-  }, [classes]);
+    loadData();
+  }, []);
 
-  const addClass = (name: string, level: string, maxLives: number) => {
-    const newClass: ClassData = {
-      id: crypto.randomUUID(),
-      name,
-      level,
-      maxLives,
-      students: [],
-      meetings: [],
-      createdAt: new Date().toISOString(),
-      joinCode: generateJoinCode(),
-    };
-    setClasses([...classes, newClass]);
-  };
-
-  const editClass = (id: string, name: string, level: string, maxLives: number) => {
-    setClasses(classes.map(c => {
-      if (c.id === id) {
-        return {
-          ...c,
-          name,
-          level,
-          maxLives,
-          students: c.students.map(s => ({
-            ...s,
-            lives: Math.min(s.lives, maxLives)
-          }))
-        };
+  const importLocalData = async () => {
+    try {
+      setIsLoading(true);
+      const item = window.localStorage.getItem(STORAGE_KEY);
+      if (!item) return;
+      const localClasses = JSON.parse(item);
+      for (const c of localClasses) {
+        const joinCode = c.joinCode || generateJoinCode();
+        const newClass = await db.createClass(c.name, c.level || '', c.maxLives, joinCode);
+        
+        for (const s of c.students || []) {
+          const pin = s.pin || generatePin();
+          const newStudent = await db.addStudent(newClass.id, s.name, s.lives, String(pin));
+          if (s.points > 0) {
+            await db.updateStudentPoints(newStudent.id, s.points);
+          }
+          if (s.nickname) {
+            await db.updateStudent(newStudent.id, s.name, s.nickname);
+          }
+        }
       }
-      return c;
-    }));
+      await loadData();
+      alert('Local data imported to Supabase successfully!');
+    } catch (err: any) {
+      console.error(err);
+      alert('Failed to import data: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const deleteClass = (id: string) => {
-    setClasses(classes.filter(c => c.id !== id));
+  const addClass = async (name: string, level: string, maxLives: number) => {
+    try {
+      await db.createClass(name, level, maxLives, generateJoinCode());
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const addStudent = (classId: string, name: string) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        const newStudent: Student = {
-          id: crypto.randomUUID(),
-          name,
-          lives: c.maxLives,
-          points: 0,
-          joinedAt: new Date().toISOString(),
-          pin: generatePin(),
-        };
-        return { ...c, students: [...c.students, newStudent] };
-      }
-      return c;
-    }));
+  const editClass = async (id: string, name: string, level: string, maxLives: number) => {
+    try {
+      await db.updateClass(id, name, level, maxLives);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const editStudent = (classId: string, studentId: string, name: string, nickname?: string) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          students: c.students.map(s => {
-            if (s.id === studentId) {
-              return { ...s, name, nickname };
-            }
-            return s;
-          })
-        };
-      }
-      return c;
-    }));
+  const deleteClass = async (id: string) => {
+    try {
+      await db.deleteClass(id);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const deleteStudent = (classId: string, studentId: string) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          students: c.students.filter(s => s.id !== studentId)
-        };
-      }
-      return c;
-    }));
+  const regenerateJoinCode = async (classId: string) => {
+    try {
+      await db.regenerateJoinCode(classId, generateJoinCode());
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const updateStudentLives = (classId: string, studentId: string, change: number) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          students: c.students.map(s => {
-            if (s.id === studentId) {
-              return { ...s, lives: Math.max(0, Math.min(s.lives + change, c.maxLives)) };
-            }
-            return s;
-          })
-        };
-      }
-      return c;
-    }));
+  const addStudent = async (classId: string, name: string) => {
+    try {
+      const c = classes.find(cl => cl.id === classId);
+      if (!c) return;
+      await db.addStudent(classId, name, c.maxLives, generatePin());
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const updateStudentPoints = (classId: string, studentId: string, change: number) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          students: c.students.map(s => {
-            if (s.id === studentId) {
-              return { ...s, points: Math.max(0, s.points + change) };
-            }
-            return s;
-          })
-        };
-      }
-      return c;
-    }));
+  const editStudent = async (classId: string, studentId: string, name: string, nickname?: string) => {
+    try {
+      await db.updateStudent(studentId, name, nickname);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const startMeeting = (classId: string) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        const newMeeting: Meeting = {
-          id: crypto.randomUUID(),
-          startedAt: new Date().toISOString(),
-        };
-        return {
-          ...c,
-          meetings: [...c.meetings, newMeeting],
-          students: c.students.map(s => ({
-            ...s,
-            lives: c.maxLives // Reset lives to maxLives, points unchanged
-          }))
-        };
-      }
-      return c;
-    }));
+  const deleteStudent = async (classId: string, studentId: string) => {
+    try {
+      await db.deleteStudent(studentId);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const regenerateJoinCode = (classId: string) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return { ...c, joinCode: generateJoinCode() };
-      }
-      return c;
-    }));
+  const regenerateStudentPin = async (classId: string, studentId: string) => {
+    try {
+      await db.resetStudentPin(studentId, generatePin());
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
-  const regenerateStudentPin = (classId: string, studentId: string) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          students: c.students.map(s => {
-            if (s.id === studentId) {
-              return { ...s, pin: generatePin() };
-            }
-            return s;
-          })
-        };
-      }
-      return c;
-    }));
+  const updateStudentLives = async (classId: string, studentId: string, change: number) => {
+    try {
+      const c = classes.find(cl => cl.id === classId);
+      if (!c) return;
+      await db.updateStudentLives(studentId, change, c.maxLives);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const updateStudentPoints = async (classId: string, studentId: string, change: number) => {
+    try {
+      await db.updateStudentPoints(studentId, change);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const startMeeting = async (classId: string) => {
+    try {
+      const c = classes.find(cl => cl.id === classId);
+      if (!c) return;
+      await db.startNewMeeting(classId, c.maxLives);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
   return {
     classes,
+    isLoading,
+    error,
+    importLocalData,
     addClass,
     editClass,
     deleteClass,

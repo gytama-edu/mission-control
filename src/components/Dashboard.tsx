@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { ClassData } from '../types';
-import { Users, Plus, Star, Shield, Trash2, Rocket } from 'lucide-react';
+import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download } from 'lucide-react';
 
 interface DashboardProps {
   classes: ClassData[];
+  isLoading: boolean;
+  error: string | null;
   onAddClass: (name: string, level: string, maxLives: number) => void;
   onDeleteClass: (id: string) => void;
   onSelectClass: (id: string) => void;
+  onImportLocalData: () => void;
 }
 
-export function Dashboard({ classes, onAddClass, onDeleteClass, onSelectClass }: DashboardProps) {
+export function Dashboard({ classes, isLoading, error, onAddClass, onDeleteClass, onSelectClass, onImportLocalData }: DashboardProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newClassName, setNewClassName] = useState('');
   const [newClassLevel, setNewClassLevel] = useState('');
@@ -25,6 +28,25 @@ export function Dashboard({ classes, onAddClass, onDeleteClass, onSelectClass }:
     setIsAdding(false);
   };
 
+  const hasLocalData = () => {
+    try {
+      return !!window.localStorage.getItem('mission_control_classes');
+    } catch {
+      return false;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-12 w-12 text-blue-500 animate-spin mb-4" />
+          <p className="text-slate-400">Loading your command center...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
       <header className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -33,16 +55,46 @@ export function Dashboard({ classes, onAddClass, onDeleteClass, onSelectClass }:
             <Rocket className="text-blue-500" size={32} />
             Mission Control
           </h1>
-          <p className="text-slate-400 mt-1">Classroom gamification dashboard</p>
+          <p className="text-slate-400 mt-1">Classroom gamification dashboard (Cloud Sync)</p>
         </div>
-        <button
-          onClick={() => setIsAdding(!isAdding)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-        >
-          <Plus size={20} />
-          Create New Class
-        </button>
+        <div className="flex gap-3">
+          {hasLocalData() && classes.length === 0 && (
+            <button
+              onClick={() => {
+                if (confirm('Import local data to Supabase? This may take a moment.')) {
+                  onImportLocalData();
+                }
+              }}
+              className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <Download size={20} />
+              Import Local Data
+            </button>
+          )}
+          <button
+            onClick={() => setIsAdding(!isAdding)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <Plus size={20} />
+            Create New Class
+          </button>
+        </div>
       </header>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-8">
+          <h3 className="font-bold mb-1">Connection Error</h3>
+          <p>{error}</p>
+        </div>
+      )}
+
+      <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-4 rounded-xl mb-8 text-sm flex gap-3 items-start">
+        <Shield size={20} className="shrink-0 mt-0.5" />
+        <div>
+          <strong className="block mb-1">Phase 4 Prototype Notice</strong>
+          This is a cloud-sync prototype. Full teacher authentication is not yet implemented, so anyone with the URL could theoretically access this dashboard. Do not use for secure production data yet.
+        </div>
+      </div>
 
       {isAdding && (
         <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl mb-8 shadow-xl">

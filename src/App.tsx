@@ -14,6 +14,9 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'landing' | 'teacher' | 'student'>('landing');
   const {
     classes,
+    isLoading,
+    error,
+    importLocalData,
     addClass,
     editClass,
     deleteClass,
@@ -36,7 +39,7 @@ export default function App() {
   }
 
   if (viewMode === 'student') {
-    return <StudentAccess classes={classes} onBack={() => setViewMode('landing')} />;
+    return <StudentAccess onBack={() => setViewMode('landing')} />;
   }
 
   return (
@@ -71,9 +74,12 @@ export default function App() {
           </div>
           <Dashboard
             classes={classes}
+            isLoading={isLoading}
+            error={error}
             onAddClass={addClass}
             onDeleteClass={deleteClass}
             onSelectClass={setActiveClassId}
+            onImportLocalData={importLocalData}
           />
         </div>
       )}

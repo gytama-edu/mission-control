@@ -1,23 +1,24 @@
-import { useState, useEffect } from 'react';
-import { ClassData } from '../types';
-import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ClassData, Student } from '../types';
+import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2 } from 'lucide-react';
+import * as db from '../services/missionControlData';
 
 interface StudentAccessProps {
-  classes: ClassData[];
   onBack: () => void;
 }
 
 const PROFILE_KEY = 'mission_control_student_profile';
 
-export function StudentAccess({ classes, onBack }: StudentAccessProps) {
+export function StudentAccess({ onBack }: StudentAccessProps) {
   const [joinCode, setJoinCode] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   
   const [loggedInClass, setLoggedInClass] = useState<ClassData | null>(null);
-  const [loggedInStudentId, setLoggedInStudentId] = useState<string | null>(null);
+  const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null);
 
-  const [savedProfile, setSavedProfile] = useState<{ classId: string, studentId: string } | null>(null);
+  const [savedProfile, setSavedProfile] = useState<{ classId: string, studentId: string, studentName?: string } | null>(null);
   const [showSavedPrompt, setShowSavedPrompt] = useState(false);
 
   useEffect(() => {
@@ -25,80 +26,85 @@ export function StudentAccess({ classes, onBack }: StudentAccessProps) {
       const saved = window.localStorage.getItem(PROFILE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        const c = classes.find(c => c.id === parsed.classId);
-        const s = c?.students.find(s => s.id === parsed.studentId);
-        if (c && s) {
+        if (parsed.classId && parsed.studentId) {
           setSavedProfile(parsed);
           setShowSavedPrompt(true);
-        } else {
-          window.localStorage.removeItem(PROFILE_KEY);
         }
       }
     } catch (e) {
       console.error(e);
     }
-  }, [classes]);
+  }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const fetchDashboardData = async (classId: string, studentId: string) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const { classData, studentData } = await db.getStudentDashboardData(classId, studentId);
+      if (classData && studentData) {
+        setLoggedInClass(classData);
+        setLoggedInStudent(studentData);
+      } else {
+        setError('Saved profile data could not be found.');
+        window.localStorage.removeItem(PROFILE_KEY);
+        setShowSavedPrompt(false);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to connect.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     const normalizedEnteredCode = joinCode.trim().toUpperCase();
     const normalizedEnteredPin = pin.trim();
 
-    console.log('--- DIAGNOSTIC ---');
-    console.log('localStorage Key used by app:', 'mission_control_classes');
-    console.log('Number of classes found in state:', classes.length);
-    console.log('Available join codes:', classes.map(c => String(c.joinCode || "").trim().toUpperCase()));
-    console.log('Entered code after normalization:', normalizedEnteredCode);
+    try {
+      const targetClass = await db.findClassByJoinCode(normalizedEnteredCode);
+      if (!targetClass) {
+        setError('Class code not found.');
+        setIsLoading(false);
+        return;
+      }
 
-    const targetClass = classes.find(c => String(c.joinCode || "").trim().toUpperCase() === normalizedEnteredCode);
-    if (!targetClass) {
-      console.log('Result: Class code not found');
-      console.log('--- END DIAGNOSTIC ---');
-      setError('Class code not found.');
-      return;
+      const student = await db.findStudentByClassAndPin(targetClass.id, normalizedEnteredPin);
+      if (!student) {
+        setError('PIN not found in this class.');
+        setIsLoading(false);
+        return;
+      }
+
+      await fetchDashboardData(targetClass.id, student.id);
+    } catch (err: any) {
+      setError(err.message || 'Login failed.');
+      setIsLoading(false);
     }
-
-    console.log('Class found:', targetClass.name);
-    console.log('Available student PINs in matched class:', targetClass.students.map(s => String(s.pin).trim()));
-    console.log('Entered PIN after normalization:', normalizedEnteredPin);
-
-    const student = targetClass.students.find(s => String(s.pin || "").trim() === normalizedEnteredPin);
-    if (!student) {
-      console.log('Result: PIN not found in this class');
-      console.log('--- END DIAGNOSTIC ---');
-      setError('PIN not found in this class.');
-      return;
-    }
-
-    console.log('Student found:', student.name);
-    console.log('--- END DIAGNOSTIC ---');
-
-    setLoggedInClass(targetClass);
-    setLoggedInStudentId(student.id);
   };
 
   const handleSaveProfile = () => {
-    if (loggedInClass && loggedInStudentId) {
+    if (loggedInClass && loggedInStudent) {
       window.localStorage.setItem(PROFILE_KEY, JSON.stringify({
         classId: loggedInClass.id,
-        studentId: loggedInStudentId
+        studentId: loggedInStudent.id,
+        studentName: loggedInStudent.nickname || loggedInStudent.name
       }));
     }
   };
 
   const handleLogout = () => {
     setLoggedInClass(null);
-    setLoggedInStudentId(null);
+    setLoggedInStudent(null);
     setJoinCode('');
     setPin('');
   };
 
-  if (loggedInClass && loggedInStudentId) {
-    const student = loggedInClass.students.find(s => s.id === loggedInStudentId);
-    if (!student) return null; // Should not happen
-
+  if (loggedInClass && loggedInStudent) {
+    const student = loggedInStudent;
     const status = student.lives === 0 ? 'Out' : student.lives <= loggedInClass.maxLives / 2 ? 'Warning' : 'Safe';
     const statusColor = status === 'Out' ? 'text-red-500 bg-red-500/10 border-red-500/20' 
       : status === 'Warning' ? 'text-amber-500 bg-amber-500/10 border-amber-500/20' 
@@ -117,12 +123,21 @@ export function StudentAccess({ classes, onBack }: StudentAccessProps) {
           <h1 className="text-2xl font-display font-bold text-white flex items-center gap-2">
             <Rocket className="text-emerald-500" /> Mission Control
           </h1>
-          <button 
-            onClick={handleLogout}
-            className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
-          >
-            <LogOut size={18} /> Logout
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => fetchDashboardData(loggedInClass.id, student.id)}
+              className="text-slate-400 hover:text-white transition-colors"
+              title="Refresh Data"
+            >
+              {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Refresh'}
+            </button>
+            <button 
+              onClick={handleLogout}
+              className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
+            >
+              <LogOut size={18} /> Logout
+            </button>
+          </div>
         </header>
 
         {!window.localStorage.getItem(PROFILE_KEY) && (
@@ -179,7 +194,7 @@ export function StudentAccess({ classes, onBack }: StudentAccessProps) {
               <div className="space-y-4">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-800">
                   <span className="text-slate-400">Your Rank</span>
-                  <span className="font-mono font-bold text-white">#{rank}</span>
+                  <span className="font-mono font-bold text-white">#{rank > 0 ? rank : '-'}</span>
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-slate-800">
                   <span className="text-slate-400">Total Students</span>
@@ -220,17 +235,17 @@ export function StudentAccess({ classes, onBack }: StudentAccessProps) {
             <div className="bg-slate-800/50 border border-slate-700 p-5 rounded-xl text-center mb-4">
               <p className="text-slate-300 mb-2">Saved Profile Found</p>
               <h3 className="text-xl font-bold text-white mb-4">
-                {classes.find(c => c.id === savedProfile.classId)?.students.find(s => s.id === savedProfile.studentId)?.name}
+                {savedProfile.studentName || 'Student Profile'}
               </h3>
               <button
                 onClick={() => {
-                  setLoggedInClass(classes.find(c => c.id === savedProfile.classId) || null);
-                  setLoggedInStudentId(savedProfile.studentId);
+                  fetchDashboardData(savedProfile.classId, savedProfile.studentId);
                   setShowSavedPrompt(false);
                 }}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold transition-colors"
+                disabled={isLoading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
               >
-                Continue
+                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Continue'}
               </button>
             </div>
             <button
@@ -278,9 +293,10 @@ export function StudentAccess({ classes, onBack }: StudentAccessProps) {
             </div>
             <button
               type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold transition-colors mt-2"
+              disabled={isLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-3 rounded-xl font-bold transition-colors mt-2 flex items-center justify-center gap-2"
             >
-              Access Dashboard
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Access Dashboard'}
             </button>
           </form>
         )}
