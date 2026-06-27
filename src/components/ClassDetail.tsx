@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
@@ -111,6 +111,16 @@ export function ClassDetail({
   const [selectedTaskForGroups, setSelectedTaskForGroups] = useState<Task | null>(null);
   const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
   const [isGroupsLoading, setIsGroupsLoading] = useState(false);
+
+  // Teacher Submission Viewer states
+  const [selectedTaskForSubmissions, setSelectedTaskForSubmissions] = useState<Task | null>(null);
+  const [taskSubmissions, setTaskSubmissions] = useState<any[]>([]);
+  const [isFetchingSubmissions, setIsFetchingSubmissions] = useState(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [selectedSubmissionForReview, setSelectedSubmissionForReview] = useState<any | null>(null);
+  const [reviewFeedback, setReviewFeedback] = useState('');
+  const [reviewScore, setReviewScore] = useState<number>(0);
+  const [isSavingReview, setIsSavingReview] = useState(false);
 
   // Task form states
   const [taskFormTitle, setTaskFormTitle] = useState('');
@@ -311,6 +321,64 @@ export function ClassDetail({
       loadTasks();
     } catch (err: any) {
       alert('Failed to archive task: ' + err.message);
+    }
+  };
+
+  const handleOpenSubmissionsModal = async (task: Task) => {
+    setSelectedTaskForSubmissions(task);
+    setIsFetchingSubmissions(true);
+    setSubmissionsError(null);
+    setSelectedSubmissionForReview(null);
+    try {
+      const subs = await taskDb.fetchSubmissionsByTask(task.id);
+      setTaskSubmissions(subs);
+    } catch (err: any) {
+      setSubmissionsError('Failed to fetch submissions: ' + err.message);
+    } finally {
+      setIsFetchingSubmissions(false);
+    }
+  };
+
+  const handleSelectSubmissionForReview = (sub: any) => {
+    setSelectedSubmissionForReview(sub);
+    setReviewFeedback(sub.teacher_feedback || '');
+    setReviewScore(sub.score || 0);
+  };
+
+  const handleSaveReview = async (status: 'reviewed' | 'returned') => {
+    if (!selectedSubmissionForReview || !selectedTaskForSubmissions) return;
+    setIsSavingReview(true);
+    setSubmissionsError(null);
+    try {
+      await taskDb.reviewSubmission(
+        selectedSubmissionForReview.id,
+        reviewFeedback,
+        status,
+        reviewScore
+      );
+      
+      // Refresh list
+      const subs = await taskDb.fetchSubmissionsByTask(selectedTaskForSubmissions.id);
+      setTaskSubmissions(subs);
+      
+      // Update local selected submission
+      const updatedSub = subs.find(s => s.id === selectedSubmissionForReview.id);
+      setSelectedSubmissionForReview(updatedSub || null);
+      
+      alert(`Submission marked as ${status}!`);
+    } catch (err: any) {
+      setSubmissionsError('Failed to save review: ' + err.message);
+    } finally {
+      setIsSavingReview(false);
+    }
+  };
+
+  const handleDownloadAttachment = async (filePath: string) => {
+    try {
+      const url = await taskDb.getAttachmentSignedUrl(filePath);
+      window.open(url, '_blank');
+    } catch (err: any) {
+      alert('Failed to generate download link: ' + err.message);
     }
   };
 
@@ -1530,7 +1598,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       </div>
 
                       {/* Management Buttons */}
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-start font-sans">
+                        {task.task_type === 'individual' && (task.status === 'published' || task.status === 'closed' || task.status === 'archived') && (
+                          <button
+                            onClick={() => handleOpenSubmissionsModal(task)}
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <FileText size={14} /> Submissions
+                          </button>
+                        )}
                         {isDraft && (
                           <>
                             <button
@@ -2331,6 +2407,265 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                 Close Summary
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Teacher Submissions Viewer Modal */}
+      {selectedTaskForSubmissions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in font-sans">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col h-[85vh]">
+            
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <FileText className="text-purple-400" size={20} />
+                  Submissions: {selectedTaskForSubmissions.title}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Task ID: <span className="font-mono text-slate-500">{selectedTaskForSubmissions.id}</span> • Type: <span className="text-white capitalize font-medium">{selectedTaskForSubmissions.task_type}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTaskForSubmissions(null);
+                  setSelectedSubmissionForReview(null);
+                }}
+                className="text-slate-400 hover:text-white transition-colors p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content Body: Split View */}
+            <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-950/20">
+              
+              {/* Left Column: Student List */}
+              <div className="w-1/3 border-r border-slate-800 overflow-y-auto p-4 space-y-3 shrink-0">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Class Roster & Status</h4>
+                {isFetchingSubmissions ? (
+                  <div className="py-8 text-center text-slate-500 text-sm">
+                    <Loader2 className="animate-spin mx-auto mb-2 text-purple-400" size={20} />
+                    Loading submissions...
+                  </div>
+                ) : classData.students.length === 0 ? (
+                  <div className="py-8 text-center text-slate-500 text-xs italic">
+                    No students enrolled in this class.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {classData.students.map((student) => {
+                      const submission = taskSubmissions.find((s) => s.student_id === student.id);
+                      const isSelected = selectedSubmissionForReview?.student_id === student.id;
+
+                      let statusLabel = 'Not Submitted';
+                      let statusStyle = 'text-slate-500 bg-slate-900 border-slate-850';
+
+                      if (submission) {
+                        if (submission.status === 'reviewed') {
+                          statusLabel = 'Reviewed';
+                          statusStyle = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                        } else if (submission.status === 'returned') {
+                          statusLabel = 'Returned';
+                          statusStyle = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                        } else if (submission.status === 'late') {
+                          statusLabel = 'Late';
+                          statusStyle = 'text-red-400 bg-red-500/10 border-red-500/20';
+                        } else {
+                          statusLabel = 'Submitted';
+                          statusStyle = 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={student.id}
+                          disabled={!submission}
+                          onClick={() => handleSelectSubmissionForReview(submission)}
+                          className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                            !submission 
+                              ? 'opacity-50 cursor-not-allowed border-slate-900 bg-slate-950/40' 
+                              : isSelected
+                              ? 'bg-purple-600/10 border-purple-500/50 hover:bg-purple-600/15'
+                              : 'bg-slate-900/60 border-slate-850 hover:bg-slate-900/90'
+                          }`}
+                        >
+                          <div className="truncate">
+                            <p className="text-xs font-bold text-white truncate">{student.nickname || student.name}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">PIN: {student.pin}</p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border shrink-0 ${statusStyle}`}>
+                            {statusLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Submission details and review controls */}
+              <div className="flex-1 flex flex-col overflow-y-auto p-6 min-w-0">
+                {selectedSubmissionForReview ? (
+                  <div className="space-y-6 flex-1 flex flex-col">
+                    
+                    {/* Submission Info */}
+                    <div>
+                      <h4 className="text-base font-bold text-white mb-1">
+                        Reviewing: <span className="text-purple-400">{selectedSubmissionForReview.studentName}</span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Submitted: {new Date(selectedSubmissionForReview.created_at).toLocaleString()}
+                        {selectedSubmissionForReview.status === 'late' && (
+                          <span className="text-red-400 font-bold ml-2 font-mono">⚠️ LATE SUBMISSION</span>
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Text Answer */}
+                    {selectedTaskForSubmissions.allow_text_submission && (
+                      <div className="space-y-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Student Response</span>
+                        <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl text-xs text-slate-200 whitespace-pre-wrap leading-relaxed italic">
+                          {selectedSubmissionForReview.submission_text || (
+                            <span className="text-slate-600 italic">No text response provided.</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Attachments */}
+                    {selectedTaskForSubmissions.allow_attachment_submission && (
+                      <div className="space-y-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Attachments</span>
+                        {selectedSubmissionForReview.attachments && selectedSubmissionForReview.attachments.length > 0 ? (
+                          <div className="grid sm:grid-cols-2 gap-2">
+                            {selectedSubmissionForReview.attachments.map((file: any) => (
+                              <div
+                                key={file.id}
+                                className="bg-slate-950 border border-slate-850 p-3 rounded-xl flex items-center justify-between gap-3 text-xs"
+                              >
+                                <div className="truncate">
+                                  <p className="font-mono text-slate-300 truncate font-semibold flex items-center gap-1.5">
+                                    <Paperclip size={12} className="text-slate-500 shrink-0" />
+                                    {file.file_name}
+                                  </p>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">
+                                    Size: {(file.file_size / (1024 * 1024)).toFixed(2)} MB
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadAttachment(file.file_path)}
+                                  className="text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-500/20 transition-all text-[11px] shrink-0"
+                                >
+                                  Download
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">No attachments uploaded.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Divider */}
+                    <div className="border-t border-slate-800/80 my-4" />
+
+                    {/* Review Form */}
+                    <div className="space-y-4 bg-slate-900/40 p-5 rounded-2xl border border-slate-850">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <CheckSquare size={14} className="text-purple-400" />
+                        Grading & Commander Feedback
+                      </h4>
+
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="sm:col-span-2 space-y-1.5">
+                          <label className="block text-xs text-slate-400">Feedback Comments</label>
+                          <textarea
+                            rows={3}
+                            value={reviewFeedback}
+                            onChange={(e) => setReviewFeedback(e.target.value)}
+                            placeholder="Add directive feedback, corrections, or praise here..."
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-xs text-slate-400">Score / Grade Points</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={reviewScore}
+                            onChange={(e) => setReviewScore(Number(e.target.value))}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                          />
+                          <p className="text-[10px] text-slate-500 italic">Max suggested: {selectedTaskForSubmissions.reward_points} pts</p>
+                        </div>
+                      </div>
+
+                      {submissionsError && (
+                        <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg">
+                          {submissionsError}
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-2.5 pt-2">
+                        <button
+                          type="button"
+                          disabled={isSavingReview}
+                          onClick={() => handleSaveReview('returned')}
+                          className="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-amber-400 hover:text-amber-300 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                        >
+                          {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
+                          Return for Resubmission
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingReview}
+                          onClick={() => handleSaveReview('reviewed')}
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5"
+                        >
+                          {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
+                          Complete & Review
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                ) : (
+                  <div className="my-auto text-center space-y-3 p-6">
+                    <div className="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-full flex items-center justify-center mx-auto border border-purple-500/20">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Select a Student Submission</h4>
+                      <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
+                        Select an active student's logged directive from the left roster panel to begin reviewing their work, downloading file attachments, and recording feedback.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/40 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTaskForSubmissions(null);
+                  setSelectedSubmissionForReview(null);
+                }}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              >
+                Close Submissions Viewer
+              </button>
+            </div>
+
           </div>
         </div>
       )}

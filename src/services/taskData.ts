@@ -330,3 +330,267 @@ export const removeStudentFromTaskGroup = async (
     { task_id: taskId, group_id: taskGroupId }
   );
 };
+
+export const submitIndividualTask = async (
+  taskId: string,
+  classId: string,
+  studentId: string,
+  taskTitle: string,
+  submissionText: string | null,
+  isLate: boolean = false
+): Promise<any> => {
+  // Check if a submission already exists
+  const { data: existing, error: findError } = await supabase
+    .from('task_submissions')
+    .select('id, status')
+    .eq('task_id', taskId)
+    .eq('student_id', studentId)
+    .is('task_group_id', null)
+    .maybeSingle();
+
+  if (findError) throw findError;
+
+  const status = isLate ? 'late' : 'submitted';
+
+  let result;
+  if (existing) {
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .update({
+        submission_text: submissionText,
+        status: existing.status === 'reviewed' ? 'reviewed' : status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    result = data;
+
+    // Log activity
+    await logActivity(
+      classId,
+      'task_resubmitted',
+      studentId,
+      0,
+      0,
+      null,
+      { task_id: taskId, task_title: taskTitle, submission_id: data.id }
+    );
+  } else {
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .insert([{
+        task_id: taskId,
+        class_id: classId,
+        student_id: studentId,
+        submitted_by_student_id: studentId,
+        submission_text: submissionText,
+        status
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    result = data;
+
+    // Log activity
+    await logActivity(
+      classId,
+      'task_submitted',
+      studentId,
+      0,
+      0,
+      null,
+      { task_id: taskId, task_title: taskTitle, submission_id: data.id }
+    );
+  }
+
+  return result;
+};
+
+export const uploadAttachmentToStorage = async (
+  classId: string,
+  taskId: string,
+  studentId: string,
+  submissionId: string,
+  file: File
+): Promise<{ filePath: string; fileName: string }> => {
+  const timestamp = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `${classId}/${taskId}/${studentId}/${submissionId}/${timestamp}-${safeName}`;
+
+  const { data, error } = await supabase.storage
+    .from('task-submissions')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) throw error;
+  return { filePath, fileName: file.name };
+};
+
+export const addSubmissionAttachmentMetadata = async (metadataInput: {
+  submission_id: string;
+  task_id: string;
+  class_id: string;
+  student_id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size_bytes: number;
+}): Promise<any> => {
+  const { data, error } = await supabase
+    .from('submission_attachments')
+    .insert([{
+      ...metadataInput,
+      storage_bucket: 'task-submissions'
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Log activity
+  await logActivity(
+    metadataInput.class_id,
+    'task_attachment_uploaded',
+    metadataInput.student_id,
+    0,
+    0,
+    null,
+    {
+      task_id: metadataInput.task_id,
+      submission_id: metadataInput.submission_id,
+      file_name: metadataInput.file_name
+    }
+  );
+
+  return data;
+};
+
+export const deleteSubmissionAttachment = async (
+  attachmentId: string,
+  filePath: string,
+  classId: string,
+  studentId: string,
+  taskId: string,
+  submissionId: string
+): Promise<void> => {
+  // Delete from storage
+  const { error: storageError } = await supabase.storage
+    .from('task-submissions')
+    .remove([filePath]);
+
+  if (storageError) {
+    console.warn('Could not delete file from storage bucket:', storageError);
+  }
+
+  // Delete from db
+  const { error } = await supabase
+    .from('submission_attachments')
+    .delete()
+    .eq('id', attachmentId);
+
+  if (error) throw error;
+};
+
+export const fetchStudentSubmission = async (
+  taskId: string,
+  studentId: string
+): Promise<any | null> => {
+  // Fetch submission
+  const { data: submission, error: subError } = await supabase
+    .from('task_submissions')
+    .select('*')
+    .eq('task_id', taskId)
+    .eq('student_id', studentId)
+    .is('task_group_id', null)
+    .maybeSingle();
+
+  if (subError) throw subError;
+  if (!submission) return null;
+
+  // Fetch attachments
+  const { data: attachments, error: attachError } = await supabase
+    .from('submission_attachments')
+    .select('*')
+    .eq('submission_id', submission.id);
+
+  if (attachError) throw attachError;
+
+  return {
+    ...submission,
+    attachments: attachments || []
+  };
+};
+
+export const fetchSubmissionsByTask = async (
+  taskId: string
+): Promise<any[]> => {
+  // Fetch all submissions for this task
+  const { data: submissions, error: subError } = await supabase
+    .from('task_submissions')
+    .select(`
+      *,
+      students (
+        name
+      )
+    `)
+    .eq('task_id', taskId);
+
+  if (subError) throw subError;
+
+  // Fetch all attachments for this task
+  const { data: attachments, error: attachError } = await supabase
+    .from('submission_attachments')
+    .select('*')
+    .eq('task_id', taskId);
+
+  if (attachError) throw attachError;
+
+  return (submissions || []).map((sub: any) => {
+    const subAttachments = (attachments || []).filter((a: any) => a.submission_id === sub.id);
+    return {
+      ...sub,
+      studentName: sub.students?.name || 'Unknown Student',
+      attachments: subAttachments
+    };
+  });
+};
+
+export const getAttachmentSignedUrl = async (
+  filePath: string
+): Promise<string> => {
+  const { data, error } = await supabase.storage
+    .from('task-submissions')
+    .createSignedUrl(filePath, 3600); // 1 hour expiration
+
+  if (error) throw error;
+  return data.signedUrl;
+};
+
+export const reviewSubmission = async (
+  submissionId: string,
+  feedback: string,
+  status: 'reviewed' | 'returned',
+  score?: number
+): Promise<any> => {
+  const { data, error } = await supabase
+    .from('task_submissions')
+    .update({
+      teacher_feedback: feedback,
+      status: status,
+      score: score,
+      reviewed_at: new Date().toISOString()
+    })
+    .eq('id', submissionId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+

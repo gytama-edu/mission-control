@@ -97,4 +97,39 @@ export interface TaskGroupMember {
   studentName?: string;
 }
 
+export interface TaskSubmission {
+  id: string;
+  task_id: string;
+  class_id: string;
+  student_id: string | null;
+  task_group_id: string | null;
+  submitted_by_student_id: string | null;
+  submission_text: string | null;
+  status: 'submitted' | 'reviewed' | 'returned' | 'late';
+  teacher_feedback: string | null;
+  awarded_points: number | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+  studentName?: string;
+  attachments?: SubmissionAttachment[];
+}
+
+export interface SubmissionAttachment {
+  id: string;
+  submission_id: string;
+  task_id: string;
+  class_id: string;
+  student_id: string | null;
+  task_group_id: string | null;
+  file_name: string;
+  file_path: string;
+  file_type: string | null;
+  file_size_bytes: number | null;
+  storage_bucket: string;
+  uploaded_at: string;
+}
+
+
 

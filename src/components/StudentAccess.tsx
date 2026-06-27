@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClassData, Student, ActivityLog, Task } from '../types';
-import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users } from 'lucide-react';
+import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle } from 'lucide-react';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import { supabase } from '../lib/supabaseClient';
@@ -30,6 +30,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [isTasksLoading, setIsTasksLoading] = useState(false);
   const [isTasksTableMissing, setIsTasksTableMissing] = useState(false);
   const [studentGroups, setStudentGroups] = useState<Record<string, string>>({});
+  const [studentSubmissions, setStudentSubmissions] = useState<Record<string, any>>({});
 
   const loadStudentTasks = async (classId: string, studentId: string) => {
     setIsTasksLoading(true);
@@ -59,6 +60,32 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
           }
         });
         setStudentGroups(groupMap);
+      }
+
+      // Fetch task submissions
+      const { data: subRows, error: subErr } = await supabase
+        .from('task_submissions')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('class_id', classId);
+
+      // Fetch submission attachments
+      const { data: attachRows, error: attachErr } = await supabase
+        .from('submission_attachments')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('class_id', classId);
+
+      if (!subErr && subRows) {
+        const subMap: Record<string, any> = {};
+        subRows.forEach((s: any) => {
+          const sAttachments = (attachRows || []).filter((a: any) => a.submission_id === s.id);
+          subMap[s.task_id] = {
+            ...s,
+            attachments: sAttachments
+          };
+        });
+        setStudentSubmissions(subMap);
       }
     } catch (err: any) {
       if (err && (err.code === 'PGRST205' || (err.message && err.message.includes('tasks') && err.message.includes('schema cache')))) {
@@ -118,6 +145,167 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       supabase.removeChannel(tasksChannel);
     };
   }, [loggedInClass?.id, loggedInStudent?.id, isTasksTableMissing]);
+
+  // Student task submission states
+  const [selectedTaskForSubmission, setSelectedTaskForSubmission] = useState<Task | null>(null);
+  const [submissionText, setSubmissionText] = useState('');
+  const [submissionFiles, setSubmissionFiles] = useState<File[]>([]);
+  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
+  const [submissionError, setSubmissionError] = useState('');
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
+
+  const openSubmissionModal = (task: Task) => {
+    setSelectedTaskForSubmission(task);
+    const existing = studentSubmissions[task.id];
+    if (existing) {
+      setSubmissionText(existing.submission_text || '');
+    } else {
+      setSubmissionText('');
+    }
+    setSubmissionFiles([]);
+    setSubmissionError('');
+    setSubmissionSuccess(false);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !selectedTaskForSubmission) return;
+    const filesArray = Array.from(e.target.files) as File[];
+    
+    // File validation!
+    // 1. Check max attachments count
+    if (filesArray.length > selectedTaskForSubmission.max_attachments) {
+      setSubmissionError(`You can only upload up to ${selectedTaskForSubmission.max_attachments} file(s).`);
+      return;
+    }
+
+    // 2. Check each file size and type
+    const maxBytes = selectedTaskForSubmission.max_attachment_size_mb * 1024 * 1024;
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/wav',
+      'audio/wave',
+      'audio/x-wav',
+      'video/mp4'
+    ];
+
+    for (const file of filesArray) {
+      if (file.size > maxBytes) {
+        setSubmissionError(`File "${file.name}" exceeds the size limit of ${selectedTaskForSubmission.max_attachment_size_mb}MB.`);
+        return;
+      }
+      
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      const allowedExts = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'mp3', 'wav', 'mp4'];
+      
+      if (!allowedTypes.includes(file.type) && (!fileExt || !allowedExts.includes(fileExt))) {
+        setSubmissionError(`File "${file.name}" has unsupported type. Allowed: PDF, DOC, DOCX, PPT, PPTX, JPG, JPEG, PNG, WEBP, MP3, WAV, MP4.`);
+        return;
+      }
+    }
+
+    setSubmissionError('');
+    setSubmissionFiles(filesArray);
+  };
+
+  const handleDeleteExistingAttachment = async (attachmentId: string, filePath: string) => {
+    if (!loggedInClass || !loggedInStudent || !selectedTaskForSubmission) return;
+    const existingSub = studentSubmissions[selectedTaskForSubmission.id];
+    if (!existingSub) return;
+
+    try {
+      await taskDb.deleteSubmissionAttachment(
+        attachmentId,
+        filePath,
+        loggedInClass.id,
+        loggedInStudent.id,
+        selectedTaskForSubmission.id,
+        existingSub.id
+      );
+
+      // Reload tasks and submissions to refresh the list of attachments
+      await loadStudentTasks(loggedInClass.id, loggedInStudent.id);
+    } catch (err: any) {
+      console.error('Failed to delete attachment:', err);
+      setSubmissionError(err.message || 'Failed to delete attachment.');
+    }
+  };
+
+  const handleTaskSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loggedInClass || !loggedInStudent || !selectedTaskForSubmission) return;
+
+    // Determine if late
+    const isLate = selectedTaskForSubmission.due_at 
+      ? new Date() > new Date(selectedTaskForSubmission.due_at)
+      : false;
+
+    setIsSubmittingTask(true);
+    setSubmissionError('');
+    setSubmissionSuccess(false);
+
+    try {
+      // 1. Perform database submission row insert/update
+      const submission = await taskDb.submitIndividualTask(
+        selectedTaskForSubmission.id,
+        loggedInClass.id,
+        loggedInStudent.id,
+        selectedTaskForSubmission.title,
+        submissionText || null,
+        isLate
+      );
+
+      // 2. Upload any attachments
+      if (selectedTaskForSubmission.allow_attachment_submission && submissionFiles.length > 0) {
+        // Upload each file
+        for (const file of submissionFiles) {
+          const { filePath, fileName } = await taskDb.uploadAttachmentToStorage(
+            loggedInClass.id,
+            selectedTaskForSubmission.id,
+            loggedInStudent.id,
+            submission.id,
+            file
+          );
+
+          // Add attachment record to DB
+          await taskDb.addSubmissionAttachmentMetadata({
+            submission_id: submission.id,
+            task_id: selectedTaskForSubmission.id,
+            class_id: loggedInClass.id,
+            student_id: loggedInStudent.id,
+            file_name: fileName,
+            file_path: filePath,
+            file_type: file.type || file.name.split('.').pop() || 'unknown',
+            file_size_bytes: file.size
+          });
+        }
+      }
+
+      setSubmissionSuccess(true);
+      // Reload everything
+      await loadStudentTasks(loggedInClass.id, loggedInStudent.id);
+      
+      // Keep modal open briefly to show success, then auto-close or let user dismiss
+      setTimeout(() => {
+        setSelectedTaskForSubmission(null);
+      }, 1500);
+
+    } catch (err: any) {
+      console.error('Submission failed:', err);
+      setSubmissionError(err.message || 'Failed to submit task. Please check your storage bucket configuration or contact teacher.');
+    } finally {
+      setIsSubmittingTask(false);
+    }
+  };
 
   const loadStudentLogs = async (classId: string, studentId: string) => {
     setIsLogsLoading(true);
@@ -515,11 +703,42 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                     const assignedGroup = studentGroups[task.id];
                     const isClosed = task.status === 'closed';
 
+                    const submission = studentSubmissions[task.id];
+                    let submissionStatus = 'Not submitted';
+                    let statusBadgeColor = 'bg-slate-900 text-slate-500 border-slate-800';
+
+                    if (submission) {
+                      if (submission.status === 'reviewed') {
+                        submissionStatus = 'Reviewed';
+                        statusBadgeColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                      } else if (submission.status === 'returned') {
+                        submissionStatus = 'Returned';
+                        statusBadgeColor = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                      } else if (submission.status === 'late') {
+                        submissionStatus = 'Late Submission';
+                        statusBadgeColor = 'bg-red-500/10 text-red-400 border-red-500/20';
+                      } else {
+                        submissionStatus = 'Submitted';
+                        statusBadgeColor = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                      }
+                    }
+
+                    let subTypeLabel = '';
+                    if (task.allow_text_submission && task.allow_attachment_submission) {
+                      subTypeLabel = 'Text & Attachment';
+                    } else if (task.allow_text_submission) {
+                      subTypeLabel = 'Text Response';
+                    } else if (task.allow_attachment_submission) {
+                      subTypeLabel = 'Attachment Upload';
+                    } else {
+                      subTypeLabel = 'No submission required';
+                    }
+
                     return (
                       <div
                         key={task.id}
                         className={`bg-slate-950 border border-slate-850 rounded-xl p-4 space-y-3 transition-all relative ${
-                          isClosed ? 'opacity-60' : 'border-purple-500/10 hover:border-purple-500/20'
+                          isClosed ? 'opacity-70' : 'border-purple-500/10 hover:border-purple-500/20'
                         }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -534,6 +753,9 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                             <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-900 text-slate-400 border border-slate-800 capitalize">
                               {task.task_type}
                             </span>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold border capitalize ${statusBadgeColor}`}>
+                              {submissionStatus}
+                            </span>
                           </div>
 
                           <span className="text-yellow-500 text-xs font-mono font-bold flex items-center gap-1 bg-yellow-500/5 px-2 py-0.5 rounded border border-yellow-500/10">
@@ -545,6 +767,17 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                           <h4 className="text-sm font-bold text-white leading-snug">{task.title}</h4>
                           {task.description && (
                             <p className="text-xs text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 bg-slate-900/40 p-2 rounded-lg border border-slate-850">
+                          <div>
+                            <span className="text-slate-500">Submission:</span> <span className="font-medium text-slate-300">{subTypeLabel}</span>
+                          </div>
+                          {task.allow_attachment_submission && (
+                            <div>
+                              <span className="text-slate-500">Files Max:</span> <span className="font-mono font-medium text-slate-300">{task.max_attachments} • {task.max_attachment_size_mb}MB each</span>
+                            </div>
                           )}
                         </div>
 
@@ -563,13 +796,30 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                           </div>
                         )}
 
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-900/60 text-[11px] text-slate-500">
-                          <span>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-900/60 text-[11px] text-slate-500">
+                          <span className="flex items-center gap-1">
                             📅 Due: {task.due_at ? new Date(task.due_at).toLocaleString() : 'No due date set'}
                           </span>
-                          <span className="text-purple-400/80 font-bold uppercase tracking-wider font-mono">
-                            Submission coming in Phase 7B
-                          </span>
+                          
+                          {task.task_type === 'group' ? (
+                            <span className="text-amber-500/80 font-bold uppercase tracking-wider font-mono bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/10">
+                              Group submission coming in Phase 7C
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openSubmissionModal(task)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                isClosed
+                                  ? 'bg-slate-900 text-slate-500 border border-slate-850 cursor-not-allowed'
+                                  : submission
+                                  ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-md'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse hover:animate-none'
+                              }`}
+                            >
+                              {isClosed ? 'View Submission' : submission ? 'Update Submission' : 'Open Mission Form'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -680,6 +930,231 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
             </div>
           </div>
         </div>
+
+        {/* Task Submission Modal */}
+        {selectedTaskForSubmission && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <CheckSquare size={18} className="text-purple-400" />
+                    {selectedTaskForSubmission.title}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Reward: <span className="text-yellow-500 font-semibold font-mono">⭐ {selectedTaskForSubmission.reward_points} pts</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTaskForSubmission(null)}
+                  className="text-slate-400 hover:text-white transition-colors p-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                {/* Task Details */}
+                {selectedTaskForSubmission.description && (
+                  <div className="bg-slate-950 border border-slate-850 p-4 rounded-xl">
+                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Mission Directive</h4>
+                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedTaskForSubmission.description}</p>
+                  </div>
+                )}
+
+                {/* Due Date Indicator */}
+                <div className="flex items-center gap-2 text-xs bg-slate-950 border border-slate-850 p-3 rounded-xl">
+                  <Clock size={14} className="text-slate-500" />
+                  <span className="text-slate-400">
+                    📅 Due: {selectedTaskForSubmission.due_at ? new Date(selectedTaskForSubmission.due_at).toLocaleString() : 'No due date'}
+                  </span>
+                  {selectedTaskForSubmission.due_at && new Date() > new Date(selectedTaskForSubmission.due_at) && (
+                    <span className="text-red-400 font-mono font-extrabold uppercase bg-red-500/10 px-1.5 py-0.5 rounded ml-auto text-[9px] border border-red-500/20">
+                      LATE
+                    </span>
+                  )}
+                </div>
+
+                {/* Existing Submission Details */}
+                {studentSubmissions[selectedTaskForSubmission.id] && (
+                  <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Saved Submission</h4>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${
+                        studentSubmissions[selectedTaskForSubmission.id].status === 'reviewed'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : studentSubmissions[selectedTaskForSubmission.id].status === 'returned'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : studentSubmissions[selectedTaskForSubmission.id].status === 'late'
+                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                          : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      }`}>
+                        {studentSubmissions[selectedTaskForSubmission.id].status}
+                      </span>
+                    </div>
+
+                    {studentSubmissions[selectedTaskForSubmission.id].submission_text && (
+                      <div className="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-850 italic">
+                        "{studentSubmissions[selectedTaskForSubmission.id].submission_text}"
+                      </div>
+                    )}
+
+                    {/* Teacher Feedback if reviewed/returned */}
+                    {studentSubmissions[selectedTaskForSubmission.id].teacher_feedback && (
+                      <div className="bg-purple-950/25 border border-purple-900/40 p-3 rounded-lg text-xs space-y-1">
+                        <div className="font-bold text-purple-400 flex items-center gap-1">💬 Teacher Feedback:</div>
+                        <p className="text-slate-300 italic">{studentSubmissions[selectedTaskForSubmission.id].teacher_feedback}</p>
+                      </div>
+                    )}
+
+                    {/* Attachments list if any */}
+                    {studentSubmissions[selectedTaskForSubmission.id].attachments && 
+                     studentSubmissions[selectedTaskForSubmission.id].attachments.length > 0 && (
+                      <div className="space-y-2">
+                        <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Saved Attachments:</h5>
+                        <div className="space-y-1.5">
+                          {studentSubmissions[selectedTaskForSubmission.id].attachments.map((file: any) => (
+                            <div key={file.id} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-850 text-xs">
+                              <span className="text-slate-300 font-mono flex items-center gap-1.5 truncate">
+                                <Paperclip size={12} className="text-slate-500 shrink-0" />
+                                {file.file_name}
+                              </span>
+                              {selectedTaskForSubmission.status !== 'closed' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteExistingAttachment(file.id, file.file_path)}
+                                  className="text-red-400 hover:text-red-300 p-1 transition-colors hover:bg-red-500/10 rounded"
+                                  title="Delete attachment"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Submission form */}
+                {selectedTaskForSubmission.status === 'closed' ? (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3.5 rounded-xl flex items-center gap-2.5 text-xs">
+                    <AlertTriangle size={16} />
+                    <span>This task is closed. You can no longer make or update submissions.</span>
+                  </div>
+                ) : submissionSuccess ? (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3.5 rounded-xl flex items-center gap-2.5 text-xs font-medium">
+                    <CheckCircle size={16} />
+                    <span>Directive logged! Transmitting to commander...</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleTaskSubmit} className="space-y-4">
+                    {/* Text Area Input */}
+                    {selectedTaskForSubmission.allow_text_submission && (
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                          Your Text Answer
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={submissionText}
+                          onChange={(e) => setSubmissionText(e.target.value)}
+                          placeholder="Type your response or directive log here..."
+                          required={!selectedTaskForSubmission.allow_attachment_submission}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        />
+                      </div>
+                    )}
+
+                    {/* File Attachment Upload */}
+                    {selectedTaskForSubmission.allow_attachment_submission && (
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                          Upload Files & Documentations
+                        </label>
+                        <div className="border border-dashed border-slate-800 bg-slate-950 hover:bg-slate-950/65 rounded-xl p-4 text-center cursor-pointer transition-colors relative">
+                          <input
+                            type="file"
+                            multiple
+                            maxLength={selectedTaskForSubmission.max_attachments}
+                            onChange={handleFileChange}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                          <Upload className="mx-auto text-slate-500 mb-2" size={20} />
+                          <p className="text-xs text-slate-400">Drag or browse to attach files</p>
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            Up to {selectedTaskForSubmission.max_attachments} file(s) • Max size: {selectedTaskForSubmission.max_attachment_size_mb}MB each
+                          </p>
+                        </div>
+
+                        {/* Selected files listing */}
+                        {submissionFiles.length > 0 && (
+                          <div className="space-y-1.5">
+                            <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Selected files to upload:</h5>
+                            <div className="space-y-1">
+                              {submissionFiles.map((file, idx) => (
+                                <div key={idx} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-850 text-xs">
+                                  <span className="text-slate-300 font-mono flex items-center gap-1.5 truncate">
+                                    <FileText size={12} className="text-slate-500 shrink-0" />
+                                    {file.name}
+                                    <span className="text-[10px] text-slate-500">({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSubmissionFiles(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-red-400 hover:text-red-300 p-1"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {submissionError && (
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl flex items-center gap-2 text-xs">
+                        <AlertTriangle size={14} className="shrink-0" />
+                        <span>{submissionError}</span>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTaskForSubmission(null)}
+                        className="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmittingTask}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-2"
+                      >
+                        {isSubmittingTask ? (
+                          <>
+                            <Loader2 className="animate-spin" size={14} /> Transmitting...
+                          </>
+                        ) : studentSubmissions[selectedTaskForSubmission.id] ? (
+                          'Update Submission'
+                        ) : (
+                          'Submit Directive'
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
