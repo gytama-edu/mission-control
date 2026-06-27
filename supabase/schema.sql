@@ -26,8 +26,16 @@ CREATE TABLE meetings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   class_id uuid REFERENCES classes(id) ON DELETE CASCADE,
   started_at timestamptz DEFAULT now(),
-  reset_lives_to integer NOT NULL
+  ended_at timestamptz,
+  status text NOT NULL DEFAULT 'ended' CHECK (status IN ('active', 'ended')),
+  reset_lives_to integer NOT NULL,
+  summary jsonb DEFAULT '{}'::jsonb,
+  teacher_id uuid REFERENCES auth.users(id) ON DELETE SET NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_meeting_per_class
+ON public.meetings (class_id)
+WHERE status = 'active';
 
 -- Enable Row Level Security (RLS) on all tables
 ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
@@ -113,6 +121,7 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
   teacher_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
   student_id uuid REFERENCES public.students(id) ON DELETE SET NULL,
+  meeting_id uuid REFERENCES public.meetings(id) ON DELETE SET NULL,
   action_type text NOT NULL,
   points_delta integer DEFAULT 0,
   lives_delta integer DEFAULT 0,

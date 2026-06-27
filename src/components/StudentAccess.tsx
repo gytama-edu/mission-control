@@ -240,13 +240,13 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       )
       .subscribe();
 
-    // 4. Subscribe to meetings INSERT for this class
+    // 4. Subscribe to meetings updates (start/end) for this class
     const meetingsSubscription = supabase
       .channel(`class-meetings-${classId}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'meetings',
           filter: `class_id=eq.${classId}`,
@@ -317,6 +317,8 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     const sortedStudents = [...loggedInClass.students].sort((a, b) => b.points - a.points);
     const rank = sortedStudents.findIndex(s => s.id === student.id) + 1;
 
+    const activeMeeting = loggedInClass.meetings.find(m => m.status === 'active');
+
     const latestMeeting = loggedInClass.meetings.length > 0 
       ? new Date(loggedInClass.meetings[loggedInClass.meetings.length - 1].startedAt).toLocaleDateString()
       : 'No meetings yet';
@@ -354,8 +356,20 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                     Class: <span className="text-white font-medium">{loggedInClass.name}</span>
                   </p>
                 </div>
-                <div className={`px-3 py-1 rounded-lg text-sm font-medium border ${statusColor}`}>
-                  Status: {status}
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <div className={`px-3 py-1 rounded-lg text-sm font-medium border ${statusColor}`}>
+                    Status: {status}
+                  </div>
+                  {activeMeeting ? (
+                    <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider animate-pulse">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      Class Session Active
+                    </span>
+                  ) : (
+                    <span className="bg-slate-850 text-slate-500 border border-slate-800 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider">
+                      No Active Session
+                    </span>
+                  )}
                 </div>
               </div>
 

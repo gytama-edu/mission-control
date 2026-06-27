@@ -112,7 +112,8 @@ export default function App() {
     regenerateStudentPin,
     updateStudentLives,
     updateStudentPoints,
-    startMeeting
+    startMeeting,
+    endMeeting
   } = useClasses(teacherUser?.id || null);
 
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
@@ -170,6 +171,7 @@ export default function App() {
           onUpdateLives={(studentId, change, reason) => updateStudentLives(activeClass.id, studentId, change, reason)}
           onUpdatePoints={(studentId, change, reason) => updateStudentPoints(activeClass.id, studentId, change, reason)}
           onStartMeeting={() => startMeeting(activeClass.id)}
+          onEndMeeting={(meetingId) => endMeeting(activeClass.id, meetingId)}
         />
       ) : (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-4">

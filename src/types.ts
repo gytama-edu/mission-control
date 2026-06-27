@@ -10,7 +10,25 @@ export interface Student {
 
 export interface Meeting {
   id: string;
+  class_id: string;
   startedAt: string;
+  endedAt?: string | null;
+  status: 'active' | 'ended';
+  resetLivesTo: number;
+  summary?: {
+    started_at?: string;
+    ended_at?: string;
+    duration?: string;
+    total_point_changes?: number;
+    total_lives_lost?: number;
+    total_lives_gained?: number;
+    total_actions?: number;
+    most_active_student?: string;
+    top_gainers?: string[];
+    lost_lives_students?: string[];
+    [key: string]: any;
+  } | null;
+  teacherId?: string | null;
 }
 
 export interface ClassData {
@@ -30,6 +48,7 @@ export interface ActivityLog {
   teacher_id?: string | null;
   class_id: string;
   student_id?: string | null;
+  meeting_id?: string | null;
   action_type: string;
   points_delta?: number;
   lives_delta?: number;

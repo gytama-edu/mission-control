@@ -184,6 +184,13 @@ export function useClasses(teacherId: string | null) {
     } catch (err: any) { alert(err.message); }
   };
 
+  const endMeeting = async (classId: string, meetingId: string) => {
+    try {
+      await db.endClassMeeting(meetingId, classId);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
+  };
+
   return {
     classes,
     isLoading,
@@ -199,6 +206,7 @@ export function useClasses(teacherId: string | null) {
     updateStudentLives,
     updateStudentPoints,
     startMeeting,
+    endMeeting,
     regenerateJoinCode,
     regenerateStudentPin
   };

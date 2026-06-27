@@ -17,6 +17,7 @@ interface ClassDetailProps {
   onUpdateLives: (studentId: string, change: number, reason?: string | null) => void;
   onUpdatePoints: (studentId: string, change: number, reason?: string | null) => void;
   onStartMeeting: () => void;
+  onEndMeeting: (meetingId: string) => void;
 }
 
 export function ClassDetail({
@@ -31,10 +32,11 @@ export function ClassDetail({
   onRegenerateStudentPin,
   onUpdateLives,
   onUpdatePoints,
-  onStartMeeting
+  onStartMeeting,
+  onEndMeeting
 }: ClassDetailProps) {
   const [newStudentName, setNewStudentName] = useState('');
-  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'settings'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'settings'>('roster');
 
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
@@ -42,10 +44,13 @@ export function ClassDetail({
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [logFilter, setLogFilter] = useState<'all' | 'points' | 'lives' | 'system'>('all');
+  const [timelineMeetingFilter, setTimelineMeetingFilter] = useState<'current' | 'all'>('all');
   const [isTableMissing, setIsTableMissing] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+  const [isEndMeetingModalOpen, setIsEndMeetingModalOpen] = useState(false);
+  const [selectedMeetingForSummary, setSelectedMeetingForSummary] = useState<any | null>(null);
 
   const loadLogs = async () => {
     setIsLogsLoading(true);
@@ -107,6 +112,19 @@ export function ClassDetail({
   const [editClassName, setEditClassName] = useState(classData.name);
   const [editClassLevel, setEditClassLevel] = useState(classData.level);
   const [editClassMaxLives, setEditClassMaxLives] = useState(classData.maxLives);
+
+  const activeMeeting = classData.meetings?.find(m => m.status === 'active');
+
+  const handleEndMeeting = async () => {
+    if (!activeMeeting) return;
+    try {
+      await onEndMeeting(activeMeeting.id);
+      setIsEndMeetingModalOpen(false);
+      alert('Class meeting ended and session summary created!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to end meeting.');
+    }
+  };
 
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,13 +202,33 @@ export function ClassDetail({
             </div>
           </div>
 
-          <button
-            onClick={() => setIsMeetingModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
-          >
-            <Play size={20} className="fill-current" />
-            Start New Meeting
-          </button>
+          {activeMeeting ? (
+            <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-950 p-4 rounded-xl border border-emerald-500/30">
+              <div className="flex items-center gap-2.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="text-left">
+                  <div className="text-sm font-bold text-emerald-400">Meeting in progress</div>
+                  <div className="text-xs text-slate-400">
+                    Started: {new Date(activeMeeting.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEndMeetingModalOpen(true)}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer shrink-0"
+              >
+                End Class Meeting
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsMeetingModalOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+            >
+              <Play size={20} className="fill-current" />
+              Start New Meeting
+            </button>
+          )}
         </div>
       </header>
 
@@ -227,6 +265,17 @@ export function ClassDetail({
           <Clock size={16} /> Activity Log
           {activeTab === 'activity_log' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('meetings')}
+          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'meetings' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <Play size={16} /> Meeting History
+          {activeTab === 'meetings' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
           )}
         </button>
         <button
@@ -613,20 +662,47 @@ alter publication supabase_realtime add table public.activity_logs;`}
             <>
               {/* Filtering */}
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div className="flex gap-1.5 flex-wrap">
-                  {(['all', 'points', 'lives', 'system'] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setLogFilter(filter)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors capitalize cursor-pointer ${
-                        logFilter === filter
-                          ? 'bg-indigo-600 text-white shadow'
-                          : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
-                      }`}
-                    >
-                      {filter === 'all' ? 'All Activities' : filter === 'system' ? 'Roster / Class' : `${filter} changes`}
-                    </button>
-                  ))}
+                <div className="flex gap-4 flex-wrap items-center">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {(['all', 'points', 'lives', 'system'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        onClick={() => setLogFilter(filter)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors capitalize cursor-pointer ${
+                          logFilter === filter
+                            ? 'bg-indigo-600 text-white shadow'
+                            : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        {filter === 'all' ? 'All Activities' : filter === 'system' ? 'Roster / Class' : `${filter} changes`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {activeMeeting && (
+                    <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-850">
+                      <button
+                        onClick={() => setTimelineMeetingFilter('all')}
+                        className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-all cursor-pointer ${
+                          timelineMeetingFilter === 'all'
+                            ? 'bg-slate-800 text-white font-bold'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        All History
+                      </button>
+                      <button
+                        onClick={() => setTimelineMeetingFilter('current')}
+                        className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-all cursor-pointer ${
+                          timelineMeetingFilter === 'current'
+                            ? 'bg-emerald-600 text-white font-bold'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Current Session
+                      </button>
+                    </div>
+                  )}
                 </div>
                 
                 <button
@@ -644,6 +720,11 @@ alter publication supabase_realtime add table public.activity_logs;`}
               ) : (
                 (() => {
                   const filtered = activityLogs.filter((log) => {
+                    if (timelineMeetingFilter === 'current') {
+                      if (!activeMeeting) return false;
+                      if (log.meeting_id !== activeMeeting.id) return false;
+                    }
+
                     if (logFilter === 'all') return true;
                     if (logFilter === 'points') return log.action_type === 'points_changed';
                     if (logFilter === 'lives') return log.action_type === 'lives_changed';
@@ -657,7 +738,8 @@ alter publication supabase_realtime add table public.activity_logs;`}
                         'student_updated',
                         'student_deleted',
                         'student_pin_reset',
-                        'meeting_started'
+                        'meeting_started',
+                        'meeting_ended'
                       ].includes(log.action_type);
                     }
                     return true;
@@ -687,6 +769,7 @@ alter publication supabase_realtime add table public.activity_logs;`}
                         const isPoints = log.action_type === 'points_changed';
                         const isLives = log.action_type === 'lives_changed';
                         const isUndoable = (isPoints || isLives) && !log.undone;
+                        const isCurrentSessionLog = activeMeeting && log.meeting_id === activeMeeting.id;
 
                         // Formulate nice human-readable message
                         let title = '';
@@ -694,57 +777,61 @@ alter publication supabase_realtime add table public.activity_logs;`}
                         let badgeColor = 'bg-slate-800 text-slate-400';
 
                         if (log.action_type === 'points_changed') {
-                          const delta = log.points_delta || 0;
-                          const sign = delta > 0 ? '+' : '';
-                          title = `${sign}${delta} points`;
-                          details = `awarded to ${log.studentName || 'Student'}`;
-                          badgeColor = delta > 0 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20';
+                           const delta = log.points_delta || 0;
+                           const sign = delta > 0 ? '+' : '';
+                           title = `${sign}${delta} points`;
+                           details = `awarded to ${log.studentName || 'Student'}`;
+                           badgeColor = delta > 0 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20';
                         } else if (log.action_type === 'lives_changed') {
-                          const delta = log.lives_delta || 0;
-                          const sign = delta > 0 ? '+' : '';
-                          title = `${sign}${delta} lives`;
-                          details = `for ${log.studentName || 'Student'}`;
-                          badgeColor = delta > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20';
+                           const delta = log.lives_delta || 0;
+                           const sign = delta > 0 ? '+' : '';
+                           title = `${sign}${delta} lives`;
+                           details = `for ${log.studentName || 'Student'}`;
+                           badgeColor = delta > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20';
                         } else if (log.action_type === 'class_created') {
-                          title = 'Class Created';
-                          details = `"${log.metadata?.name || 'Class'}" initialized`;
-                          badgeColor = 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
+                           title = 'Class Created';
+                           details = `"${log.metadata?.name || 'Class'}" initialized`;
+                           badgeColor = 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
                         } else if (log.action_type === 'class_claimed') {
-                          title = 'Class Claimed';
-                          details = `Linked securely to teacher account`;
-                          badgeColor = 'bg-teal-500/10 text-teal-400 border border-teal-500/20';
+                           title = 'Class Claimed';
+                           details = `Linked securely to teacher account`;
+                           badgeColor = 'bg-teal-500/10 text-teal-400 border border-teal-500/20';
                         } else if (log.action_type === 'class_updated') {
-                          title = 'Class Edited';
-                          details = `Max Lives: ${log.metadata?.max_lives || 'N/A'}`;
-                          badgeColor = 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+                           title = 'Class Edited';
+                           details = `Max Lives: ${log.metadata?.max_lives || 'N/A'}`;
+                           badgeColor = 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
                         } else if (log.action_type === 'join_code_regenerated') {
-                          title = 'Join Code Reset';
-                          details = `New code: ${log.metadata?.new_code || 'N/A'}`;
-                          badgeColor = 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
+                           title = 'Join Code Reset';
+                           details = `New code: ${log.metadata?.new_code || 'N/A'}`;
+                           badgeColor = 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
                         } else if (log.action_type === 'student_added') {
-                          title = 'Student Registered';
-                          details = `"${log.metadata?.student_name || 'Student'}" joined the roster`;
-                          badgeColor = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
+                           title = 'Student Registered';
+                           details = `"${log.metadata?.student_name || 'Student'}" joined the roster`;
+                           badgeColor = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
                         } else if (log.action_type === 'student_updated') {
-                          title = 'Student Profile Edited';
-                          details = `"${log.metadata?.name || 'Student'}" updated`;
-                          badgeColor = 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20';
+                           title = 'Student Profile Edited';
+                           details = `"${log.metadata?.name || 'Student'}" updated`;
+                           badgeColor = 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20';
                         } else if (log.action_type === 'student_deleted') {
-                          title = 'Student Removed';
-                          details = `"${log.metadata?.student_name || 'Student'}" removed`;
-                          badgeColor = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+                           title = 'Student Removed';
+                           details = `"${log.metadata?.student_name || 'Student'}" removed`;
+                           badgeColor = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
                         } else if (log.action_type === 'student_pin_reset') {
-                          title = 'Student PIN Reset';
-                          details = `New credentials generated`;
-                          badgeColor = 'bg-amber-500/10 text-amber-500 border border-amber-500/20';
+                           title = 'Student PIN Reset';
+                           details = `New credentials generated`;
+                           badgeColor = 'bg-amber-500/10 text-amber-500 border border-amber-500/20';
                         } else if (log.action_type === 'meeting_started') {
-                          title = 'New Session Started';
-                          details = `All student lives restored to ${log.metadata?.reset_lives_to || classData.maxLives}`;
-                          badgeColor = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                           title = 'New Session Started';
+                           details = `All student lives restored to ${log.metadata?.reset_lives_to || classData.maxLives}`;
+                           badgeColor = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                        } else if (log.action_type === 'meeting_ended') {
+                           title = 'Session Ended';
+                           details = `Duration: ${log.metadata?.duration || 'N/A'}. Point changes: ${log.metadata?.total_points || 0}. Lives lost: ${log.metadata?.lives_lost || 0}.`;
+                           badgeColor = 'bg-pink-500/10 text-pink-400 border border-pink-500/20';
                         } else if (log.action_type === 'action_undone') {
-                          title = 'Action Undone';
-                          details = log.reason || '';
-                          badgeColor = 'bg-slate-850 text-slate-400 border border-slate-800';
+                           title = 'Action Undone';
+                           details = log.reason || '';
+                           badgeColor = 'bg-slate-850 text-slate-400 border border-slate-800';
                         }
 
                         return (
@@ -755,21 +842,30 @@ alter publication supabase_realtime add table public.activity_logs;`}
                             }`}
                           >
                             <div className="flex items-start gap-3">
-                              <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold uppercase tracking-wider shrink-0 border ${badgeColor}`}>
-                                {title}
-                              </span>
-                              <div className="space-y-1">
-                                <p className={`text-sm font-medium text-slate-200 ${log.undone ? 'line-through' : ''}`}>
-                                  {details}
-                                  {log.reason && (
-                                    <span className="text-slate-400 block text-xs mt-1 font-sans italic line-through-none">
-                                      Reason: "{log.reason}"
+                              <div className="flex flex-col gap-1.5 items-start">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold uppercase tracking-wider shrink-0 border ${badgeColor}`}>
+                                    {title}
+                                  </span>
+                                  {isCurrentSessionLog && (
+                                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                                      Current Session
                                     </span>
                                   )}
-                                </p>
-                                <span className="text-[10px] text-slate-500 font-mono block">
-                                  {new Date(log.created_at).toLocaleString()}
-                                </span>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className={`text-sm font-medium text-slate-200 ${log.undone ? 'line-through' : ''}`}>
+                                    {details}
+                                    {log.reason && (
+                                      <span className="text-slate-400 block text-xs mt-1 font-sans italic line-through-none">
+                                        Reason: "{log.reason}"
+                                      </span>
+                                    )}
+                                  </p>
+                                  <span className="text-[10px] text-slate-500 font-mono block">
+                                    {new Date(log.created_at).toLocaleString()}
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
@@ -796,6 +892,102 @@ alter publication supabase_realtime add table public.activity_logs;`}
                 })()
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'meetings' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-display font-bold text-white">Meeting History</h2>
+              <p className="text-sm text-slate-400">Review class sessions, summaries, and performance metrics.</p>
+            </div>
+          </div>
+
+          {classData.meetings.length === 0 ? (
+            <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500">
+              No meetings recorded for this class yet.
+            </div>
+          ) : (
+            <div className="space-y-4 max-w-3xl">
+              {classData.meetings.map((meeting) => {
+                const isActive = meeting.status === 'active';
+                const startedTime = new Date(meeting.startedAt).toLocaleString();
+                const endedTime = meeting.endedAt ? new Date(meeting.endedAt).toLocaleString() : 'Active Now';
+
+                return (
+                  <div
+                    key={meeting.id}
+                    className={`bg-slate-900 border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                      isActive ? 'border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.05)] bg-slate-900/90' : 'border-slate-800'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2.5">
+                        {isActive ? (
+                          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider animate-pulse">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                            Active Session
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-850 text-slate-400 border border-slate-800">
+                            Ended Session
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-500 font-mono">
+                          Lives Reset Target: {meeting.resetLivesTo}
+                        </span>
+                      </div>
+
+                      <div className="text-sm text-slate-300 space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-500 text-xs w-14">Started:</span>
+                          <span className="font-medium text-slate-200">{startedTime}</span>
+                        </div>
+                        {!isActive && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-500 text-xs w-14">Ended:</span>
+                            <span className="font-medium text-slate-200">{endedTime}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {meeting.summary && (
+                        <div className="text-xs text-slate-400 bg-slate-950/50 p-2.5 rounded-lg border border-slate-850 max-w-md">
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-sans">
+                            <div>Duration: <span className="font-semibold text-slate-300">{meeting.summary.duration}</span></div>
+                            <div>Total Actions: <span className="font-semibold text-slate-300">{meeting.summary.total_actions}</span></div>
+                            <div>Point Changes: <span className="font-semibold text-slate-300">{meeting.summary.total_point_changes}</span></div>
+                            <div>Lives Lost: <span className="font-semibold text-slate-300 text-red-400">{meeting.summary.total_lives_lost}</span></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      {isActive ? (
+                        <button
+                          onClick={() => setIsEndMeetingModalOpen(true)}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          End Class Meeting
+                        </button>
+                      ) : meeting.summary ? (
+                        <button
+                          onClick={() => setSelectedMeetingForSummary(meeting)}
+                          className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 hover:border-slate-600 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          View Summary Report
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-500 italic">No summary generated</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -974,6 +1166,178 @@ alter publication supabase_realtime add table public.activity_logs;`}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* End Meeting Confirmation Modal */}
+      {isEndMeetingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-red-500/20 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center gap-3 text-red-400 mb-4">
+              <AlertTriangle size={28} />
+              <h3 className="text-2xl font-display font-bold text-white">End class meeting?</h3>
+            </div>
+            <p className="text-slate-300 mb-6 leading-relaxed text-sm">
+              This will close the active meeting and generate a comprehensive session summary report.
+            </p>
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2 mb-6">
+              <div className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                <span>Student current points will remain unchanged.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                <span>Student current lives will not reset.</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsEndMeetingModalOpen(false)}
+                className="px-5 py-2.5 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEndMeeting}
+                className="bg-red-650 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-2"
+              >
+                End Meeting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Summary Detail Modal */}
+      {selectedMeetingForSummary && selectedMeetingForSummary.summary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-5">
+              <div>
+                <h3 className="text-xl font-display font-bold text-white flex items-center gap-2">
+                  <Trophy className="text-yellow-500" size={20} />
+                  Session Summary Report
+                </h3>
+                <p className="text-xs text-slate-500 font-mono mt-1">
+                  Session ID: {selectedMeetingForSummary.id.substring(0, 8)}...
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedMeetingForSummary(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-6 text-sm">
+              {/* Timing info */}
+              <div className="grid grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-850">
+                <div>
+                  <span className="text-[10px] text-slate-500 font-mono block uppercase">Started At</span>
+                  <span className="text-slate-200 font-medium">
+                    {new Date(selectedMeetingForSummary.summary.started_at).toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 font-mono block uppercase">Ended At</span>
+                  <span className="text-slate-200 font-medium">
+                    {new Date(selectedMeetingForSummary.summary.ended_at).toLocaleString()}
+                  </span>
+                </div>
+                <div className="col-span-2 border-t border-slate-800/60 pt-2 flex justify-between items-center text-xs">
+                  <span className="text-slate-400">Total Duration:</span>
+                  <span className="font-bold text-emerald-400">{selectedMeetingForSummary.summary.duration}</span>
+                </div>
+              </div>
+
+              {/* Stats overview */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Key Stats Overview</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 text-center">
+                    <span className="text-2xl font-black text-slate-100 block">
+                      {selectedMeetingForSummary.summary.total_actions}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono uppercase">Total Actions Logged</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 text-center">
+                    <span className="text-2xl font-black text-yellow-500 block">
+                      {selectedMeetingForSummary.summary.total_point_changes >= 0 ? '+' : ''}
+                      {selectedMeetingForSummary.summary.total_point_changes}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono uppercase font-bold">Points Awarded</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 text-center col-span-2">
+                    <div className="flex justify-around items-center h-full">
+                      <div>
+                        <span className="text-lg font-bold text-red-500 block">
+                          -{selectedMeetingForSummary.summary.total_lives_lost}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono uppercase">Lives Lost</span>
+                      </div>
+                      <div className="h-6 w-px bg-slate-800" />
+                      <div>
+                        <span className="text-lg font-bold text-emerald-400 block">
+                          +{selectedMeetingForSummary.summary.total_lives_gained}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-mono uppercase">Lives Recovered</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Performance / Leaders */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance Metrics</h4>
+                
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between bg-slate-950/60 p-3 rounded-xl border border-slate-850/80">
+                    <span className="text-xs text-slate-400 font-medium">Most Active Student</span>
+                    <span className="font-bold text-indigo-400 text-sm">
+                      {selectedMeetingForSummary.summary.most_active_student}
+                    </span>
+                  </div>
+
+                  {selectedMeetingForSummary.summary.top_gainers && selectedMeetingForSummary.summary.top_gainers.length > 0 && (
+                    <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-850/80 space-y-2">
+                      <span className="text-xs text-slate-400 font-medium block">Top Point Gainers</span>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedMeetingForSummary.summary.top_gainers.map((gainer: string, idx: number) => (
+                          <span key={idx} className="bg-yellow-500/10 text-yellow-500 text-xs px-2.5 py-1 rounded-lg border border-yellow-500/20 font-medium">
+                            {gainer}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedMeetingForSummary.summary.lost_lives_students && selectedMeetingForSummary.summary.lost_lives_students.length > 0 && (
+                    <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-850/80 space-y-2">
+                      <span className="text-xs text-slate-400 font-medium block">Classroom Incidents (Lives Lost)</span>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedMeetingForSummary.summary.lost_lives_students.map((incident: string, idx: number) => (
+                          <span key={idx} className="bg-red-500/10 text-red-400 text-xs px-2.5 py-1 rounded-lg border border-red-500/20 font-medium">
+                            {incident}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 border-t border-slate-850 pt-4 flex justify-end">
+              <button
+                onClick={() => setSelectedMeetingForSummary(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-bold transition-all text-sm cursor-pointer"
+              >
+                Close Summary
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -8,15 +8,31 @@ export const logActivity = async (
   pointsDelta: number = 0,
   livesDelta: number = 0,
   reason: string | null = null,
-  metadata: any = {}
+  metadata: any = {},
+  meetingId: string | null = null
 ): Promise<void> => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     const teacherId = user?.id || null;
+    
+    let activeMeetingId = meetingId;
+    if (!activeMeetingId) {
+      const { data: activeMeeting } = await supabase
+        .from('meetings')
+        .select('id')
+        .eq('class_id', classId)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (activeMeeting) {
+        activeMeetingId = activeMeeting.id;
+      }
+    }
+
     await supabase.from('activity_logs').insert([{
       class_id: classId,
       teacher_id: teacherId,
       student_id: studentId,
+      meeting_id: activeMeetingId,
       action_type: actionType,
       points_delta: pointsDelta,
       lives_delta: livesDelta,
@@ -46,6 +62,7 @@ export const fetchActivityLogs = async (classId: string): Promise<ActivityLog[]>
     teacher_id: log.teacher_id,
     class_id: log.class_id,
     student_id: log.student_id,
+    meeting_id: log.meeting_id,
     action_type: log.action_type,
     points_delta: log.points_delta,
     lives_delta: log.lives_delta,
@@ -75,6 +92,7 @@ export const fetchStudentActivityLogs = async (classId: string, studentId: strin
     teacher_id: log.teacher_id,
     class_id: log.class_id,
     student_id: log.student_id,
+    meeting_id: log.meeting_id,
     action_type: log.action_type,
     points_delta: log.points_delta,
     lives_delta: log.lives_delta,
@@ -190,7 +208,7 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
   const { data: meetings, error: meetingError } = await supabase
     .from('meetings')
     .select('*')
-    .order('started_at', { ascending: true });
+    .order('started_at', { ascending: false });
 
   if (meetingError) throw meetingError;
 
@@ -217,8 +235,13 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
       .filter(m => m.class_id === c.id)
       .map(m => ({
         id: m.id,
+        class_id: m.class_id,
         startedAt: m.started_at,
-        resetLivesTo: m.reset_lives_to
+        endedAt: m.ended_at,
+        status: m.status || 'ended',
+        resetLivesTo: m.reset_lives_to,
+        summary: m.summary || null,
+        teacherId: m.teacher_id
       }))
   }));
 };
@@ -435,9 +458,32 @@ export const updateStudentPoints = async (studentId: string, change: number, rea
 };
 
 export const startNewMeeting = async (classId: string, maxLives: number): Promise<any> => {
+  // Check if there is already an active meeting
+  const { data: activeMeeting, error: checkError } = await supabase
+    .from('meetings')
+    .select('*')
+    .eq('class_id', classId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (checkError) throw checkError;
+
+  if (activeMeeting) {
+    throw new Error('A meeting is already active. End the current meeting before starting a new one.');
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const teacherId = user?.id || null;
+
   const { data: meeting, error: meetingError } = await supabase
     .from('meetings')
-    .insert([{ class_id: classId, reset_lives_to: maxLives }])
+    .insert([{ 
+      class_id: classId, 
+      reset_lives_to: maxLives, 
+      status: 'active',
+      started_at: new Date().toISOString(),
+      teacher_id: teacherId
+    }])
     .select()
     .single();
 
@@ -451,9 +497,155 @@ export const startNewMeeting = async (classId: string, maxLives: number): Promis
   if (studentError) throw studentError;
 
   // Log meeting started
-  await logActivity(classId, 'meeting_started', null, 0, 0, null, { reset_lives_to: maxLives });
+  await logActivity(classId, 'meeting_started', null, 0, 0, null, { reset_lives_to: maxLives }, meeting.id);
 
   return meeting;
+};
+
+export const endClassMeeting = async (meetingId: string, classId: string): Promise<any> => {
+  // Fetch meeting details
+  const { data: meeting, error: meetingFetchError } = await supabase
+    .from('meetings')
+    .select('*')
+    .eq('id', meetingId)
+    .single();
+
+  if (meetingFetchError) throw meetingFetchError;
+  if (!meeting) throw new Error('Meeting not found.');
+
+  // Fetch all logs for this meeting to build summary
+  const { data: logs, error: logsError } = await supabase
+    .from('activity_logs')
+    .select(`
+      *,
+      students (
+        name
+      )
+    `)
+    .eq('meeting_id', meetingId)
+    .eq('undone', false);
+
+  if (logsError) throw logsError;
+
+  const startedAt = new Date(meeting.started_at);
+  const endedAt = new Date();
+  const diffMs = endedAt.getTime() - startedAt.getTime();
+  
+  // Format duration nicely
+  const diffMins = Math.floor(diffMs / 60000);
+  let durationStr = '';
+  if (diffMins < 1) {
+    durationStr = 'Less than a minute';
+  } else if (diffMins < 60) {
+    durationStr = `${diffMins} minute${diffMins > 1 ? 's' : ''}`;
+  } else {
+    const hrs = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+    durationStr = `${hrs} hour${hrs > 1 ? 's' : ''}${mins > 0 ? ` ${mins} minute${mins > 1 ? 's' : ''}` : ''}`;
+  }
+
+  // Calculate totals
+  let totalPoints = 0;
+  let livesLost = 0;
+  let livesGained = 0;
+  const actionCount = logs?.length || 0;
+
+  // Track per-student points and life changes
+  const studentPoints: Record<string, { name: string; points: number }> = {};
+  const studentLivesLost: Record<string, { name: string; lost: number }> = {};
+  const studentActionCount: Record<string, { name: string; count: number }> = {};
+
+  for (const log of logs || []) {
+    const studentName = log.students?.name || 'Unknown Student';
+    if (log.student_id) {
+      if (!studentPoints[log.student_id]) {
+        studentPoints[log.student_id] = { name: studentName, points: 0 };
+      }
+      if (!studentLivesLost[log.student_id]) {
+        studentLivesLost[log.student_id] = { name: studentName, lost: 0 };
+      }
+      if (!studentActionCount[log.student_id]) {
+        studentActionCount[log.student_id] = { name: studentName, count: 0 };
+      }
+      studentActionCount[log.student_id].count += 1;
+    }
+
+    if (log.action_type === 'points_changed') {
+      const delta = log.points_delta || 0;
+      totalPoints += delta;
+      if (log.student_id) {
+        studentPoints[log.student_id].points += delta;
+      }
+    } else if (log.action_type === 'lives_changed') {
+      const delta = log.lives_delta || 0;
+      if (delta < 0) {
+        livesLost += Math.abs(delta);
+        if (log.student_id) {
+          studentLivesLost[log.student_id].lost += Math.abs(delta);
+        }
+      } else {
+        livesGained += delta;
+      }
+    }
+  }
+
+  // Find most active student
+  let mostActiveStudent = 'None';
+  let maxActions = 0;
+  for (const stId in studentActionCount) {
+    if (studentActionCount[stId].count > maxActions) {
+      maxActions = studentActionCount[stId].count;
+      mostActiveStudent = studentActionCount[stId].name;
+    }
+  }
+
+  // Find top point gainers
+  const topGainers = Object.values(studentPoints)
+    .filter(st => st.points > 0)
+    .sort((a, b) => b.points - a.points)
+    .map(st => `${st.name} (+${st.points})`);
+
+  // Find students who lost lives
+  const lostLivesStudents = Object.values(studentLivesLost)
+    .filter(st => st.lost > 0)
+    .sort((a, b) => b.lost - a.lost)
+    .map(st => `${st.name} (lost ${st.lost})`);
+
+  const summary = {
+    started_at: meeting.started_at,
+    ended_at: endedAt.toISOString(),
+    duration: durationStr,
+    total_point_changes: totalPoints,
+    total_lives_lost: livesLost,
+    total_lives_gained: livesGained,
+    total_actions: actionCount,
+    most_active_student: mostActiveStudent,
+    top_gainers: topGainers.slice(0, 3),
+    lost_lives_students: lostLivesStudents.slice(0, 3)
+  };
+
+  const { data: updatedMeeting, error: updateMeetingError } = await supabase
+    .from('meetings')
+    .update({
+      status: 'ended',
+      ended_at: endedAt.toISOString(),
+      summary: summary
+    })
+    .eq('id', meetingId)
+    .select()
+    .single();
+
+  if (updateMeetingError) throw updateMeetingError;
+
+  // Log meeting ended
+  await logActivity(classId, 'meeting_ended', null, 0, 0, null, {
+    meeting_id: meetingId,
+    duration: durationStr,
+    total_points: totalPoints,
+    lives_lost: livesLost
+  }, meetingId);
+
+  return updatedMeeting;
 };
 
 export const findClassByJoinCode = async (joinCode: string): Promise<any> => {
