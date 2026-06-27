@@ -609,15 +609,20 @@ export const reviewSubmission = async (
   submissionId: string,
   feedback: string,
   status: 'reviewed' | 'returned',
-  score?: number
+  awardedPoints?: number | null,
+  reviewedBy?: string | null
 ): Promise<any> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentTeacherId = reviewedBy || user?.id || null;
+
   const { data, error } = await supabase
     .from('task_submissions')
     .update({
       teacher_feedback: feedback,
       status: status,
-      score: score,
-      reviewed_at: new Date().toISOString()
+      awarded_points: awardedPoints,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: currentTeacherId
     })
     .eq('id', submissionId)
     .select()

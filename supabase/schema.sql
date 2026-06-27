@@ -844,6 +844,19 @@ grant execute on function public.fetch_task_submissions_for_teacher(uuid, uuid) 
 -- 1. File type and size validation triggers/constraints
 -- =========================================================================
 
+-- Ensure task_submissions columns are present
+alter table public.task_submissions
+add column if not exists awarded_points integer;
+
+alter table public.task_submissions
+add column if not exists teacher_feedback text;
+
+alter table public.task_submissions
+add column if not exists reviewed_at timestamptz;
+
+alter table public.task_submissions
+add column if not exists reviewed_by uuid references auth.users(id) on delete set null;
+
 notify pgrst, 'reload schema';
 
 

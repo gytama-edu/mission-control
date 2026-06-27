@@ -1002,6 +1002,16 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                       </div>
                     )}
 
+                    {studentSubmissions[selectedTaskForSubmission.id].awarded_points !== undefined && 
+                     studentSubmissions[selectedTaskForSubmission.id].awarded_points !== null && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg text-xs space-y-1">
+                        <div className="font-bold text-yellow-500 flex items-center gap-1">⭐ Points Awarded:</div>
+                        <p className="text-white font-mono font-bold text-sm">
+                          {studentSubmissions[selectedTaskForSubmission.id].awarded_points} / {selectedTaskForSubmission.reward_points} pts
+                        </p>
+                      </div>
+                    )}
+
                     {/* Teacher Feedback if reviewed/returned */}
                     {studentSubmissions[selectedTaskForSubmission.id].teacher_feedback && (
                       <div className="bg-purple-950/25 border border-purple-900/40 p-3 rounded-lg text-xs space-y-1">

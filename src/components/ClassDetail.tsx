@@ -366,7 +366,7 @@ export function ClassDetail({
   const handleSelectSubmissionForReview = (sub: any) => {
     setSelectedSubmissionForReview(sub);
     setReviewFeedback(sub.teacher_feedback || '');
-    setReviewScore(sub.score || 0);
+    setReviewScore(sub.awarded_points || 0);
   };
 
   const handleSaveReview = async (status: 'reviewed' | 'returned') => {
@@ -2716,10 +2716,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                             ) : (
                               /* Static review info or button to start reviewing */
                               <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                                {sub.score !== undefined && sub.score !== null ? (
+                                {sub.awarded_points !== undefined && sub.awarded_points !== null ? (
                                   <div className="space-y-1 w-full sm:w-auto">
                                     <span className="text-xs text-yellow-500 font-mono font-bold bg-yellow-500/5 px-2.5 py-1 rounded border border-yellow-500/10 inline-block">
-                                      ⭐ Grade: {sub.score} / {selectedTaskForSubmissions.reward_points} pts
+                                      ⭐ Points Awarded: {sub.awarded_points} / {selectedTaskForSubmissions.reward_points} pts
                                     </span>
                                     {sub.teacher_feedback && (
                                       <p className="text-xs text-slate-400 bg-slate-950/30 border border-slate-850/60 p-2.5 rounded-lg mt-1 italic">
@@ -2736,7 +2736,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                   onClick={() => handleSelectSubmissionForReview(sub)}
                                   className="text-purple-400 hover:text-white bg-purple-600/15 hover:bg-purple-600 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-purple-500/20 transition-all cursor-pointer ml-auto"
                                 >
-                                  {sub.score !== undefined && sub.score !== null ? 'Edit Review' : 'Review & Grade'}
+                                  {sub.awarded_points !== undefined && sub.awarded_points !== null ? 'Edit Review' : 'Review & Grade'}
                                 </button>
                               </div>
                             )}
