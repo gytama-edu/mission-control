@@ -740,6 +740,96 @@ grant execute on function public.delete_submission_attachment(uuid, uuid, uuid, 
 grant execute on function public.delete_submission_attachment(uuid, uuid, uuid, uuid, uuid) to authenticated;
 
 -- =========================================================================
+-- Phase 7B RPC Function: Fetch task submissions for teacher
+-- =========================================================================
+create or replace function public.fetch_task_submissions_for_teacher(
+  task_id_input uuid,
+  class_id_input uuid
+)
+returns table (
+  submission_id uuid,
+  task_id uuid,
+  class_id uuid,
+  student_id uuid,
+  student_name text,
+  student_nickname text,
+  submission_text text,
+  submission_status text,
+  teacher_feedback text,
+  awarded_points integer,
+  created_at timestamptz,
+  updated_at timestamptz,
+  attachments jsonb
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1
+    from public.classes c
+    where c.id = class_id_input
+    and (c.teacher_id = auth.uid() or c.teacher_id is null)
+  ) then
+    raise exception 'You do not own this class';
+  end if;
+
+  return query
+  select
+    ts.id as submission_id,
+    ts.task_id,
+    ts.class_id,
+    ts.student_id,
+    s.name as student_name,
+    s.nickname as student_nickname,
+    ts.submission_text,
+    ts.status as submission_status,
+    ts.teacher_feedback,
+    ts.awarded_points,
+    ts.created_at,
+    ts.updated_at,
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', sa.id,
+          'file_name', sa.file_name,
+          'file_path', sa.file_path,
+          'file_type', sa.file_type,
+          'file_size_bytes', sa.file_size_bytes,
+          'storage_bucket', sa.storage_bucket,
+          'uploaded_at', sa.uploaded_at
+        )
+      ) filter (where sa.id is not null),
+      '[]'::jsonb
+    ) as attachments
+  from public.task_submissions ts
+  left join public.students s
+    on s.id = ts.student_id
+  left join public.submission_attachments sa
+    on sa.submission_id = ts.id
+  where ts.task_id = task_id_input
+    and ts.class_id = class_id_input
+  group by
+    ts.id,
+    ts.task_id,
+    ts.class_id,
+    ts.student_id,
+    s.name,
+    s.nickname,
+    ts.submission_text,
+    ts.status,
+    ts.teacher_feedback,
+    ts.awarded_points,
+    ts.created_at,
+    ts.updated_at
+  order by ts.created_at desc;
+end;
+$$;
+
+grant execute on function public.fetch_task_submissions_for_teacher(uuid, uuid) to authenticated;
+
+-- =========================================================================
 -- Private Storage Bucket 'task-submissions' and Storage Policies
 -- =========================================================================
 -- NOTE: Please configure the 'task-submissions' private storage bucket and its

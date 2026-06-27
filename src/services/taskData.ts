@@ -496,57 +496,59 @@ export const fetchStudentSubmission = async (
   };
 };
 
-export const fetchTaskSubmissions = async (taskId: string, classId: string): Promise<any[]> => {
+export const fetchTaskSubmissions = async (
+  taskId: string,
+  classId: string
+): Promise<any[]> => {
   console.log('[DEBUG] fetchTaskSubmissions parameters:', { taskId, classId });
-  
-  // Diagnostic query: fetch all submissions in the database to see if any exist at all
-  const { data: allSubs, error: allSubsError } = await supabase
-    .from('task_submissions')
-    .select('*');
-  console.log('[DEBUG] DIAGNOSTIC - All submissions in table:', allSubs, 'All submissions error:', allSubsError);
+  const { data, error } = await supabase.rpc(
+    'fetch_task_submissions_for_teacher',
+    {
+      task_id_input: taskId,
+      class_id_input: classId,
+    }
+  );
 
-  // Fetch all submissions for this task with correct class_id filtering
-  const { data: submissions, error: subError } = await supabase
-    .from('task_submissions')
-    .select(`
-      *,
-      students (
-        name,
-        nickname
-      )
-    `)
-    .eq('task_id', taskId)
-    .eq('class_id', classId);
-
-  console.log('[DEBUG] task_submissions select result:', { submissions, subError });
-
-  if (subError) {
-    console.error('[DEBUG] fetchTaskSubmissions error:', subError);
-    throw subError;
+  if (error) {
+    console.error('[DEBUG] fetchTaskSubmissions RPC error:', error);
+    throw error;
   }
 
-  // Fetch all attachments for this task and class
-  const { data: attachments, error: attachError } = await supabase
-    .from('submission_attachments')
-    .select('*')
-    .eq('task_id', taskId)
-    .eq('class_id', classId);
+  const submissions = data || [];
+  console.log('[DEBUG] fetchTaskSubmissions raw data count:', submissions.length);
 
-  console.log('[DEBUG] submission_attachments select result:', { attachments, attachError });
+  const submissionsWithSignedUrls = await Promise.all(
+    submissions.map(async (submission: any) => {
+      const attachmentsWithUrls = await Promise.all(
+        (submission.attachments || []).map(async (attachment: any) => {
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from(attachment.storage_bucket || 'task-submissions')
+            .createSignedUrl(attachment.file_path, 60 * 10);
 
-  if (attachError) throw attachError;
+          return {
+            ...attachment,
+            signed_url: signedError ? null : signedData?.signedUrl || null,
+          };
+        })
+      );
 
-  const result = (submissions || []).map((sub: any) => {
-    const subAttachments = (attachments || []).filter((a: any) => a.submission_id === sub.id);
-    return {
-      ...sub,
-      studentName: sub.students?.nickname || sub.students?.name || 'Unknown Student',
-      attachments: subAttachments
-    };
-  });
+      return {
+        ...submission,
+        id: submission.submission_id,
+        status: submission.submission_status,
+        studentName: submission.student_nickname || submission.student_name || 'Unknown Student',
+        student: {
+          id: submission.student_id,
+          name: submission.student_name,
+          nickname: submission.student_nickname,
+        },
+        attachments: attachmentsWithUrls,
+      };
+    })
+  );
 
-  console.log('[DEBUG] fetchTaskSubmissions processed result:', result);
-  return result;
+  console.log('[DEBUG] fetchTaskSubmissions final processed result:', submissionsWithSignedUrls);
+  return submissionsWithSignedUrls;
 };
 
 export const fetchSubmissionsByTask = async (taskId: string): Promise<any[]> => {

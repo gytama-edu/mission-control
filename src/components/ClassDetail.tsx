@@ -344,10 +344,19 @@ export function ClassDetail({
     setIsFetchingSubmissions(true);
     setSubmissionsError(null);
     setSelectedSubmissionForReview(null);
+    console.log('[DEBUG] handleOpenSubmissionsModal details:', {
+      selectedTaskId: task.id,
+      currentClassId: classData.id
+    });
     try {
       const subs = await taskDb.fetchTaskSubmissions(task.id, classData.id);
+      console.log('[DEBUG] handleOpenSubmissionsModal successfully loaded submissions:', {
+        count: subs.length,
+        submissions: subs
+      });
       setTaskSubmissions(subs);
     } catch (err: any) {
+      console.error('[DEBUG] handleOpenSubmissionsModal fetch error:', err);
       setSubmissionsError('Failed to fetch submissions: ' + err.message);
     } finally {
       setIsFetchingSubmissions(false);
@@ -2483,14 +2492,23 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                   onClick={async () => {
                     setIsFetchingSubmissions(true);
                     setSubmissionsError(null);
+                    console.log('[DEBUG] Refresh button details:', {
+                      selectedTaskId: selectedTaskForSubmissions.id,
+                      currentClassId: classData.id
+                    });
                     try {
                       const subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+                      console.log('[DEBUG] Refresh successfully loaded submissions:', {
+                        count: subs.length,
+                        submissions: subs
+                      });
                       setTaskSubmissions(subs);
                       if (selectedSubmissionForReview) {
                         const updated = subs.find(s => s.id === selectedSubmissionForReview.id);
                         setSelectedSubmissionForReview(updated || null);
                       }
                     } catch (err: any) {
+                      console.error('[DEBUG] Refresh fetch error:', err);
                       setSubmissionsError('Failed to refresh: ' + err.message);
                     } finally {
                       setIsFetchingSubmissions(false);
@@ -2611,7 +2629,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                       </div>
                                       <button
                                         type="button"
-                                        onClick={() => handleDownloadAttachment(file.file_path)}
+                                        onClick={() => {
+                                          if (file.signed_url) {
+                                            window.open(file.signed_url, '_blank');
+                                          } else {
+                                            handleDownloadAttachment(file.file_path);
+                                          }
+                                        }}
                                         className="text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/20 transition-all text-[10px] cursor-pointer"
                                       >
                                         Open File
