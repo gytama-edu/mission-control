@@ -43,17 +43,37 @@ export function StudentAccess({ classes, onBack }: StudentAccessProps) {
     e.preventDefault();
     setError('');
 
-    const targetClass = classes.find(c => String(c.joinCode).trim().toUpperCase() === joinCode.trim().toUpperCase());
+    const normalizedEnteredCode = joinCode.trim().toUpperCase();
+    const normalizedEnteredPin = pin.trim();
+
+    console.log('--- DIAGNOSTIC ---');
+    console.log('localStorage Key used by app:', 'mission_control_classes');
+    console.log('Number of classes found in state:', classes.length);
+    console.log('Available join codes:', classes.map(c => String(c.joinCode || "").trim().toUpperCase()));
+    console.log('Entered code after normalization:', normalizedEnteredCode);
+
+    const targetClass = classes.find(c => String(c.joinCode || "").trim().toUpperCase() === normalizedEnteredCode);
     if (!targetClass) {
+      console.log('Result: Class code not found');
+      console.log('--- END DIAGNOSTIC ---');
       setError('Class code not found.');
       return;
     }
 
-    const student = targetClass.students.find(s => String(s.pin).trim() === pin.trim());
+    console.log('Class found:', targetClass.name);
+    console.log('Available student PINs in matched class:', targetClass.students.map(s => String(s.pin).trim()));
+    console.log('Entered PIN after normalization:', normalizedEnteredPin);
+
+    const student = targetClass.students.find(s => String(s.pin || "").trim() === normalizedEnteredPin);
     if (!student) {
+      console.log('Result: PIN not found in this class');
+      console.log('--- END DIAGNOSTIC ---');
       setError('PIN not found in this class.');
       return;
     }
+
+    console.log('Student found:', student.name);
+    console.log('--- END DIAGNOSTIC ---');
 
     setLoggedInClass(targetClass);
     setLoggedInStudentId(student.id);
