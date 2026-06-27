@@ -22,4 +22,5 @@ export interface ClassData {
   meetings: Meeting[];
   createdAt: string;
   joinCode: string;
+  teacherId?: string | null;
 }
