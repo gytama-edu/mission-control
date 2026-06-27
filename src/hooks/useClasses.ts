@@ -23,6 +23,9 @@ export function useClasses() {
             if (!s.pin) {
               s.pin = generatePin();
               cMigrated = true;
+            } else if (typeof s.pin !== 'string') {
+              s.pin = String(s.pin);
+              cMigrated = true;
             }
             return s;
           });

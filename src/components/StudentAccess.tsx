@@ -43,15 +43,15 @@ export function StudentAccess({ classes, onBack }: StudentAccessProps) {
     e.preventDefault();
     setError('');
 
-    const targetClass = classes.find(c => c.joinCode.toUpperCase() === joinCode.trim().toUpperCase());
+    const targetClass = classes.find(c => String(c.joinCode).trim().toUpperCase() === joinCode.trim().toUpperCase());
     if (!targetClass) {
-      setError('Invalid Class Code');
+      setError('Class code not found.');
       return;
     }
 
-    const student = targetClass.students.find(s => s.pin === pin.trim());
+    const student = targetClass.students.find(s => String(s.pin).trim() === pin.trim());
     if (!student) {
-      setError('Invalid PIN');
+      setError('PIN not found in this class.');
       return;
     }
 
