@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ClassData } from '../types';
-import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download } from 'lucide-react';
+import { Users, Plus, Shield, Trash2, Rocket, Loader2, Download } from 'lucide-react';
 
 interface DashboardProps {
   classes: ClassData[];
@@ -10,9 +10,23 @@ interface DashboardProps {
   onDeleteClass: (id: string) => void;
   onSelectClass: (id: string) => void;
   onImportLocalData: () => void;
+  onClaimClass: (id: string) => void;
+  teacherEmail?: string | null;
+  onLogout: () => void;
 }
 
-export function Dashboard({ classes, isLoading, error, onAddClass, onDeleteClass, onSelectClass, onImportLocalData }: DashboardProps) {
+export function Dashboard({
+  classes,
+  isLoading,
+  error,
+  onAddClass,
+  onDeleteClass,
+  onSelectClass,
+  onImportLocalData,
+  onClaimClass,
+  teacherEmail,
+  onLogout
+}: DashboardProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newClassName, setNewClassName] = useState('');
   const [newClassLevel, setNewClassLevel] = useState('');
@@ -55,9 +69,20 @@ export function Dashboard({ classes, isLoading, error, onAddClass, onDeleteClass
             <Rocket className="text-blue-500" size={32} />
             Mission Control
           </h1>
-          <p className="text-slate-400 mt-1">Classroom gamification dashboard (Cloud Sync)</p>
+          <p className="text-slate-400 mt-1">Classroom gamification dashboard</p>
+          {teacherEmail && (
+            <p className="text-sm text-blue-400 font-mono mt-1.5">Logged in as: {teacherEmail}</p>
+          )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap items-center">
+          {teacherEmail && (
+            <button
+              onClick={onLogout}
+              className="bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm border border-slate-850"
+            >
+              Log Out
+            </button>
+          )}
           {hasLocalData() && classes.length === 0 && (
             <button
               onClick={() => {
@@ -88,11 +113,11 @@ export function Dashboard({ classes, isLoading, error, onAddClass, onDeleteClass
         </div>
       )}
 
-      <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-4 rounded-xl mb-8 text-sm flex gap-3 items-start">
+      <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-xl mb-8 text-sm flex gap-3 items-start">
         <Shield size={20} className="shrink-0 mt-0.5" />
         <div>
-          <strong className="block mb-1">Phase 4 Prototype Notice</strong>
-          This is a cloud-sync prototype. Full teacher authentication is not yet implemented, so anyone with the URL could theoretically access this dashboard. Do not use for secure production data yet.
+          <strong className="block mb-1">Phase 5 - Security Active</strong>
+          Teacher login is active. Student access still uses Class Code + PIN. Full student account security may be added later.
         </div>
       </div>
 
@@ -174,24 +199,46 @@ export function Dashboard({ classes, isLoading, error, onAddClass, onDeleteClass
               onClick={() => onSelectClass(c.id)}
               className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-blue-500/50 hover:bg-slate-800/50 transition-all cursor-pointer group flex flex-col h-full"
             >
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex justify-between items-start mb-4 gap-2">
                 <div>
-                  <h3 className="text-xl font-display font-bold text-white group-hover:text-blue-400 transition-colors">
-                    {c.name}
-                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-display font-bold text-white group-hover:text-blue-400 transition-colors">
+                      {c.name}
+                    </h3>
+                    {!c.teacherId && (
+                      <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 text-xs px-2 py-0.5 rounded-full font-mono font-medium">
+                        Unowned
+                      </span>
+                    )}
+                  </div>
                   <p className="text-slate-400 text-sm mt-1">{c.level}</p>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('Are you sure you want to delete this class?\nStudents, points, and history will be removed. This cannot be undone.')) {
-                      onDeleteClass(c.id);
-                    }
-                  }}
-                  className="text-slate-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-400/10 transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {!c.teacherId && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Claim "${c.name}" as your class? This will link it securely to your teacher account.`)) {
+                          onClaimClass(c.id);
+                        }
+                      }}
+                      className="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 text-xs px-2 py-1 rounded-lg transition-all font-semibold"
+                    >
+                      Claim
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm('Are you sure you want to delete this class?\nStudents, points, and history will be removed. This cannot be undone.')) {
+                        onDeleteClass(c.id);
+                      }
+                    }}
+                    className="text-slate-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-400/10 transition-colors"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-auto grid grid-cols-2 gap-4 pt-6 border-t border-slate-800">
