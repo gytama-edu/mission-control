@@ -1465,10 +1465,25 @@ CREATE TABLE IF NOT EXISTS public.task_submissions (
   CONSTRAINT check_submission_status CHECK (status IN ('submitted', 'reviewed', 'returned', 'late'))
 );
 
+CREATE TABLE IF NOT EXISTS public.submission_attachments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  submission_id uuid NOT NULL REFERENCES public.task_submissions(id) ON DELETE CASCADE,
+  task_id uuid NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+  class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  student_id uuid REFERENCES public.students(id) ON DELETE SET NULL,
+  task_group_id uuid REFERENCES public.task_groups(id) ON DELETE SET NULL,
+  file_name text NOT NULL,
+  file_path text NOT NULL,
+  file_type text,
+  file_size_bytes bigint,
+  created_at timestamptz DEFAULT now()
+);
+
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_group_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.submission_attachments ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Teachers can select tasks for owned classes" ON public.tasks FOR SELECT TO authenticated USING (
   EXISTS (SELECT 1 FROM public.classes WHERE classes.id = tasks.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
@@ -1495,6 +1510,16 @@ CREATE POLICY "Students can view task groups" ON public.task_groups FOR SELECT T
 
 CREATE POLICY "Teachers can manage group members" ON public.task_group_members FOR ALL TO authenticated USING (true);
 CREATE POLICY "Students can view group members" ON public.task_group_members FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Teachers can manage submissions" ON public.task_submissions FOR ALL TO authenticated USING (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = task_submissions.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+);
+CREATE POLICY "Students can view their own submissions" ON public.task_submissions FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Teachers can view attachments" ON public.submission_attachments FOR ALL TO authenticated USING (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = submission_attachments.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+);
+CREATE POLICY "Students can view their own attachments" ON public.submission_attachments FOR SELECT TO anon USING (true);
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.task_groups;
@@ -1525,7 +1550,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
   max_attachment_size_mb integer NOT NULL DEFAULT 10,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
-);`}
+);
+
+-- Note: The copied SQL script also provisions the groups, submissions, and attachments tables with matching RLS Policies. Please copy the script using the button above.`}
                 </pre>
               </div>
             </div>
