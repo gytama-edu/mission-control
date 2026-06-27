@@ -464,12 +464,319 @@ alter publication supabase_realtime add table public.task_groups;
 alter publication supabase_realtime add table public.task_group_members;
 
 -- =========================================================================
+-- Phase 7B/C: Secure RPC Functions for Student Submissions
+-- =========================================================================
+
+-- Function 1: submit_individual_task
+create or replace function public.submit_individual_task(
+  task_id_input uuid,
+  student_id_input uuid,
+  submission_text_input text
+)
+returns uuid
+language plpgsql
+security definer -- Runs with owner privileges to bypass anon insert RLS
+set search_path = public, pg_temp
+as $$
+declare
+  v_task_type text;
+  v_status text;
+  v_due_at timestamptz;
+  v_class_id uuid;
+  v_student_class_id uuid;
+  v_submission_id uuid;
+  v_submission_status text;
+  v_existing_status text;
+  v_existing_id uuid;
+begin
+  -- 1. Find the task details
+  select task_type, status, due_at, class_id
+  into v_task_type, v_status, v_due_at, v_class_id
+  from public.tasks
+  where id = task_id_input;
+
+  if not found then
+    raise exception 'Task not found.';
+  end if;
+
+  -- 2. Confirm task_type = 'individual'
+  if v_task_type <> 'individual' then
+    raise exception 'This function is only for individual tasks.';
+  end if;
+
+  -- 3. Confirm status = 'published'
+  if v_status <> 'published' then
+    raise exception 'Submissions are only allowed for published tasks. Task is currently %.', v_status;
+  end if;
+
+  -- 4. Confirm the student exists
+  select class_id
+  into v_student_class_id
+  from public.students
+  where id = student_id_input;
+
+  if not found then
+    raise exception 'Student not found.';
+  end if;
+
+  -- 5. Confirm student belongs to the same class as the task
+  if v_class_id <> v_student_class_id then
+    raise exception 'Student does not belong to the same class as the task.';
+  end if;
+
+  -- 6. Determine whether submission is late if due_at has passed
+  if v_due_at is not null and now() > v_due_at then
+    v_submission_status := 'late';
+  else
+    v_submission_status := 'submitted';
+  end if;
+
+  -- 7. Find existing submission
+  select id, status
+  into v_existing_id, v_existing_status
+  from public.task_submissions
+  where task_id = task_id_input
+    and student_id = student_id_input
+    and task_group_id is null;
+
+  if v_existing_id is not null then
+    -- Update existing submission
+    update public.task_submissions
+    set 
+      submission_text = submission_text_input,
+      status = case when v_existing_status = 'reviewed' then 'reviewed' else v_submission_status end,
+      updated_at = now()
+    where id = v_existing_id
+    returning id into v_submission_id;
+  else
+    -- Insert new submission
+    insert into public.task_submissions (
+      task_id,
+      class_id,
+      student_id,
+      submitted_by_student_id,
+      submission_text,
+      status
+    )
+    values (
+      task_id_input,
+      v_class_id,
+      student_id_input,
+      student_id_input,
+      submission_text_input,
+      v_submission_status
+    )
+    returning id into v_submission_id;
+  end if;
+
+  return v_submission_id;
+end;
+$$;
+
+-- Grant execution to anon (for student Class Code + PIN login) and authenticated users
+grant execute on function public.submit_individual_task(uuid, uuid, text) to anon;
+grant execute on function public.submit_individual_task(uuid, uuid, text) to authenticated;
+
+-- Function 2: add_submission_attachment_metadata
+create or replace function public.add_submission_attachment_metadata(
+  submission_id_input uuid,
+  task_id_input uuid,
+  class_id_input uuid,
+  student_id_input uuid,
+  file_name_input text,
+  file_path_input text,
+  file_type_input text,
+  file_size_bytes_input bigint
+)
+returns uuid
+language plpgsql
+security definer -- Runs with owner privileges to bypass anon insert RLS
+set search_path = public, pg_temp
+as $$
+declare
+  v_sub_task_id uuid;
+  v_sub_class_id uuid;
+  v_sub_student_id uuid;
+  v_allow_attachments boolean;
+  v_max_attachments int;
+  v_max_attachment_size_mb int;
+  v_current_count int;
+  v_inserted_id uuid;
+begin
+  -- 1. Verify submission exists and matches task/class/student parameters
+  select task_id, class_id, student_id
+  into v_sub_task_id, v_sub_class_id, v_sub_student_id
+  FROM public.task_submissions
+  WHERE id = submission_id_input;
+
+  if not found then
+    raise exception 'Submission not found.';
+  end if;
+
+  if v_sub_task_id <> task_id_input or v_sub_class_id <> class_id_input or v_sub_student_id <> student_id_input then
+    raise exception 'Invalid submission parameters match.';
+  end if;
+
+  -- 2. Fetch task constraints
+  select allow_attachment_submission, max_attachments, max_attachment_size_mb
+  into v_allow_attachments, v_max_attachments, v_max_attachment_size_mb
+  from public.tasks
+  where id = task_id_input;
+
+  if not found then
+    raise exception 'Task not found.';
+  end if;
+
+  -- 3. Confirm task allows attachment submission
+  if not v_allow_attachments then
+    raise exception 'This task does not allow file attachments.';
+  end if;
+
+  -- 4. Check file size
+  if v_max_attachment_size_mb is not null and file_size_bytes_input > (v_max_attachment_size_mb * 1024 * 1024) then
+    raise exception 'File exceeds the maximum size limit of %MB.', v_max_attachment_size_mb;
+  end if;
+
+  -- 5. Check file count
+  select count(*)
+  into v_current_count
+  from public.submission_attachments
+  where submission_id = submission_id_input;
+
+  if v_max_attachments is not null and v_current_count >= v_max_attachments then
+    raise exception 'Maximum attachment limit of % reached for this task.', v_max_attachments;
+  end if;
+
+  -- 6. Insert metadata
+  insert into public.submission_attachments (
+    submission_id,
+    task_id,
+    class_id,
+    student_id,
+    file_name,
+    file_path,
+    file_type,
+    file_size_bytes,
+    storage_bucket
+  )
+  values (
+    submission_id_input,
+    task_id_input,
+    class_id_input,
+    student_id_input,
+    file_name_input,
+    file_path_input,
+    file_type_input,
+    file_size_bytes_input,
+    'task-submissions'
+  )
+  returning id into v_inserted_id;
+
+  return v_inserted_id;
+end;
+$$;
+
+-- Grant execution on attachment metadata function
+grant execute on function public.add_submission_attachment_metadata(uuid, uuid, uuid, uuid, text, text, text, bigint) to anon;
+grant execute on function public.add_submission_attachment_metadata(uuid, uuid, uuid, uuid, text, text, text, bigint) to authenticated;
+
+-- Function 3: delete_submission_attachment
+create or replace function public.delete_submission_attachment(
+  attachment_id_input uuid,
+  student_id_input uuid,
+  class_id_input uuid,
+  task_id_input uuid,
+  submission_id_input uuid
+)
+returns boolean
+language plpgsql
+security definer -- Runs with owner privileges to bypass anon delete RLS
+set search_path = public, pg_temp
+as $$
+declare
+  v_sub_student_id uuid;
+  v_sub_class_id uuid;
+  v_sub_task_id uuid;
+  v_attachment_sub_id uuid;
+begin
+  -- Verify submission details
+  select student_id, class_id, task_id
+  into v_sub_student_id, v_sub_class_id, v_sub_task_id
+  from public.task_submissions
+  where id = submission_id_input;
+
+  if not found then
+    raise exception 'Submission not found.';
+  end if;
+
+  if v_sub_student_id <> student_id_input or v_sub_class_id <> class_id_input or v_sub_task_id <> task_id_input then
+    raise exception 'Invalid parameters for the submission.';
+  end if;
+
+  -- Verify attachment belongs to the submission
+  select submission_id
+  into v_attachment_sub_id
+  from public.submission_attachments
+  where id = attachment_id_input;
+
+  if not found then
+    raise exception 'Attachment not found.';
+  end if;
+
+  if v_attachment_sub_id <> submission_id_input then
+    raise exception 'Attachment does not belong to the specified submission.';
+  end if;
+
+  -- Delete attachment record
+  delete from public.submission_attachments
+  where id = attachment_id_input;
+
+  return true;
+end;
+$$;
+
+-- Grant execution on delete submission attachment function
+grant execute on function public.delete_submission_attachment(uuid, uuid, uuid, uuid, uuid) to anon;
+grant execute on function public.delete_submission_attachment(uuid, uuid, uuid, uuid, uuid) to authenticated;
+
+-- =========================================================================
+-- Private Storage Bucket 'task-submissions' and Storage Policies
+-- =========================================================================
+
+-- Create the bucket safely
+insert into storage.buckets (id, name, public)
+values ('task-submissions', 'task-submissions', false)
+on conflict (id) do nothing;
+
+-- Enable RLS on storage.objects if not already enabled
+alter table storage.objects enable row level security;
+
+-- Storage Insert Policy (Allow both anon and auth to upload/insert to task-submissions bucket)
+create policy "Allow students and teachers upload to task-submissions"
+on storage.objects for insert
+with check (
+  bucket_id = 'task-submissions'
+);
+
+-- Storage Select Policy (Allow select/read of files in task-submissions bucket)
+create policy "Allow select of task-submissions"
+on storage.objects for select
+using (
+  bucket_id = 'task-submissions'
+);
+
+-- Storage Delete Policy (Allow delete of files in task-submissions bucket)
+create policy "Allow delete of task-submissions"
+on storage.objects for delete
+using (
+  bucket_id = 'task-submissions'
+);
+
+-- =========================================================================
 -- Phase 7D (Future Release Notes)
 -- =========================================================================
 -- Note: Phase 7D will create:
--- 1. 'task-submissions' storage bucket
--- 2. File upload UI & storage RLS policies
--- 3. File type and size validation triggers/constraints
+-- 1. File type and size validation triggers/constraints
 -- =========================================================================
 
 notify pgrst, 'reload schema';

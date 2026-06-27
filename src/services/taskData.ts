@@ -339,75 +339,37 @@ export const submitIndividualTask = async (
   submissionText: string | null,
   isLate: boolean = false
 ): Promise<any> => {
-  // Check if a submission already exists
-  const { data: existing, error: findError } = await supabase
+  // Check if a submission already exists for correct activity logging
+  const { data: existing } = await supabase
     .from('task_submissions')
-    .select('id, status')
+    .select('id')
     .eq('task_id', taskId)
     .eq('student_id', studentId)
     .is('task_group_id', null)
     .maybeSingle();
 
-  if (findError) throw findError;
+  // Invoke RPC for secure upsert
+  const { data: submissionId, error } = await supabase
+    .rpc('submit_individual_task', {
+      task_id_input: taskId,
+      student_id_input: studentId,
+      submission_text_input: submissionText
+    });
 
-  const status = isLate ? 'late' : 'submitted';
+  if (error) throw error;
 
-  let result;
-  if (existing) {
-    const { data, error } = await supabase
-      .from('task_submissions')
-      .update({
-        submission_text: submissionText,
-        status: existing.status === 'reviewed' ? 'reviewed' : status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', existing.id)
-      .select()
-      .single();
+  // Log activity
+  await logActivity(
+    classId,
+    existing ? 'task_resubmitted' : 'task_submitted',
+    studentId,
+    0,
+    0,
+    null,
+    { task_id: taskId, task_title: taskTitle, submission_id: submissionId }
+  );
 
-    if (error) throw error;
-    result = data;
-
-    // Log activity
-    await logActivity(
-      classId,
-      'task_resubmitted',
-      studentId,
-      0,
-      0,
-      null,
-      { task_id: taskId, task_title: taskTitle, submission_id: data.id }
-    );
-  } else {
-    const { data, error } = await supabase
-      .from('task_submissions')
-      .insert([{
-        task_id: taskId,
-        class_id: classId,
-        student_id: studentId,
-        submitted_by_student_id: studentId,
-        submission_text: submissionText,
-        status
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    result = data;
-
-    // Log activity
-    await logActivity(
-      classId,
-      'task_submitted',
-      studentId,
-      0,
-      0,
-      null,
-      { task_id: taskId, task_title: taskTitle, submission_id: data.id }
-    );
-  }
-
-  return result;
+  return { id: submissionId };
 };
 
 export const uploadAttachmentToStorage = async (
@@ -443,13 +405,16 @@ export const addSubmissionAttachmentMetadata = async (metadataInput: {
   file_size_bytes: number;
 }): Promise<any> => {
   const { data, error } = await supabase
-    .from('submission_attachments')
-    .insert([{
-      ...metadataInput,
-      storage_bucket: 'task-submissions'
-    }])
-    .select()
-    .single();
+    .rpc('add_submission_attachment_metadata', {
+      submission_id_input: metadataInput.submission_id,
+      task_id_input: metadataInput.task_id,
+      class_id_input: metadataInput.class_id,
+      student_id_input: metadataInput.student_id,
+      file_name_input: metadataInput.file_name,
+      file_path_input: metadataInput.file_path,
+      file_type_input: metadataInput.file_type,
+      file_size_bytes_input: metadataInput.file_size_bytes
+    });
 
   if (error) throw error;
 
@@ -468,7 +433,7 @@ export const addSubmissionAttachmentMetadata = async (metadataInput: {
     }
   );
 
-  return data;
+  return { id: data };
 };
 
 export const deleteSubmissionAttachment = async (
@@ -488,11 +453,15 @@ export const deleteSubmissionAttachment = async (
     console.warn('Could not delete file from storage bucket:', storageError);
   }
 
-  // Delete from db
+  // Delete from db using RPC
   const { error } = await supabase
-    .from('submission_attachments')
-    .delete()
-    .eq('id', attachmentId);
+    .rpc('delete_submission_attachment', {
+      attachment_id_input: attachmentId,
+      student_id_input: studentId,
+      class_id_input: classId,
+      task_id_input: taskId,
+      submission_id_input: submissionId
+    });
 
   if (error) throw error;
 };
