@@ -497,6 +497,14 @@ export const fetchStudentSubmission = async (
 };
 
 export const fetchTaskSubmissions = async (taskId: string, classId: string): Promise<any[]> => {
+  console.log('[DEBUG] fetchTaskSubmissions parameters:', { taskId, classId });
+  
+  // Diagnostic query: fetch all submissions in the database to see if any exist at all
+  const { data: allSubs, error: allSubsError } = await supabase
+    .from('task_submissions')
+    .select('*');
+  console.log('[DEBUG] DIAGNOSTIC - All submissions in table:', allSubs, 'All submissions error:', allSubsError);
+
   // Fetch all submissions for this task with correct class_id filtering
   const { data: submissions, error: subError } = await supabase
     .from('task_submissions')
@@ -510,7 +518,12 @@ export const fetchTaskSubmissions = async (taskId: string, classId: string): Pro
     .eq('task_id', taskId)
     .eq('class_id', classId);
 
-  if (subError) throw subError;
+  console.log('[DEBUG] task_submissions select result:', { submissions, subError });
+
+  if (subError) {
+    console.error('[DEBUG] fetchTaskSubmissions error:', subError);
+    throw subError;
+  }
 
   // Fetch all attachments for this task and class
   const { data: attachments, error: attachError } = await supabase
@@ -519,9 +532,11 @@ export const fetchTaskSubmissions = async (taskId: string, classId: string): Pro
     .eq('task_id', taskId)
     .eq('class_id', classId);
 
+  console.log('[DEBUG] submission_attachments select result:', { attachments, attachError });
+
   if (attachError) throw attachError;
 
-  return (submissions || []).map((sub: any) => {
+  const result = (submissions || []).map((sub: any) => {
     const subAttachments = (attachments || []).filter((a: any) => a.submission_id === sub.id);
     return {
       ...sub,
@@ -529,6 +544,9 @@ export const fetchTaskSubmissions = async (taskId: string, classId: string): Pro
       attachments: subAttachments
     };
   });
+
+  console.log('[DEBUG] fetchTaskSubmissions processed result:', result);
+  return result;
 };
 
 export const fetchSubmissionsByTask = async (taskId: string): Promise<any[]> => {
