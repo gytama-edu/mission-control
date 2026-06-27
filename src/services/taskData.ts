@@ -496,10 +496,7 @@ export const fetchStudentSubmission = async (
   };
 };
 
-export const fetchTaskSubmissions = async (
-  taskId: string,
-  classId: string
-): Promise<any[]> => {
+export const fetchTaskSubmissions = async (taskId: string, classId: string): Promise<any[]> => {
   // Fetch all submissions for this task with correct class_id filtering
   const { data: submissions, error: subError } = await supabase
     .from('task_submissions')
@@ -534,9 +531,7 @@ export const fetchTaskSubmissions = async (
   });
 };
 
-export const fetchSubmissionsByTask = async (
-  taskId: string
-): Promise<any[]> => {
+export const fetchSubmissionsByTask = async (taskId: string): Promise<any[]> => {
   // For backwards compatibility, find the class_id first from tasks
   const { data: task } = await supabase
     .from('tasks')
