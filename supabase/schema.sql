@@ -6,6 +6,7 @@ CREATE TABLE classes (
   level text,
   max_lives integer NOT NULL CHECK (max_lives >= 1 AND max_lives <= 20),
   join_code text UNIQUE NOT NULL,
+  teacher_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now()
 );
 
@@ -34,24 +35,69 @@ ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meetings ENABLE ROW LEVEL SECURITY;
 
 -- ==============================================================================
--- PHASE 4: TEMPORARY PROTOTYPE POLICIES
--- ==============================================================================
--- WARNING: These policies allow full anonymous access for cloud-sync testing.
--- They are NOT secure for production. Phase 5 will introduce teacher 
--- authentication and stricter RLS policies to lock down access.
+-- PHASE 5: SECURE TEACHER AUTHENTICATION & CLASS OWNERSHIP RLS POLICIES
 -- ==============================================================================
 
--- Classes temporary policies
-CREATE POLICY "Enable all access for anon users on classes"
-  ON classes FOR ALL USING (true) WITH CHECK (true);
+-- Classes: Read access for everyone (students look up by class code; teachers view owned classes).
+-- Write access restricted to authenticated teachers owning the class or claiming an unowned class.
+CREATE POLICY "Allow select for everyone" ON classes
+  FOR SELECT USING (true);
 
--- Students temporary policies
-CREATE POLICY "Enable all access for anon users on students"
-  ON students FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated teachers to insert classes" ON classes
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = teacher_id);
 
--- Meetings temporary policies
-CREATE POLICY "Enable all access for anon users on meetings"
-  ON meetings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow teachers to update owned or unowned classes" ON classes
+  FOR UPDATE TO authenticated USING (auth.uid() = teacher_id OR teacher_id IS NULL) WITH CHECK (auth.uid() = teacher_id);
+
+CREATE POLICY "Allow teachers to delete owned classes" ON classes
+  FOR DELETE TO authenticated USING (auth.uid() = teacher_id);
+
+
+-- Students: Read access for everyone (so student dashboards can load details).
+-- Write access restricted to authenticated teachers who own the class.
+CREATE POLICY "Allow select students for everyone" ON students
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow teachers to manage students of owned classes" ON students
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM classes
+      WHERE classes.id = students.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM classes
+      WHERE classes.id = students.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  );
+
+
+-- Meetings: Read access for everyone.
+-- Write access restricted to authenticated teachers who own the class.
+CREATE POLICY "Allow select meetings for everyone" ON meetings
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow teachers to manage meetings of owned classes" ON meetings
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM classes
+      WHERE classes.id = meetings.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM classes
+      WHERE classes.id = meetings.class_id
+      AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL)
+    )
+  );
+
 
 -- Enable Realtime for the tables (required for postgres_changes subscription)
 alter publication supabase_realtime add table public.classes;
