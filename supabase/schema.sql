@@ -742,35 +742,10 @@ grant execute on function public.delete_submission_attachment(uuid, uuid, uuid, 
 -- =========================================================================
 -- Private Storage Bucket 'task-submissions' and Storage Policies
 -- =========================================================================
-
--- Create the bucket safely
-insert into storage.buckets (id, name, public)
-values ('task-submissions', 'task-submissions', false)
-on conflict (id) do nothing;
-
--- Enable RLS on storage.objects if not already enabled
-alter table storage.objects enable row level security;
-
--- Storage Insert Policy (Allow both anon and auth to upload/insert to task-submissions bucket)
-create policy "Allow students and teachers upload to task-submissions"
-on storage.objects for insert
-with check (
-  bucket_id = 'task-submissions'
-);
-
--- Storage Select Policy (Allow select/read of files in task-submissions bucket)
-create policy "Allow select of task-submissions"
-on storage.objects for select
-using (
-  bucket_id = 'task-submissions'
-);
-
--- Storage Delete Policy (Allow delete of files in task-submissions bucket)
-create policy "Allow delete of task-submissions"
-on storage.objects for delete
-using (
-  bucket_id = 'task-submissions'
-);
+-- NOTE: Please configure the 'task-submissions' private storage bucket and its
+-- policies directly in the Supabase Dashboard under Storage -> Policies to prevent 
+-- ownership permission errors (42501) on storage.objects during database migration.
+-- See the manual setup instructions provided in the final summary.
 
 -- =========================================================================
 -- Phase 7D (Future Release Notes)
