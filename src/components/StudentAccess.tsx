@@ -20,15 +20,12 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [loggedInClass, setLoggedInClass] = useState<ClassData | null>(null);
   const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null);
 
-  const [savedProfile, setSavedProfile] = useState<{ classId: string, studentId: string, studentName?: string } | null>(null);
-  const [showSavedPrompt, setShowSavedPrompt] = useState(false);
-
   // Auto-restore profile on refresh/mount
   useEffect(() => {
     const autoRestore = async () => {
       try {
         const saved = window.localStorage.getItem(PROFILE_KEY);
-        if (saved && saved !== 'dismissed') {
+        if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed.classId && parsed.studentId) {
             setRestoringProfile(true);
@@ -53,6 +50,14 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     autoRestore();
   }, []);
 
+  const handleLogout = () => {
+    window.localStorage.removeItem(PROFILE_KEY);
+    setLoggedInClass(null);
+    setLoggedInStudent(null);
+    setJoinCode('');
+    setPin('');
+  };
+
   // Fetch the latest dashboard data helper
   const fetchDashboardData = async (classId: string, studentId: string) => {
     setIsLoading(true);
@@ -62,10 +67,14 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       if (classData && studentData) {
         setLoggedInClass(classData);
         setLoggedInStudent(studentData);
+        // Automatically save session to localStorage when logged in successfully!
+        window.localStorage.setItem(PROFILE_KEY, JSON.stringify({
+          classId,
+          studentId,
+        }));
       } else {
-        setError('Saved profile data could not be found.');
+        setError('Profile no longer exists. Please log in again.');
         window.localStorage.removeItem(PROFILE_KEY);
-        setShowSavedPrompt(false);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to connect.');
@@ -88,6 +97,10 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
         if (classData && studentData) {
           setLoggedInClass(classData);
           setLoggedInStudent(studentData);
+        } else {
+          // If data isn't found during refresh, they might have been deleted
+          handleLogout();
+          setError('Your profile or class has been removed by the teacher.');
         }
       } catch (err) {
         console.error("Failed to fetch updated real-time data:", err);
@@ -138,28 +151,35 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
-          // If update is for someone else or is an insert/delete, pull fresh class list
-          if (payload.new && (payload.new as any).id !== studentId) {
-            refreshData();
-          } else if (payload.eventType === 'DELETE' || payload.eventType === 'INSERT') {
-            refreshData();
+          // If logged-in student got deleted, log them out!
+          if (payload.eventType === 'DELETE' && payload.old && (payload.old as any).id === studentId) {
+            handleLogout();
+            setError('Your student profile was removed by the teacher.');
+            return;
           }
+          // Otherwise pull fresh class list/rankings
+          refreshData();
         }
       )
       .subscribe();
 
-    // 3. Subscribe to current class detail updates (e.g., changing maxLives, level, or name)
+    // 3. Subscribe to current class detail updates (e.g., changing maxLives, level, or name, or DELETE)
     const classSubscription = supabase
       .channel(`class-details-${classId}`)
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'classes',
           filter: `id=eq.${classId}`,
         },
-        () => {
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            handleLogout();
+            setError('This class has been deleted by the teacher.');
+            return;
+          }
           refreshData();
         }
       )
@@ -220,24 +240,6 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     }
   };
 
-  const handleSaveProfile = () => {
-    if (loggedInClass && loggedInStudent) {
-      window.localStorage.setItem(PROFILE_KEY, JSON.stringify({
-        classId: loggedInClass.id,
-        studentId: loggedInStudent.id,
-        studentName: loggedInStudent.nickname || loggedInStudent.name
-      }));
-    }
-  };
-
-  const handleLogout = () => {
-    window.localStorage.removeItem(PROFILE_KEY);
-    setLoggedInClass(null);
-    setLoggedInStudent(null);
-    setJoinCode('');
-    setPin('');
-  };
-
   if (restoringProfile) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
@@ -286,16 +288,6 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
             </button>
           </div>
         </header>
-
-        {!window.localStorage.getItem(PROFILE_KEY) && (
-          <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-blue-200 text-sm">Save this profile on this device for quick access next time?</div>
-            <div className="flex gap-2">
-              <button onClick={() => window.localStorage.setItem(PROFILE_KEY, 'dismissed')} className="px-3 py-1.5 text-sm text-blue-300 hover:text-white">Not now</button>
-              <button onClick={() => { handleSaveProfile(); alert('Profile saved!'); }} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded shadow-sm">Save Profile</button>
-            </div>
-          </div>
-        )}
 
         <div className="grid md:grid-cols-3 gap-6">
           <div className="md:col-span-2 space-y-6">
@@ -377,76 +369,49 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
           <p className="text-slate-400">Enter your credentials to view your status.</p>
         </div>
 
-        {showSavedPrompt && savedProfile ? (
-          <div className="mb-8">
-            <div className="bg-slate-800/50 border border-slate-700 p-5 rounded-xl text-center mb-4">
-              <p className="text-slate-300 mb-2">Saved Profile Found</p>
-              <h3 className="text-xl font-bold text-white mb-4">
-                {savedProfile.studentName || 'Student Profile'}
-              </h3>
-              <button
-                onClick={() => {
-                  fetchDashboardData(savedProfile.classId, savedProfile.studentId);
-                  setShowSavedPrompt(false);
-                }}
-                disabled={isLoading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
-              >
-                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Continue'}
-              </button>
+        <form onSubmit={handleLogin} className="space-y-5">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm text-center">
+              {error}
             </div>
-            <button
-              onClick={() => setShowSavedPrompt(false)}
-              className="w-full text-slate-400 hover:text-white text-sm"
-            >
-              Use another profile
-            </button>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">Class Code</label>
+            <div className="relative">
+              <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                type="text"
+                required
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                placeholder="e.g. SPACE1"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono uppercase"
+              />
+            </div>
           </div>
-        ) : (
-          <form onSubmit={handleLogin} className="space-y-5">
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm text-center">
-                {error}
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Class Code</label>
-              <div className="relative">
-                <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                <input
-                  type="text"
-                  required
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. SPACE1"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono uppercase"
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">Student PIN</label>
+            <div className="relative">
+              <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                type="password"
+                required
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="4-digit PIN"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+              />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Student PIN</label>
-              <div className="relative">
-                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                <input
-                  type="password"
-                  required
-                  maxLength={4}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="4-digit PIN"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                />
-              </div>
-            </div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-3 rounded-xl font-bold transition-colors mt-2 flex items-center justify-center gap-2"
-            >
-              {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Access Dashboard'}
-            </button>
-          </form>
-        )}
+          </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-3 rounded-xl font-bold transition-colors mt-2 flex items-center justify-center gap-2"
+          >
+            {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Access Dashboard'}
+          </button>
+        </form>
       </div>
       <div className="mt-auto" />
     </div>
