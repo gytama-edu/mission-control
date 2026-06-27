@@ -3,16 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useClasses } from './hooks/useClasses';
 import { Dashboard } from './components/Dashboard';
 import { ClassDetail } from './components/ClassDetail';
 import { Landing } from './components/Landing';
 import { StudentAccess } from './components/StudentAccess';
-import { isSupabaseConfigured } from './lib/supabaseClient';
-import { AlertTriangle } from 'lucide-react';
+import { TeacherAuth } from './components/TeacherAuth';
+import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 export default function App() {
+  const [teacherUser, setTeacherUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [viewMode, setViewMode] = useState<'landing' | 'teacher' | 'student'>(() => {
     try {
       const saved = window.localStorage.getItem('mission_control_view_mode');
@@ -31,6 +35,40 @@ export default function App() {
       window.localStorage.setItem('mission_control_view_mode', mode);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Check auth session on load
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setTeacherUser(session?.user ?? null);
+      } catch (err) {
+        console.error('Error retrieving session:', err);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setTeacherUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setTeacherUser(null);
+      handleSetViewMode('landing');
+    } catch (err) {
+      console.error('Logout error:', err);
     }
   };
 
@@ -64,6 +102,7 @@ export default function App() {
     error,
     importLocalData,
     addClass,
+    claimClass,
     editClass,
     deleteClass,
     regenerateJoinCode,
@@ -74,12 +113,22 @@ export default function App() {
     updateStudentLives,
     updateStudentPoints,
     startMeeting
-  } = useClasses();
-
+  } = useClasses(teacherUser?.id || null);
 
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
 
   const activeClass = classes.find(c => c.id === activeClassId);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-12 w-12 text-blue-500 animate-spin mb-4" />
+          <p className="text-slate-400">Loading teacher profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (viewMode === 'landing') {
     return <Landing onSelectTeacher={() => handleSetViewMode('teacher')} onSelectStudent={() => handleSetViewMode('student')} />;
@@ -87,6 +136,19 @@ export default function App() {
 
   if (viewMode === 'student') {
     return <StudentAccess onBack={() => handleSetViewMode('landing')} />;
+  }
+
+  // If viewMode is teacher but no teacher is logged in, show TeacherAuth screen
+  if (viewMode === 'teacher' && !teacherUser) {
+    return (
+      <TeacherAuth
+        onBack={() => handleSetViewMode('landing')}
+        onAuthSuccess={(user) => {
+          setTeacherUser(user);
+          handleSetViewMode('teacher');
+        }}
+      />
+    );
   }
 
   return (
@@ -127,6 +189,9 @@ export default function App() {
             onDeleteClass={deleteClass}
             onSelectClass={setActiveClassId}
             onImportLocalData={importLocalData}
+            onClaimClass={claimClass}
+            teacherEmail={teacherUser?.email}
+            onLogout={handleLogout}
           />
         </div>
       )}
