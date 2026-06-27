@@ -61,3 +61,40 @@ export interface ActivityLog {
   studentName?: string | null;
 }
 
+export interface Task {
+  id: string;
+  teacher_id: string | null;
+  class_id: string;
+  title: string;
+  description: string | null;
+  task_type: 'individual' | 'group';
+  status: 'draft' | 'published' | 'closed' | 'archived';
+  due_at: string | null;
+  reward_points: number;
+  allow_text_submission: boolean;
+  allow_attachment_submission: boolean;
+  max_attachments: number;
+  max_attachment_size_mb: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskGroup {
+  id: string;
+  task_id: string;
+  class_id: string;
+  name: string;
+  created_at: string;
+  members?: TaskGroupMember[];
+}
+
+export interface TaskGroupMember {
+  id: string;
+  task_group_id: string;
+  task_id: string;
+  student_id: string;
+  created_at: string;
+  studentName?: string;
+}
+
+

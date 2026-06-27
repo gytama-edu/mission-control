@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ClassData, ActivityLog } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2 } from 'lucide-react';
+import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
+import * as taskDb from '../services/taskData';
 
 interface ClassDetailProps {
   classData: ClassData;
@@ -36,7 +37,8 @@ export function ClassDetail({
   onEndMeeting
 }: ClassDetailProps) {
   const [newStudentName, setNewStudentName] = useState('');
-  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'settings'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings'>('roster');
+
 
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
@@ -95,6 +97,292 @@ export function ClassDetail({
       supabase.removeChannel(channel);
     };
   }, [classData.id, isTableMissing]);
+
+  // Task States
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
+  const [isTasksTableMissing, setIsTasksTableMissing] = useState(false);
+  const [copiedTasksSql, setCopiedTasksSql] = useState(false);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskDeleteConfirmId, setTaskDeleteConfirmId] = useState<string | null>(null);
+
+  // Group task management states
+  const [selectedTaskForGroups, setSelectedTaskForGroups] = useState<Task | null>(null);
+  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
+  const [isGroupsLoading, setIsGroupsLoading] = useState(false);
+
+  // Task form states
+  const [taskFormTitle, setTaskFormTitle] = useState('');
+  const [taskFormDescription, setTaskFormDescription] = useState('');
+  const [taskFormType, setTaskFormType] = useState<'individual' | 'group'>('individual');
+  const [taskFormDueAt, setTaskFormDueAt] = useState('');
+  const [taskFormRewardPoints, setTaskFormRewardPoints] = useState(0);
+  const [taskFormAllowText, setTaskFormAllowText] = useState(true);
+  const [taskFormAllowAttachment, setTaskFormAllowAttachment] = useState(false);
+  const [taskFormMaxAttachments, setTaskFormMaxAttachments] = useState(1);
+  const [taskFormMaxSizeMb, setTaskFormMaxSizeMb] = useState(10);
+
+  // Auto-group states
+  const [numGroupsToCreate, setNumGroupsToCreate] = useState(3);
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [renameGroupValue, setRenameGroupValue] = useState('');
+
+  const loadTasks = async () => {
+    setIsTasksLoading(true);
+    try {
+      const data = await taskDb.fetchTasksByClass(classData.id);
+      setTasks(data);
+      setIsTasksTableMissing(false);
+    } catch (err: any) {
+      if (err && (err.code === 'PGRST205' || (err.message && err.message.includes('tasks') && err.message.includes('schema cache')))) {
+        setIsTasksTableMissing(true);
+        console.warn('Tasks table is missing in Supabase. Task management is disabled until migration is run.');
+      } else {
+        console.error('Failed to load tasks:', err);
+      }
+    } finally {
+      setIsTasksLoading(false);
+    }
+  };
+
+  const loadTaskGroups = async (taskId: string) => {
+    setIsGroupsLoading(true);
+    try {
+      const data = await taskDb.fetchTaskGroups(taskId);
+      setTaskGroups(data);
+    } catch (err: any) {
+      console.error('Failed to load task groups:', err);
+    } finally {
+      setIsGroupsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTasks();
+
+    if (isTasksTableMissing) return;
+
+    const tasksChannel = supabase
+      .channel(`class-tasks-${classData.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `class_id=eq.${classData.id}`
+        },
+        () => {
+          loadTasks();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_groups',
+          filter: `class_id=eq.${classData.id}`
+        },
+        () => {
+          if (selectedTaskForGroups) {
+            loadTaskGroups(selectedTaskForGroups.id);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_group_members'
+        },
+        () => {
+          if (selectedTaskForGroups) {
+            loadTaskGroups(selectedTaskForGroups.id);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(tasksChannel);
+    };
+  }, [classData.id, selectedTaskForGroups?.id, isTasksTableMissing]);
+
+  const openCreateTaskModal = () => {
+    setEditingTask(null);
+    setTaskFormTitle('');
+    setTaskFormDescription('');
+    setTaskFormType('individual');
+    setTaskFormDueAt('');
+    setTaskFormRewardPoints(0);
+    setTaskFormAllowText(true);
+    setTaskFormAllowAttachment(false);
+    setTaskFormMaxAttachments(1);
+    setTaskFormMaxSizeMb(10);
+    setIsTaskModalOpen(true);
+  };
+
+  const openEditTaskModal = (task: Task) => {
+    setEditingTask(task);
+    setTaskFormTitle(task.title);
+    setTaskFormDescription(task.description || '');
+    setTaskFormType(task.task_type);
+    setTaskFormDueAt(task.due_at ? new Date(task.due_at).toISOString().slice(0, 16) : '');
+    setTaskFormRewardPoints(task.reward_points);
+    setTaskFormAllowText(task.allow_text_submission);
+    setTaskFormAllowAttachment(task.allow_attachment_submission);
+    setTaskFormMaxAttachments(task.max_attachments);
+    setTaskFormMaxSizeMb(task.max_attachment_size_mb);
+    setIsTaskModalOpen(true);
+  };
+
+  const handleSaveTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskFormTitle.trim()) {
+      alert('Title is required');
+      return;
+    }
+    try {
+      const taskInput = {
+        class_id: classData.id,
+        title: taskFormTitle.trim(),
+        description: taskFormDescription.trim(),
+        task_type: taskFormType,
+        due_at: taskFormDueAt ? new Date(taskFormDueAt).toISOString() : null,
+        reward_points: Number(taskFormRewardPoints),
+        allow_text_submission: taskFormAllowText,
+        allow_attachment_submission: taskFormAllowAttachment,
+        max_attachments: Number(taskFormMaxAttachments),
+        max_attachment_size_mb: Number(taskFormMaxSizeMb)
+      };
+
+      if (editingTask) {
+        await taskDb.updateTask(editingTask.id, taskInput);
+        alert('Task updated successfully!');
+      } else {
+        await taskDb.createTask(taskInput);
+        alert('Task created successfully!');
+      }
+      setIsTaskModalOpen(false);
+      loadTasks();
+    } catch (err: any) {
+      alert('Error saving task: ' + err.message);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string, title: string) => {
+    try {
+      await taskDb.deleteTask(taskId, classData.id, title);
+      setTaskDeleteConfirmId(null);
+      alert('Task deleted!');
+      loadTasks();
+    } catch (err: any) {
+      alert('Failed to delete task: ' + err.message);
+    }
+  };
+
+  const handlePublishTask = async (task: Task) => {
+    try {
+      await taskDb.publishTask(task.id, classData.id, task.title);
+      alert('Task published!');
+      loadTasks();
+    } catch (err: any) {
+      alert('Failed to publish task: ' + err.message);
+    }
+  };
+
+  const handleCloseTask = async (task: Task) => {
+    try {
+      await taskDb.closeTask(task.id, classData.id, task.title);
+      alert('Task closed for submissions!');
+      loadTasks();
+    } catch (err: any) {
+      alert('Failed to close task: ' + err.message);
+    }
+  };
+
+  const handleArchiveTask = async (task: Task) => {
+    try {
+      await taskDb.archiveTask(task.id, classData.id, task.title);
+      alert('Task archived!');
+      loadTasks();
+    } catch (err: any) {
+      alert('Failed to archive task: ' + err.message);
+    }
+  };
+
+  const handleCreateMultipleGroups = async () => {
+    if (!selectedTaskForGroups) return;
+    if (numGroupsToCreate < 1 || numGroupsToCreate > 20) {
+      alert('Number of groups must be between 1 and 20.');
+      return;
+    }
+    try {
+      await taskDb.createMultipleTaskGroups(
+        selectedTaskForGroups.id,
+        classData.id,
+        selectedTaskForGroups.title,
+        numGroupsToCreate
+      );
+      alert(`${numGroupsToCreate} groups created successfully!`);
+      loadTaskGroups(selectedTaskForGroups.id);
+    } catch (err: any) {
+      alert('Failed to create groups: ' + err.message);
+    }
+  };
+
+  const handleRenameGroup = async (groupId: string) => {
+    if (!renameGroupValue.trim()) return;
+    try {
+      await taskDb.renameTaskGroup(groupId, renameGroupValue.trim());
+      setRenamingGroupId(null);
+      setRenameGroupValue('');
+      if (selectedTaskForGroups) {
+        loadTaskGroups(selectedTaskForGroups.id);
+      }
+    } catch (err: any) {
+      alert('Failed to rename group: ' + err.message);
+    }
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    try {
+      await taskDb.deleteTaskGroup(groupId);
+      alert('Group deleted.');
+      if (selectedTaskForGroups) {
+        loadTaskGroups(selectedTaskForGroups.id);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAddStudentToGroup = async (groupId: string, studentId: string) => {
+    if (!selectedTaskForGroups) return;
+    try {
+      await taskDb.addStudentToTaskGroup(groupId, selectedTaskForGroups.id, classData.id, studentId);
+      if (selectedTaskForGroups) {
+        loadTaskGroups(selectedTaskForGroups.id);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRemoveStudentFromGroup = async (memberId: string, studentId: string, groupId: string) => {
+    if (!selectedTaskForGroups) return;
+    try {
+      await taskDb.removeStudentFromTaskGroup(memberId, selectedTaskForGroups.id, classData.id, studentId, groupId);
+      if (selectedTaskForGroups) {
+        loadTaskGroups(selectedTaskForGroups.id);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   const getActiveReason = () => {
     if (selectedReason === 'custom') {
@@ -276,6 +564,17 @@ export function ClassDetail({
           <Play size={16} /> Meeting History
           {activeTab === 'meetings' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('tasks')}
+          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'tasks' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <CheckSquare size={16} /> Classroom Tasks
+          {activeTab === 'tasks' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500" />
           )}
         </button>
         <button
@@ -991,6 +1290,700 @@ alter publication supabase_realtime add table public.activity_logs;`}
           )}
         </div>
       )}
+
+      {activeTab === 'tasks' && (
+        <div className="space-y-6">
+          {isTasksTableMissing ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6 animate-fade-in">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-xl">
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-display font-bold text-white mb-2">
+                    Initialize Tasks & Mission Control Tables
+                  </h3>
+                  <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
+                    To enable task creation, reward points assignment, team collaborations, and mission control, you need to execute a database migration inside your Supabase dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4 text-sm">
+                <h4 className="text-sm font-semibold text-slate-300">How to Setup:</h4>
+                <ol className="list-decimal list-inside text-slate-400 space-y-2">
+                  <li>Go to your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Supabase Dashboard</a>.</li>
+                  <li>Select your project, then open the <strong>SQL Editor</strong> in the left sidebar.</li>
+                  <li>Click <strong>New Query</strong>, paste the SQL schema below, and click <strong>Run</strong>.</li>
+                  <li>Return here and click <button onClick={loadTasks} className="text-purple-400 hover:underline font-semibold cursor-pointer font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">Sync Tasks</button> to unlock the missions!</li>
+                </ol>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-mono">SUPABASE TASKS MIGRATION SQL</span>
+                  <button
+                    onClick={() => {
+                      const sqlBlock = `CREATE TABLE IF NOT EXISTS public.tasks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  description text,
+  task_type text NOT NULL DEFAULT 'individual',
+  status text NOT NULL DEFAULT 'draft',
+  due_at timestamptz,
+  reward_points integer NOT NULL DEFAULT 0,
+  allow_text_submission boolean NOT NULL DEFAULT true,
+  allow_attachment_submission boolean NOT NULL DEFAULT false,
+  max_attachments integer NOT NULL DEFAULT 1,
+  max_attachment_size_mb integer NOT NULL DEFAULT 10,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  CONSTRAINT check_task_type CHECK (task_type IN ('individual', 'group')),
+  CONSTRAINT check_status CHECK (status IN ('draft', 'published', 'closed', 'archived')),
+  CONSTRAINT check_reward_points CHECK (reward_points >= 0),
+  CONSTRAINT check_max_attachments CHECK (max_attachments >= 0 AND max_attachments <= 5),
+  CONSTRAINT check_max_attachment_size CHECK (max_attachment_size_mb >= 1 AND max_attachment_size_mb <= 25)
+);
+
+CREATE TABLE IF NOT EXISTS public.task_groups (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+  class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.task_group_members (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_group_id uuid NOT NULL REFERENCES public.task_groups(id) ON DELETE CASCADE,
+  task_id uuid NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(task_group_id, student_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.task_submissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+  class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  student_id uuid REFERENCES public.students(id) ON DELETE CASCADE,
+  task_group_id uuid REFERENCES public.task_groups(id) ON DELETE CASCADE,
+  submitted_by_student_id uuid REFERENCES public.students(id) ON DELETE SET NULL,
+  submission_text text,
+  status text NOT NULL DEFAULT 'submitted',
+  teacher_feedback text,
+  awarded_points integer,
+  reviewed_at timestamptz,
+  reviewed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  CONSTRAINT check_submission_status CHECK (status IN ('submitted', 'reviewed', 'returned', 'late'))
+);
+
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_group_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_submissions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Teachers can select tasks for owned classes" ON public.tasks FOR SELECT TO authenticated USING (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = tasks.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+);
+CREATE POLICY "Teachers can insert tasks for owned classes" ON public.tasks FOR INSERT TO authenticated WITH CHECK (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = tasks.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+);
+CREATE POLICY "Teachers can update tasks for owned classes" ON public.tasks FOR UPDATE TO authenticated USING (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = tasks.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+) WITH CHECK (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = tasks.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+);
+CREATE POLICY "Teachers can delete tasks for owned classes" ON public.tasks FOR DELETE TO authenticated USING (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = tasks.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+);
+CREATE POLICY "Students can view published tasks" ON public.tasks FOR SELECT TO anon USING (
+  status = 'published' OR status = 'closed' OR status = 'archived'
+);
+
+CREATE POLICY "Teachers can manage task groups" ON public.task_groups FOR ALL TO authenticated USING (
+  EXISTS (SELECT 1 FROM public.classes WHERE classes.id = task_groups.class_id AND (classes.teacher_id = auth.uid() OR classes.teacher_id IS NULL))
+);
+CREATE POLICY "Students can view task groups" ON public.task_groups FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Teachers can manage group members" ON public.task_group_members FOR ALL TO authenticated USING (true);
+CREATE POLICY "Students can view group members" ON public.task_group_members FOR SELECT TO anon USING (true);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.task_groups;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
+                      navigator.clipboard.writeText(sqlBlock);
+                      setCopiedTasksSql(true);
+                      setTimeout(() => setCopiedTasksSql(false), 2000);
+                    }}
+                    className="text-xs bg-purple-600 hover:bg-purple-500 text-white font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all shadow cursor-pointer"
+                  >
+                    {copiedTasksSql ? 'Copied!' : 'Copy SQL Script'}
+                  </button>
+                </div>
+                <pre className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 font-mono overflow-x-auto max-h-60 leading-relaxed scrollbar-thin">
+                  {`CREATE TABLE IF NOT EXISTS public.tasks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  description text,
+  task_type text NOT NULL DEFAULT 'individual',
+  status text NOT NULL DEFAULT 'draft',
+  due_at timestamptz,
+  reward_points integer NOT NULL DEFAULT 0,
+  allow_text_submission boolean NOT NULL DEFAULT true,
+  allow_attachment_submission boolean NOT NULL DEFAULT false,
+  max_attachments integer NOT NULL DEFAULT 1,
+  max_attachment_size_mb integer NOT NULL DEFAULT 10,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);`}
+                </pre>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-display font-bold text-white">Classroom Tasks & Mission Control</h2>
+                  <p className="text-sm text-slate-400">Manage mission tasks, award extra points, structure team assignments, and set due dates.</p>
+                </div>
+                <button
+                  onClick={openCreateTaskModal}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-lg hover:shadow-purple-500/10"
+                >
+                  <PlusCircle size={16} />
+                  Create Classroom Task
+                </button>
+              </div>
+
+              {isTasksLoading ? (
+                <div className="text-center py-12 text-slate-500 font-mono text-sm">
+                  Loading classroom tasks...
+                </div>
+              ) : tasks.length === 0 ? (
+                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500 space-y-4">
+                  <p>No tasks created for this class yet.</p>
+                  <button
+                    onClick={openCreateTaskModal}
+                    className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Create Your First Task
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 max-w-4xl">
+                  {tasks.map((task) => {
+                const isDraft = task.status === 'draft';
+                const isPublished = task.status === 'published';
+                const isClosed = task.status === 'closed';
+                const isArchived = task.status === 'archived';
+
+                let statusBadgeColor = 'bg-slate-800 text-slate-400 border border-slate-700';
+                if (isPublished) statusBadgeColor = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20';
+                if (isClosed) statusBadgeColor = 'bg-amber-500/15 text-amber-400 border border-amber-500/20';
+                if (isArchived) statusBadgeColor = 'bg-slate-900 text-slate-600 border border-slate-850';
+
+                return (
+                  <div
+                    key={task.id}
+                    className={`bg-slate-900 border rounded-xl p-5 flex flex-col transition-all ${
+                      isPublished ? 'border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.02)]' : 'border-slate-800'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${statusBadgeColor}`}>
+                            {task.status}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-950 text-slate-400 border border-slate-850 capitalize">
+                            {task.task_type} Task
+                          </span>
+                          <span className="text-yellow-500 text-xs font-mono font-bold flex items-center gap-1 ml-1 bg-yellow-500/5 px-2 py-0.5 rounded border border-yellow-500/10">
+                            ⭐ {task.reward_points} pts
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="text-base font-bold text-white leading-snug">{task.title}</h3>
+                          {task.description && (
+                            <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500 pt-1">
+                          <span className="flex items-center gap-1">
+                            📅 Due: {task.due_at ? new Date(task.due_at).toLocaleString() : 'No due date set'}
+                          </span>
+                          <span className="flex items-center gap-1.5 border-l border-slate-800 pl-4">
+                            Submissions allowed: {task.allow_text_submission ? 'Text' : ''}
+                            {task.allow_text_submission && task.allow_attachment_submission ? ' / ' : ''}
+                            {task.allow_attachment_submission ? `Attachments (Max ${task.max_attachments}, Limit ${task.max_attachment_size_mb}MB)` : ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Management Buttons */}
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
+                        {isDraft && (
+                          <>
+                            <button
+                              onClick={() => handlePublishTask(task)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Publish Task
+                            </button>
+                            <button
+                              onClick={() => openEditTaskModal(task)}
+                              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setTaskDeleteConfirmId(task.id)}
+                              className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer"
+                              title="Delete Draft"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+
+                        {isPublished && (
+                          <>
+                            <button
+                              onClick={() => handleCloseTask(task)}
+                              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Close Task
+                            </button>
+                            <button
+                              onClick={() => handleArchiveTask(task)}
+                              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Archive Task
+                            </button>
+                          </>
+                        )}
+
+                        {isClosed && (
+                          <button
+                            onClick={() => handleArchiveTask(task)}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                          >
+                            Archive Task
+                          </button>
+                        )}
+
+                        {isArchived && (
+                          <button
+                            onClick={() => setTaskDeleteConfirmId(task.id)}
+                            className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Group Management Area */}
+                    {task.task_type === 'group' && (
+                      <div className="mt-4 border-t border-slate-800/60 pt-4">
+                        <button
+                          onClick={() => {
+                            if (selectedTaskForGroups?.id === task.id) {
+                              setSelectedTaskForGroups(null);
+                              setTaskGroups([]);
+                            } else {
+                              setSelectedTaskForGroups(task);
+                              loadTaskGroups(task.id);
+                            }
+                          }}
+                          className="text-xs bg-slate-950 border border-slate-800 hover:bg-slate-850 hover:border-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all cursor-pointer"
+                        >
+                          <Users size={14} />
+                          {selectedTaskForGroups?.id === task.id ? 'Hide Task Groups' : 'Manage Task Groups'}
+                        </button>
+                      </div>
+                    )}
+
+                    {selectedTaskForGroups?.id === task.id && (
+                      <div className="mt-4 p-4 bg-slate-950/60 border border-purple-500/10 rounded-xl space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                              <Users className="text-purple-400" size={16} />
+                              Group Assignment & Collaboration Space
+                            </h4>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              Set up teams, assign members, and track participation.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-slate-400 font-medium">Create</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="20"
+                              value={numGroupsToCreate}
+                              onChange={(e) => setNumGroupsToCreate(Number(e.target.value))}
+                              className="w-12 bg-slate-900 border border-slate-800 text-white rounded px-2 py-1 text-xs text-center focus:outline-none"
+                            />
+                            <label className="text-xs text-slate-400 font-medium">teams</label>
+                            <button
+                              onClick={handleCreateMultipleGroups}
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Auto-Generate
+                            </button>
+                          </div>
+                        </div>
+
+                        {isGroupsLoading ? (
+                          <div className="text-center py-4 text-xs text-slate-500 font-mono">
+                            Loading task groups...
+                          </div>
+                        ) : taskGroups.length === 0 ? (
+                          <div className="text-center py-6 text-xs text-slate-500 italic bg-slate-900/30 rounded-lg border border-slate-900">
+                            No groups created yet. Use the auto-generator above to build teams instantly.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Groups Grid */}
+                            <div className="space-y-4">
+                              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Teams</h5>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1">
+                                {taskGroups.map((group) => {
+                                  const isRenaming = renamingGroupId === group.id;
+
+                                  return (
+                                    <div key={group.id} className="bg-slate-900 border border-slate-850 rounded-xl p-3.5 space-y-3 relative group">
+                                      <div className="flex items-center justify-between gap-2">
+                                        {isRenaming ? (
+                                          <div className="flex gap-1.5 w-full">
+                                            <input
+                                              type="text"
+                                              value={renameGroupValue}
+                                              onChange={(e) => setRenameGroupValue(e.target.value)}
+                                              className="bg-slate-950 border border-slate-700 text-white text-xs rounded px-1.5 py-0.5 w-full focus:outline-none"
+                                            />
+                                            <button
+                                              onClick={() => handleRenameGroup(group.id)}
+                                              className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                            >
+                                              Save
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-sm text-slate-200">{group.name}</span>
+                                            <button
+                                              onClick={() => {
+                                                setRenamingGroupId(group.id);
+                                                setRenameGroupValue(group.name);
+                                              }}
+                                              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-slate-300 transition-opacity cursor-pointer"
+                                            >
+                                              <Edit2 size={11} />
+                                            </button>
+                                          </div>
+                                        )}
+
+                                        {!isRenaming && (group.members || []).length === 0 && (
+                                          <button
+                                            onClick={() => handleDeleteGroup(group.id)}
+                                            className="text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
+                                            title="Delete empty group"
+                                          >
+                                            <Trash2 size={12} />
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      <div className="space-y-1.5">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                                          Members ({(group.members || []).length})
+                                        </span>
+                                        {(group.members || []).length === 0 ? (
+                                          <span className="text-[11px] text-slate-500 italic block">No students assigned</span>
+                                        ) : (
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {(group.members || []).map((m) => (
+                                              <span
+                                                key={m.id}
+                                                className="bg-slate-950 text-slate-300 text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-800 flex items-center gap-1"
+                                              >
+                                                {m.studentName}
+                                                <button
+                                                  onClick={() => handleRemoveStudentFromGroup(m.id, m.student_id, group.id)}
+                                                  className="text-slate-500 hover:text-red-400 font-extrabold cursor-pointer text-xs"
+                                                >
+                                                  &times;
+                                                </button>
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Quick Assign Dropdown */}
+                                      <div className="pt-2 border-t border-slate-800/40">
+                                        <select
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val) {
+                                              handleAddStudentToGroup(group.id, val);
+                                              e.target.value = '';
+                                            }
+                                          }}
+                                          className="bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 text-[10px] rounded px-2 py-1 w-full focus:outline-none cursor-pointer"
+                                        >
+                                          <option value="">+ Assign Student</option>
+                                          {classData.students
+                                            .filter(s => !new Set(taskGroups.flatMap(g => (g.members || []).map(m => m.student_id))).has(s.id))
+                                            .map(s => (
+                                              <option key={s.id} value={s.id}>{s.name}</option>
+                                            ))}
+                                        </select>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Unassigned Students Panel */}
+                            <div className="bg-slate-900/45 border border-slate-850 rounded-xl p-4 space-y-3 h-fit">
+                              <div className="flex justify-between items-center">
+                                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                  Unassigned Students ({classData.students.filter(s => !new Set(taskGroups.flatMap(g => (g.members || []).map(m => m.student_id))).has(s.id)).length})
+                                </h5>
+                              </div>
+
+                              <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                                {classData.students.filter(s => !new Set(taskGroups.flatMap(g => (g.members || []).map(m => m.student_id))).has(s.id)).length === 0 ? (
+                                  <p className="text-xs text-emerald-400 italic font-semibold">
+                                    All class students are assigned to groups!
+                                  </p>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {classData.students
+                                      .filter(s => !new Set(taskGroups.flatMap(g => (g.members || []).map(m => m.student_id))).has(s.id))
+                                      .map(s => (
+                                        <span
+                                          key={s.id}
+                                          className="bg-slate-950 text-slate-400 text-xs px-2.5 py-1 rounded-lg border border-slate-850 font-medium"
+                                        >
+                                          {s.name}
+                                        </span>
+                                      ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Delete confirmation modal for task */}
+          {taskDeleteConfirmId && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="bg-slate-900 border border-red-500/20 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                <div className="flex items-center gap-3 text-red-400 mb-4">
+                  <AlertTriangle size={28} />
+                  <h3 className="text-xl font-display font-bold text-white">Delete Classroom Task?</h3>
+                </div>
+                <p className="text-slate-300 mb-6 leading-relaxed text-sm">
+                  Are you sure you want to delete this task? This action is permanent and will delete all related groups and sub-records.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setTaskDeleteConfirmId(null)}
+                    className="px-5 py-2.5 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const t = tasks.find(tsk => tsk.id === taskDeleteConfirmId);
+                      if (t) {
+                        handleDeleteTask(t.id, t.title);
+                      }
+                    }}
+                    className="bg-red-650 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors cursor-pointer"
+                  >
+                    Confirm Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Task creation / edit Modal */}
+          {isTaskModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-5">
+                  <h3 className="text-lg font-display font-bold text-white">
+                    {editingTask ? 'Edit Classroom Task' : 'Create New Classroom Task'}
+                  </h3>
+                  <button
+                    onClick={() => setIsTaskModalOpen(false)}
+                    className="text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveTask} className="space-y-4 text-sm text-slate-300">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Task Title *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g., Code Review: Refactor the Propulsion Engine"
+                      value={taskFormTitle}
+                      onChange={(e) => setTaskFormTitle(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Description</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Detail the instructions, helpful tips, and expected deliverables..."
+                      value={taskFormDescription}
+                      onChange={(e) => setTaskFormDescription(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600 resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Task Structure</label>
+                      <select
+                        value={taskFormType}
+                        onChange={(e) => setTaskFormType(e.target.value as 'individual' | 'group')}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="individual">Individual Task</option>
+                        <option value="group">Group Task</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Reward points</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={taskFormRewardPoints}
+                        onChange={(e) => setTaskFormRewardPoints(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Due Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={taskFormDueAt}
+                      onChange={(e) => setTaskFormDueAt(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                    />
+                  </div>
+
+                  <div className="border-t border-slate-850 pt-4 space-y-3">
+                    <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Submission formats</span>
+                    
+                    <div className="flex flex-col gap-2.5">
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={taskFormAllowText}
+                          onChange={(e) => setTaskFormAllowText(e.target.checked)}
+                          className="rounded bg-slate-950 border-slate-850 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                        />
+                        <span>Allow student to type text submission</span>
+                      </label>
+
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={taskFormAllowAttachment}
+                          onChange={(e) => setTaskFormAllowAttachment(e.target.checked)}
+                          className="rounded bg-slate-950 border-slate-850 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                        />
+                        <span>Allow file attachment uploads (coming in Phase 7D)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {taskFormAllowAttachment && (
+                    <div className="grid grid-cols-2 gap-4 bg-slate-950 p-3 rounded-lg border border-slate-850">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Max Attachments</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="5"
+                          value={taskFormMaxAttachments}
+                          onChange={(e) => setTaskFormMaxAttachments(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-center text-slate-300 font-mono focus:outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Max File Size (MB)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="25"
+                          value={taskFormMaxSizeMb}
+                          onChange={(e) => setTaskFormMaxSizeMb(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-center text-slate-300 font-mono focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-4 border-t border-slate-850 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsTaskModalOpen(false)}
+                      className="px-5 py-2.5 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors cursor-pointer"
+                    >
+                      {editingTask ? 'Update Task' : 'Create Task'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )}
 
       {activeTab === 'settings' && (
         <div className="max-w-2xl bg-slate-900 border border-slate-800 rounded-xl p-6">

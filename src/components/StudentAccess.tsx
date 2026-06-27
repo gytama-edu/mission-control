@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ClassData, Student, ActivityLog } from '../types';
-import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2 } from 'lucide-react';
+import { ClassData, Student, ActivityLog, Task } from '../types';
+import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users } from 'lucide-react';
 import * as db from '../services/missionControlData';
+import * as taskDb from '../services/taskData';
 import { supabase } from '../lib/supabaseClient';
 
 interface StudentAccessProps {
@@ -23,6 +24,100 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [studentLogs, setStudentLogs] = useState<ActivityLog[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isTableMissing, setIsTableMissing] = useState(false);
+
+  // Task states for student preview
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
+  const [isTasksTableMissing, setIsTasksTableMissing] = useState(false);
+  const [studentGroups, setStudentGroups] = useState<Record<string, string>>({});
+
+  const loadStudentTasks = async (classId: string, studentId: string) => {
+    setIsTasksLoading(true);
+    try {
+      const allTasks = await taskDb.fetchTasksByClass(classId);
+      const visibleTasks = allTasks.filter(t => t.status === 'published' || t.status === 'closed');
+      setTasks(visibleTasks);
+      setIsTasksTableMissing(false);
+
+      const { data: memberRows, error: memberErr } = await supabase
+        .from('task_group_members')
+        .select(`
+          task_id,
+          task_groups (
+            name
+          )
+        `)
+        .eq('student_id', studentId);
+
+      if (!memberErr && memberRows) {
+        const groupMap: Record<string, string> = {};
+        memberRows.forEach((row: any) => {
+          if (row.task_groups) {
+            groupMap[row.task_id] = Array.isArray(row.task_groups) 
+              ? row.task_groups[0]?.name 
+              : row.task_groups?.name;
+          }
+        });
+        setStudentGroups(groupMap);
+      }
+    } catch (err: any) {
+      if (err && (err.code === 'PGRST205' || (err.message && err.message.includes('tasks') && err.message.includes('schema cache')))) {
+        setIsTasksTableMissing(true);
+        console.warn('Tasks table is missing in Supabase. Mission Control is disabled for student until migration is run.');
+      } else {
+        console.error('Failed to load student tasks:', err);
+      }
+    } finally {
+      setIsTasksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loggedInClass || !loggedInStudent) {
+      setTasks([]);
+      setStudentGroups({});
+      return;
+    }
+    loadStudentTasks(loggedInClass.id, loggedInStudent.id);
+
+    if (isTasksTableMissing) return;
+
+    const tasksChannel = supabase
+      .channel(`student-tasks-${loggedInStudent.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `class_id=eq.${loggedInClass.id}`
+        },
+        () => {
+          if (loggedInClass && loggedInStudent) {
+            loadStudentTasks(loggedInClass.id, loggedInStudent.id);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_group_members',
+          filter: `student_id=eq.${loggedInStudent.id}`
+        },
+        () => {
+          if (loggedInClass && loggedInStudent) {
+            loadStudentTasks(loggedInClass.id, loggedInStudent.id);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(tasksChannel);
+    };
+  }, [loggedInClass?.id, loggedInStudent?.id, isTasksTableMissing]);
 
   const loadStudentLogs = async (classId: string, studentId: string) => {
     setIsLogsLoading(true);
@@ -122,6 +217,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       if (classData && studentData) {
         setLoggedInClass(classData);
         setLoggedInStudent(studentData);
+        loadStudentTasks(classId, studentId);
         // Automatically save session to localStorage when logged in successfully!
         window.localStorage.setItem(PROFILE_KEY, JSON.stringify({
           classId,
@@ -152,6 +248,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
         if (classData && studentData) {
           setLoggedInClass(classData);
           setLoggedInStudent(studentData);
+          loadStudentTasks(classId, studentId);
         } else {
           // If data isn't found during refresh, they might have been deleted
           handleLogout();
@@ -391,6 +488,94 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Classroom Tasks & Missions */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
+                <CheckSquare size={18} className="text-purple-400" /> Classroom Tasks & Missions
+              </h3>
+
+              {isTasksTableMissing ? (
+                <div className="py-8 px-4 text-center bg-slate-950/40 rounded-xl border border-slate-800/60 space-y-2 animate-fade-in">
+                  <div className="text-slate-500 font-mono text-sm font-semibold">🛰️ Mission Control Offline</div>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed italic">
+                    The classroom task board is currently offline. Your commander (teacher) is configuring the sub-database tables. Stay tuned, explorer!
+                  </p>
+                </div>
+              ) : isTasksLoading ? (
+                <div className="py-6 text-center text-slate-500 text-sm font-medium">Loading missions...</div>
+              ) : tasks.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-sm bg-slate-950/40 rounded-xl border border-slate-800/60 italic">
+                  No active tasks assigned yet. Stay tuned, explorer!
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {tasks.map((task) => {
+                    const assignedGroup = studentGroups[task.id];
+                    const isClosed = task.status === 'closed';
+
+                    return (
+                      <div
+                        key={task.id}
+                        className={`bg-slate-950 border border-slate-850 rounded-xl p-4 space-y-3 transition-all relative ${
+                          isClosed ? 'opacity-60' : 'border-purple-500/10 hover:border-purple-500/20'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${
+                              isClosed
+                                ? 'bg-slate-900 text-slate-500 border-slate-800'
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            }`}>
+                              {isClosed ? 'Closed' : 'Active Mission'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-900 text-slate-400 border border-slate-800 capitalize">
+                              {task.task_type}
+                            </span>
+                          </div>
+
+                          <span className="text-yellow-500 text-xs font-mono font-bold flex items-center gap-1 bg-yellow-500/5 px-2 py-0.5 rounded border border-yellow-500/10">
+                            ⭐ {task.reward_points} pts
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-bold text-white leading-snug">{task.title}</h4>
+                          {task.description && (
+                            <p className="text-xs text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                          )}
+                        </div>
+
+                        {task.task_type === 'group' && (
+                          <div className="bg-slate-900/65 border border-slate-850 rounded-lg p-2.5 flex items-center gap-2 text-xs">
+                            <Users className="text-purple-400" size={14} />
+                            {assignedGroup ? (
+                              <span className="text-slate-300 font-medium">
+                                Assigned Team: <span className="text-purple-400 font-bold">{assignedGroup}</span>
+                              </span>
+                            ) : (
+                              <span className="text-amber-500 font-medium italic">
+                                Assigned Team: Unassigned (Awaiting team selection)
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-900/60 text-[11px] text-slate-500">
+                          <span>
+                            📅 Due: {task.due_at ? new Date(task.due_at).toLocaleString() : 'No due date set'}
+                          </span>
+                          <span className="text-purple-400/80 font-bold uppercase tracking-wider font-mono">
+                            Submission coming in Phase 7B
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* My Recent Updates (Personal Timeline) */}
