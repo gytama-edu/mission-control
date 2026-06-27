@@ -496,23 +496,72 @@ export const fetchStudentSubmission = async (
   };
 };
 
-export const fetchSubmissionsByTask = async (
-  taskId: string
+export const fetchTaskSubmissions = async (
+  taskId: string,
+  classId: string
 ): Promise<any[]> => {
-  // Fetch all submissions for this task
+  // Fetch all submissions for this task with correct class_id filtering
   const { data: submissions, error: subError } = await supabase
     .from('task_submissions')
     .select(`
       *,
       students (
-        name
+        name,
+        nickname
+      )
+    `)
+    .eq('task_id', taskId)
+    .eq('class_id', classId);
+
+  if (subError) throw subError;
+
+  // Fetch all attachments for this task and class
+  const { data: attachments, error: attachError } = await supabase
+    .from('submission_attachments')
+    .select('*')
+    .eq('task_id', taskId)
+    .eq('class_id', classId);
+
+  if (attachError) throw attachError;
+
+  return (submissions || []).map((sub: any) => {
+    const subAttachments = (attachments || []).filter((a: any) => a.submission_id === sub.id);
+    return {
+      ...sub,
+      studentName: sub.students?.nickname || sub.students?.name || 'Unknown Student',
+      attachments: subAttachments
+    };
+  });
+};
+
+export const fetchSubmissionsByTask = async (
+  taskId: string
+): Promise<any[]> => {
+  // For backwards compatibility, find the class_id first from tasks
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('class_id')
+    .eq('id', taskId)
+    .maybeSingle();
+
+  if (task?.class_id) {
+    return fetchTaskSubmissions(taskId, task.class_id);
+  }
+
+  // Fallback
+  const { data: submissions, error: subError } = await supabase
+    .from('task_submissions')
+    .select(`
+      *,
+      students (
+        name,
+        nickname
       )
     `)
     .eq('task_id', taskId);
 
   if (subError) throw subError;
 
-  // Fetch all attachments for this task
   const { data: attachments, error: attachError } = await supabase
     .from('submission_attachments')
     .select('*')
@@ -524,7 +573,7 @@ export const fetchSubmissionsByTask = async (
     const subAttachments = (attachments || []).filter((a: any) => a.submission_id === sub.id);
     return {
       ...sub,
-      studentName: sub.students?.name || 'Unknown Student',
+      studentName: sub.students?.nickname || sub.students?.name || 'Unknown Student',
       attachments: subAttachments
     };
   });

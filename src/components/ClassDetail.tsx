@@ -121,6 +121,7 @@ export function ClassDetail({
   const [reviewFeedback, setReviewFeedback] = useState('');
   const [reviewScore, setReviewScore] = useState<number>(0);
   const [isSavingReview, setIsSavingReview] = useState(false);
+  const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({});
 
   // Task form states
   const [taskFormTitle, setTaskFormTitle] = useState('');
@@ -144,6 +145,20 @@ export function ClassDetail({
       const data = await taskDb.fetchTasksByClass(classData.id);
       setTasks(data);
       setIsTasksTableMissing(false);
+
+      // Fetch submission counts
+      const { data: subsData, error: subsErr } = await supabase
+        .from('task_submissions')
+        .select('task_id')
+        .eq('class_id', classData.id);
+      
+      if (!subsErr && subsData) {
+        const counts: Record<string, number> = {};
+        subsData.forEach(sub => {
+          counts[sub.task_id] = (counts[sub.task_id] || 0) + 1;
+        });
+        setSubmissionCounts(counts);
+      }
     } catch (err: any) {
       if (err && (err.code === 'PGRST205' || (err.message && err.message.includes('tasks') && err.message.includes('schema cache')))) {
         setIsTasksTableMissing(true);
@@ -330,7 +345,7 @@ export function ClassDetail({
     setSubmissionsError(null);
     setSelectedSubmissionForReview(null);
     try {
-      const subs = await taskDb.fetchSubmissionsByTask(task.id);
+      const subs = await taskDb.fetchTaskSubmissions(task.id, classData.id);
       setTaskSubmissions(subs);
     } catch (err: any) {
       setSubmissionsError('Failed to fetch submissions: ' + err.message);
@@ -358,7 +373,7 @@ export function ClassDetail({
       );
       
       // Refresh list
-      const subs = await taskDb.fetchSubmissionsByTask(selectedTaskForSubmissions.id);
+      const subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
       setTaskSubmissions(subs);
       
       // Update local selected submission
@@ -1598,14 +1613,20 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       </div>
 
                       {/* Management Buttons */}
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-start font-sans">
+                      <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-start font-sans">
                         {task.task_type === 'individual' && (task.status === 'published' || task.status === 'closed' || task.status === 'archived') && (
-                          <button
-                            onClick={() => handleOpenSubmissionsModal(task)}
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                          >
-                            <FileText size={14} /> Submissions
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-medium">
+                              <span className={`w-1.5 h-1.5 rounded-full ${(submissionCounts[task.id] || 0) === classData.students.length && classData.students.length > 0 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : (submissionCounts[task.id] || 0) > 0 ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-slate-500'}`} />
+                              Submissions: <span className="text-white font-bold font-mono">{submissionCounts[task.id] || 0}/{classData.students.length}</span>
+                            </span>
+                            <button
+                              onClick={() => handleOpenSubmissionsModal(task)}
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <FileText size={14} /> View Submissions
+                            </button>
+                          </div>
                         )}
                         {isDraft && (
                           <>
@@ -2423,23 +2444,50 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                   <FileText className="text-purple-400" size={20} />
                   Submissions: {selectedTaskForSubmissions.title}
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Task ID: <span className="font-mono text-slate-500">{selectedTaskForSubmissions.id}</span> • Type: <span className="text-white capitalize font-medium">{selectedTaskForSubmissions.task_type}</span>
+                <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
+                  <span>Task ID: <span className="font-mono text-slate-500">{selectedTaskForSubmissions.id}</span></span>
+                  <span>•</span>
+                  <span>Type: <span className="text-white capitalize font-medium">{selectedTaskForSubmissions.task_type}</span></span>
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedTaskForSubmissions(null);
-                  setSelectedSubmissionForReview(null);
-                }}
-                className="text-slate-400 hover:text-white transition-colors p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Content Body: Split View */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsFetchingSubmissions(true);
+                    setSubmissionsError(null);
+                    try {
+                      const subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+                      setTaskSubmissions(subs);
+                      if (selectedSubmissionForReview) {
+                        const updated = subs.find(s => s.id === selectedSubmissionForReview.id);
+                        setSelectedSubmissionForReview(updated || null);
+                      }
+                    } catch (err: any) {
+                      setSubmissionsError('Failed to refresh: ' + err.message);
+                    } finally {
+                      setIsFetchingSubmissions(false);
+                    }
+                  }}
+                  disabled={isFetchingSubmissions}
+                  className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-xs cursor-pointer border border-slate-800"
+                  title="Refresh Submissions"
+                >
+                  <RefreshCw size={14} className={isFetchingSubmissions ? "animate-spin text-purple-400" : ""} />
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTaskForSubmissions(null);
+                    setSelectedSubmissionForReview(null);
+                  }}
+                  className="text-slate-400 hover:text-white transition-colors p-1"
+                >
+                  ✕
+                </button>
+              </div>
+                       {/* Content Body: Split View */}
             <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-950/20">
               
               {/* Left Column: Student List */}
@@ -2458,10 +2506,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                   <div className="space-y-1.5">
                     {classData.students.map((student) => {
                       const submission = taskSubmissions.find((s) => s.student_id === student.id);
-                      const isSelected = selectedSubmissionForReview?.student_id === student.id;
+                      const isSelected = selectedSubmissionForReview?.student_id === student.id && selectedSubmissionForReview?.status !== 'none';
+                      const isNoSubSelected = selectedSubmissionForReview?.student_id === student.id && selectedSubmissionForReview?.status === 'none';
 
                       let statusLabel = 'Not Submitted';
-                      let statusStyle = 'text-slate-500 bg-slate-900 border-slate-850';
+                      let statusStyle = 'text-slate-500 bg-slate-950 border-slate-900';
 
                       if (submission) {
                         if (submission.status === 'reviewed') {
@@ -2482,19 +2531,30 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       return (
                         <button
                           key={student.id}
-                          disabled={!submission}
-                          onClick={() => handleSelectSubmissionForReview(submission)}
+                          type="button"
+                          onClick={() => {
+                            if (submission) {
+                              handleSelectSubmissionForReview(submission);
+                            } else {
+                              setSelectedSubmissionForReview({
+                                id: null,
+                                student_id: student.id,
+                                studentName: student.nickname || student.name,
+                                status: 'none'
+                              });
+                            }
+                          }}
                           className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                            !submission 
-                              ? 'opacity-50 cursor-not-allowed border-slate-900 bg-slate-950/40' 
-                              : isSelected
+                            isSelected || isNoSubSelected
                               ? 'bg-purple-600/10 border-purple-500/50 hover:bg-purple-600/15'
-                              : 'bg-slate-900/60 border-slate-850 hover:bg-slate-900/90'
+                              : submission
+                              ? 'bg-slate-900/60 border-slate-850 hover:bg-slate-900/90'
+                              : 'bg-slate-950/40 border-slate-900/50 opacity-65 hover:bg-slate-900/30'
                           }`}
                         >
                           <div className="truncate">
                             <p className="text-xs font-bold text-white truncate">{student.nickname || student.name}</p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">PIN: {student.pin}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5 font-mono">PIN: {student.pin}</p>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-[9px] font-bold border shrink-0 ${statusStyle}`}>
                             {statusLabel}
@@ -2507,145 +2567,274 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               </div>
 
               {/* Right Column: Submission details and review controls */}
-              <div className="flex-1 flex flex-col overflow-y-auto p-6 min-w-0">
+              <div className="flex-1 flex flex-col overflow-y-auto p-6 min-w-0 bg-slate-950/40">
                 {selectedSubmissionForReview ? (
-                  <div className="space-y-6 flex-1 flex flex-col">
-                    
-                    {/* Submission Info */}
-                    <div>
-                      <h4 className="text-base font-bold text-white mb-1">
-                        Reviewing: <span className="text-purple-400">{selectedSubmissionForReview.studentName}</span>
-                      </h4>
-                      <p className="text-xs text-slate-500">
-                        Submitted: {new Date(selectedSubmissionForReview.created_at).toLocaleString()}
-                        {selectedSubmissionForReview.status === 'late' && (
-                          <span className="text-red-400 font-bold ml-2 font-mono">⚠️ LATE SUBMISSION</span>
-                        )}
-                      </p>
+                  selectedSubmissionForReview.status === 'none' ? (
+                    // Empty state for student who has not submitted
+                    <div className="my-auto text-center space-y-3 p-6">
+                      <div className="w-12 h-12 bg-slate-800 text-slate-400 rounded-full flex items-center justify-center mx-auto border border-slate-700">
+                        <Clock size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">No submissions yet.</h4>
+                        <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
+                          <strong>{selectedSubmissionForReview.studentName}</strong> has not logged any directive submission for this task yet.
+                        </p>
+                      </div>
                     </div>
-
-                    {/* Text Answer */}
-                    {selectedTaskForSubmissions.allow_text_submission && (
-                      <div className="space-y-2">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Student Response</span>
-                        <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl text-xs text-slate-200 whitespace-pre-wrap leading-relaxed italic">
-                          {selectedSubmissionForReview.submission_text || (
-                            <span className="text-slate-600 italic">No text response provided.</span>
+                  ) : (
+                    // Detailed submission review
+                    <div className="space-y-6 flex-1 flex flex-col animate-fade-in">
+                      {/* Submission Info */}
+                      <div>
+                        <h4 className="text-base font-bold text-white mb-1">
+                          Reviewing: <span className="text-purple-400">{selectedSubmissionForReview.studentName}</span>
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          Submitted: {new Date(selectedSubmissionForReview.created_at).toLocaleString()}
+                          {selectedSubmissionForReview.status === 'late' && (
+                            <span className="text-red-400 font-bold ml-2 font-mono">⚠️ LATE SUBMISSION</span>
                           )}
-                        </div>
+                        </p>
                       </div>
-                    )}
 
-                    {/* Attachments */}
-                    {selectedTaskForSubmissions.allow_attachment_submission && (
-                      <div className="space-y-2">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Attachments</span>
-                        {selectedSubmissionForReview.attachments && selectedSubmissionForReview.attachments.length > 0 ? (
-                          <div className="grid sm:grid-cols-2 gap-2">
-                            {selectedSubmissionForReview.attachments.map((file: any) => (
-                              <div
-                                key={file.id}
-                                className="bg-slate-950 border border-slate-850 p-3 rounded-xl flex items-center justify-between gap-3 text-xs"
-                              >
-                                <div className="truncate">
-                                  <p className="font-mono text-slate-300 truncate font-semibold flex items-center gap-1.5">
-                                    <Paperclip size={12} className="text-slate-500 shrink-0" />
-                                    {file.file_name}
-                                  </p>
-                                  <p className="text-[10px] text-slate-500 mt-0.5">
-                                    Size: {(file.file_size / (1024 * 1024)).toFixed(2)} MB
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownloadAttachment(file.file_path)}
-                                  className="text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-500/20 transition-all text-[11px] shrink-0"
-                                >
-                                  Download
-                                </button>
-                              </div>
-                            ))}
+                      {/* Text Answer */}
+                      {selectedTaskForSubmissions.allow_text_submission && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Student Response</span>
+                          <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl text-xs text-slate-200 whitespace-pre-wrap leading-relaxed italic">
+                            {selectedSubmissionForReview.submission_text || (
+                              <span className="text-slate-600 italic">No text response provided.</span>
+                            )}
                           </div>
-                        ) : (
-                          <p className="text-xs text-slate-500 italic">No attachments uploaded.</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Divider */}
-                    <div className="border-t border-slate-800/80 my-4" />
-
-                    {/* Review Form */}
-                    <div className="space-y-4 bg-slate-900/40 p-5 rounded-2xl border border-slate-850">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <CheckSquare size={14} className="text-purple-400" />
-                        Grading & Commander Feedback
-                      </h4>
-
-                      <div className="grid sm:grid-cols-3 gap-4">
-                        <div className="sm:col-span-2 space-y-1.5">
-                          <label className="block text-xs text-slate-400">Feedback Comments</label>
-                          <textarea
-                            rows={3}
-                            value={reviewFeedback}
-                            onChange={(e) => setReviewFeedback(e.target.value)}
-                            placeholder="Add directive feedback, corrections, or praise here..."
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="block text-xs text-slate-400">Score / Grade Points</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={reviewScore}
-                            onChange={(e) => setReviewScore(Number(e.target.value))}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
-                          />
-                          <p className="text-[10px] text-slate-500 italic">Max suggested: {selectedTaskForSubmissions.reward_points} pts</p>
-                        </div>
-                      </div>
-
-                      {submissionsError && (
-                        <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg">
-                          {submissionsError}
                         </div>
                       )}
 
-                      <div className="flex justify-end gap-2.5 pt-2">
-                        <button
-                          type="button"
-                          disabled={isSavingReview}
-                          onClick={() => handleSaveReview('returned')}
-                          className="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-amber-400 hover:text-amber-300 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-                        >
-                          {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
-                          Return for Resubmission
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isSavingReview}
-                          onClick={() => handleSaveReview('reviewed')}
-                          className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5"
-                        >
-                          {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
-                          Complete & Review
-                        </button>
+                      {/* Attachments */}
+                      {selectedTaskForSubmissions.allow_attachment_submission && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Attachments</span>
+                          {selectedSubmissionForReview.attachments && selectedSubmissionForReview.attachments.length > 0 ? (
+                            <div className="grid sm:grid-cols-2 gap-2">
+                              {selectedSubmissionForReview.attachments.map((file: any) => (
+                                <div
+                                  key={file.id}
+                                  className="bg-slate-950 border border-slate-850 p-3 rounded-xl flex items-center justify-between gap-3 text-xs"
+                                >
+                                  <div className="truncate">
+                                    <p className="font-mono text-slate-300 truncate font-semibold flex items-center gap-1.5">
+                                      <Paperclip size={12} className="text-slate-500 shrink-0" />
+                                      {file.file_name}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                                      Size: {(file.file_size_bytes ? (file.file_size_bytes / (1024 * 1024)).toFixed(2) : '0.00')} MB
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadAttachment(file.file_path)}
+                                    className="text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-500/20 transition-all text-[11px] shrink-0 cursor-pointer"
+                                  >
+                                    Download
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500 italic bg-slate-950/20 p-4 border border-dashed border-slate-850 rounded-xl">
+                              No attachments submitted.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Divider */}
+                      <div className="border-t border-slate-800/80 my-4" />
+
+                      {/* Review Form */}
+                      <div className="space-y-4 bg-slate-900/40 p-5 rounded-2xl border border-slate-850">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <CheckSquare size={14} className="text-purple-400" />
+                          Grading & Commander Feedback
+                        </h4>
+
+                        <div className="grid sm:grid-cols-3 gap-4">
+                          <div className="sm:col-span-2 space-y-1.5">
+                            <label className="block text-xs text-slate-400">Feedback Comments</label>
+                            <textarea
+                              rows={3}
+                              value={reviewFeedback}
+                              onChange={(e) => setReviewFeedback(e.target.value)}
+                              placeholder="Add directive feedback, corrections, or praise here..."
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="block text-xs text-slate-400">Score / Grade Points</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={reviewScore}
+                              onChange={(e) => setReviewScore(Number(e.target.value))}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                            />
+                            <p className="text-[10px] text-slate-500 italic">Max suggested: {selectedTaskForSubmissions.reward_points} pts</p>
+                          </div>
+                        </div>
+
+                        {submissionsError && (
+                          <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg">
+                            {submissionsError}
+                          </div>
+                        )}
+
+                        <div className="flex justify-end gap-2.5 pt-2">
+                          <button
+                            type="button"
+                            disabled={isSavingReview}
+                            onClick={() => handleSaveReview('returned')}
+                            className="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-amber-400 hover:text-amber-300 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
+                            Return for Resubmission
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSavingReview}
+                            onClick={() => handleSaveReview('reviewed')}
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer"
+                          >
+                            {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
+                            Complete & Review
+                          </button>
+                        </div>
                       </div>
                     </div>
-
-                  </div>
+                  )
                 ) : (
-                  <div className="my-auto text-center space-y-3 p-6">
-                    <div className="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-full flex items-center justify-center mx-auto border border-purple-500/20">
-                      <FileText size={20} />
+                  // General View: Show all submissions as beautiful cards
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        All Submissions ({taskSubmissions.length})
+                      </h4>
+                      {submissionsError && (
+                        <span className="text-red-400 text-xs">{submissionsError}</span>
+                      )}
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Select a Student Submission</h4>
-                      <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
-                        Select an active student's logged directive from the left roster panel to begin reviewing their work, downloading file attachments, and recording feedback.
-                      </p>
-                    </div>
+
+                    {taskSubmissions.length === 0 ? (
+                      <div className="py-12 text-center space-y-3">
+                        <div className="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-full flex items-center justify-center mx-auto border border-purple-500/20 animate-pulse">
+                          <FileText size={20} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">This task has no submissions yet.</h4>
+                          <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
+                            No student submissions are available yet. Students can submit answers directly from their dashboard.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 overflow-y-auto max-h-[65vh] pr-1">
+                        {taskSubmissions.map((sub) => {
+                          const statusColors: Record<string, string> = {
+                            reviewed: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+                            returned: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                            late: 'text-red-400 bg-red-500/10 border-red-500/20',
+                            submitted: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                          };
+                          const statusStyle = statusColors[sub.status] || statusColors.submitted;
+
+                          return (
+                            <div
+                              key={sub.id}
+                              className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col transition-all hover:border-slate-700"
+                            >
+                              {/* Card Header */}
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <h5 className="text-sm font-bold text-white flex items-center gap-2">
+                                    {sub.studentName}
+                                  </h5>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">
+                                    Submitted: {new Date(sub.created_at).toLocaleString()}
+                                  </p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border capitalize ${statusStyle}`}>
+                                  {sub.status}
+                                </span>
+                              </div>
+
+                              {/* Card Text Content */}
+                              {selectedTaskForSubmissions.allow_text_submission && (
+                                <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 text-xs text-slate-300 italic whitespace-pre-wrap leading-relaxed">
+                                  {sub.submission_text || (
+                                    <span className="text-slate-600 italic">No text response.</span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Card Attachments */}
+                              {selectedTaskForSubmissions.allow_attachment_submission && (
+                                <div className="space-y-1.5">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Uploaded Files</span>
+                                  {sub.attachments && sub.attachments.length > 0 ? (
+                                    <div className="grid gap-2">
+                                      {sub.attachments.map((file: any) => (
+                                        <div
+                                          key={file.id}
+                                          className="bg-slate-950 border border-slate-850 p-2.5 rounded-lg flex items-center justify-between gap-3 text-xs"
+                                        >
+                                          <div className="truncate">
+                                            <p className="font-mono text-slate-300 truncate font-semibold flex items-center gap-1">
+                                              <Paperclip size={11} className="text-slate-500" />
+                                              {file.file_name}
+                                            </p>
+                                            <p className="text-[9px] text-slate-500 mt-0.5 font-mono">
+                                              Size: {(file.file_size_bytes ? (file.file_size_bytes / (1024 * 1024)).toFixed(2) : '0.00')} MB
+                                            </p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDownloadAttachment(file.file_path)}
+                                            className="text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/20 transition-all text-[10px] cursor-pointer"
+                                          >
+                                            Open File
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-slate-500 italic bg-slate-950/20 p-2.5 border border-dashed border-slate-850 rounded-lg">
+                                      No attachments submitted.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Action Buttons */}
+                              <div className="flex items-center justify-between border-t border-slate-800/60 pt-3 mt-1">
+                                {sub.score !== undefined && sub.score !== null ? (
+                                  <span className="text-xs text-yellow-500 font-mono font-bold bg-yellow-500/5 px-2 py-0.5 rounded border border-yellow-500/10">
+                                    ⭐ Grade: {sub.score} / {selectedTaskForSubmissions.reward_points} pts
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 italic">Ungraded</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectSubmissionForReview(sub)}
+                                  className="text-purple-400 hover:text-white bg-purple-600/15 hover:bg-purple-600 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-purple-500/20 transition-all cursor-pointer"
+                                >
+                                  Review & Grade
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2664,7 +2853,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               >
                 Close Submissions Viewer
               </button>
-            </div>
+            </div>       </div>
 
           </div>
         </div>
