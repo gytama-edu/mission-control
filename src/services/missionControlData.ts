@@ -1,11 +1,12 @@
 import { supabase } from '../lib/supabaseClient';
 import { ClassData, Student, Meeting } from '../types';
 
-export const fetchClasses = async (): Promise<ClassData[]> => {
-  const { data: classes, error: classError } = await supabase
-    .from('classes')
-    .select('*')
-    .order('created_at', { ascending: true });
+export const fetchClasses = async (teacherId?: string | null): Promise<ClassData[]> => {
+  let query = supabase.from('classes').select('*');
+  if (teacherId) {
+    query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null`);
+  }
+  const { data: classes, error: classError } = await query.order('created_at', { ascending: true });
 
   if (classError) throw classError;
 
@@ -29,6 +30,7 @@ export const fetchClasses = async (): Promise<ClassData[]> => {
     level: c.level,
     maxLives: c.max_lives,
     joinCode: c.join_code,
+    teacherId: c.teacher_id,
     createdAt: c.created_at,
     students: (students || [])
       .filter(s => s.class_id === c.id)
@@ -51,10 +53,26 @@ export const fetchClasses = async (): Promise<ClassData[]> => {
   }));
 };
 
-export const createClass = async (name: string, level: string, maxLives: number, joinCode: string): Promise<any> => {
+export const createClass = async (name: string, level: string, maxLives: number, joinCode: string, teacherId?: string): Promise<any> => {
+  const payload: any = { name, level, max_lives: maxLives, join_code: joinCode };
+  if (teacherId) {
+    payload.teacher_id = teacherId;
+  }
   const { data, error } = await supabase
     .from('classes')
-    .insert([{ name, level, max_lives: maxLives, join_code: joinCode }])
+    .insert([payload])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const claimClass = async (classId: string, teacherId: string): Promise<any> => {
+  const { data, error } = await supabase
+    .from('classes')
+    .update({ teacher_id: teacherId })
+    .eq('id', classId)
     .select()
     .single();
 
