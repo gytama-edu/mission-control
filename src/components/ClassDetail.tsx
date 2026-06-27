@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { ClassData } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw } from 'lucide-react';
 
 interface ClassDetailProps {
   classData: ClassData;
   onBack: () => void;
   onEditClass: (name: string, level: string, maxLives: number) => void;
   onDeleteClass: () => void;
+  onRegenerateJoinCode: () => void;
   onAddStudent: (name: string) => void;
   onEditStudent: (studentId: string, name: string, nickname?: string) => void;
   onDeleteStudent: (studentId: string) => void;
+  onRegenerateStudentPin: (studentId: string) => void;
   onUpdateLives: (studentId: string, change: number) => void;
   onUpdatePoints: (studentId: string, change: number) => void;
   onStartMeeting: () => void;
@@ -20,9 +22,11 @@ export function ClassDetail({
   onBack,
   onEditClass,
   onDeleteClass,
+  onRegenerateJoinCode,
   onAddStudent,
   onEditStudent,
   onDeleteStudent,
+  onRegenerateStudentPin,
   onUpdateLives,
   onUpdatePoints,
   onStartMeeting
@@ -77,7 +81,34 @@ export function ClassDetail({
 
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white mb-2">{classData.name}</h1>
+            <div className="flex items-center gap-4 mb-2">
+              <h1 className="text-3xl font-display font-bold text-white">{classData.name}</h1>
+              <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-700">
+                <Key size={14} className="text-blue-400" />
+                <span className="font-mono font-bold text-blue-400">{classData.joinCode}</span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(classData.joinCode);
+                    alert('Join code copied!');
+                  }}
+                  className="text-slate-400 hover:text-white p-1 ml-1 transition-colors"
+                  title="Copy Join Code"
+                >
+                  <Copy size={14} />
+                </button>
+                <button 
+                  onClick={() => {
+                    if (confirm('Regenerate join code? Students will need the new code to log in.')) {
+                      onRegenerateJoinCode();
+                    }
+                  }}
+                  className="text-slate-400 hover:text-white p-1 transition-colors"
+                  title="Regenerate Join Code"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-4 text-sm text-slate-400">
               <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300">
                 <Users size={14} /> Level: {classData.level}
@@ -179,6 +210,9 @@ export function ClassDetail({
                       </h3>
                       <div className={`mt-1 inline-block px-2 py-0.5 rounded text-xs font-medium border ${status.color}`}>
                         {status.label}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-400 flex items-center gap-1 font-mono">
+                        <Key size={10} /> PIN: {student.pin}
                       </div>
                     </div>
                     <button
@@ -416,6 +450,32 @@ export function ClassDetail({
                 >
                   Save Changes
                 </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const student = classData.students.find(s => s.id === editingStudentId);
+                      if (student) {
+                        navigator.clipboard.writeText(`Class Code: ${classData.joinCode}\nStudent: ${student.name}\nPIN: ${student.pin}`);
+                        alert('Login info copied!');
+                      }
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Copy size={14} /> Copy Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Regenerate PIN for this student?')) {
+                        onRegenerateStudentPin(editingStudentId);
+                      }
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <RefreshCw size={14} /> Reset PIN
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {

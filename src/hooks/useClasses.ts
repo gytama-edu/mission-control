@@ -4,10 +4,40 @@ import { ClassData, Student, Meeting } from '../types';
 const STORAGE_KEY = 'mission_control_classes';
 
 export function useClasses() {
+  const generateJoinCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+  const generatePin = () => Math.floor(1000 + Math.random() * 9000).toString();
+
   const [classes, setClasses] = useState<ClassData[]>(() => {
     try {
       const item = window.localStorage.getItem(STORAGE_KEY);
-      return item ? JSON.parse(item) : [];
+      if (item) {
+        const parsed = JSON.parse(item);
+        let migrated = false;
+        const updated = parsed.map((c: any) => {
+          let cMigrated = false;
+          if (!c.joinCode) {
+            c.joinCode = generateJoinCode();
+            cMigrated = true;
+          }
+          const updatedStudents = c.students.map((s: any) => {
+            if (!s.pin) {
+              s.pin = generatePin();
+              cMigrated = true;
+            }
+            return s;
+          });
+          if (cMigrated) {
+             migrated = true;
+             return { ...c, students: updatedStudents };
+          }
+          return c;
+        });
+        if (migrated) {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        }
+        return updated;
+      }
+      return [];
     } catch (error) {
       console.error(error);
       return [];
@@ -27,6 +57,7 @@ export function useClasses() {
       students: [],
       meetings: [],
       createdAt: new Date().toISOString(),
+      joinCode: generateJoinCode(),
     };
     setClasses([...classes, newClass]);
   };
@@ -62,6 +93,7 @@ export function useClasses() {
           lives: c.maxLives,
           points: 0,
           joinedAt: new Date().toISOString(),
+          pin: generatePin(),
         };
         return { ...c, students: [...c.students, newStudent] };
       }
@@ -152,6 +184,32 @@ export function useClasses() {
     }));
   };
 
+  const regenerateJoinCode = (classId: string) => {
+    setClasses(classes.map(c => {
+      if (c.id === classId) {
+        return { ...c, joinCode: generateJoinCode() };
+      }
+      return c;
+    }));
+  };
+
+  const regenerateStudentPin = (classId: string, studentId: string) => {
+    setClasses(classes.map(c => {
+      if (c.id === classId) {
+        return {
+          ...c,
+          students: c.students.map(s => {
+            if (s.id === studentId) {
+              return { ...s, pin: generatePin() };
+            }
+            return s;
+          })
+        };
+      }
+      return c;
+    }));
+  };
+
   return {
     classes,
     addClass,
@@ -162,6 +220,8 @@ export function useClasses() {
     deleteStudent,
     updateStudentLives,
     updateStudentPoints,
-    startMeeting
+    startMeeting,
+    regenerateJoinCode,
+    regenerateStudentPin
   };
 }

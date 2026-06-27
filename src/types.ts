@@ -5,6 +5,7 @@ export interface Student {
   lives: number;
   points: number;
   joinedAt: string;
+  pin: string;
 }
 
 export interface Meeting {
@@ -20,4 +21,5 @@ export interface ClassData {
   students: Student[];
   meetings: Meeting[];
   createdAt: string;
+  joinCode: string;
 }
