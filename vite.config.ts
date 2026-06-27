@@ -6,7 +6,7 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
-    base: '/mission-control/',
+    base: process.env.VITE_BASE_PATH || './',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

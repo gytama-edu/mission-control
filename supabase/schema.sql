@@ -52,3 +52,9 @@ CREATE POLICY "Enable all access for anon users on students"
 -- Meetings temporary policies
 CREATE POLICY "Enable all access for anon users on meetings"
   ON meetings FOR ALL USING (true) WITH CHECK (true);
+
+-- Enable Realtime for the tables (required for postgres_changes subscription)
+alter publication supabase_realtime add table public.classes;
+alter publication supabase_realtime add table public.students;
+alter publication supabase_realtime add table public.meetings;
+

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ClassData, Student } from '../types';
 import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2 } from 'lucide-react';
 import * as db from '../services/missionControlData';
+import { supabase } from '../lib/supabaseClient';
 
 interface StudentAccessProps {
   onBack: () => void;
@@ -14,6 +15,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [restoringProfile, setRestoringProfile] = useState(false);
   
   const [loggedInClass, setLoggedInClass] = useState<ClassData | null>(null);
   const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null);
@@ -21,21 +23,37 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [savedProfile, setSavedProfile] = useState<{ classId: string, studentId: string, studentName?: string } | null>(null);
   const [showSavedPrompt, setShowSavedPrompt] = useState(false);
 
+  // Auto-restore profile on refresh/mount
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(PROFILE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.classId && parsed.studentId) {
-          setSavedProfile(parsed);
-          setShowSavedPrompt(true);
+    const autoRestore = async () => {
+      try {
+        const saved = window.localStorage.getItem(PROFILE_KEY);
+        if (saved && saved !== 'dismissed') {
+          const parsed = JSON.parse(saved);
+          if (parsed.classId && parsed.studentId) {
+            setRestoringProfile(true);
+            setError('');
+            const { classData, studentData } = await db.getStudentDashboardData(parsed.classId, parsed.studentId);
+            if (classData && studentData) {
+              setLoggedInClass(classData);
+              setLoggedInStudent(studentData);
+            } else {
+              setError('Profile no longer exists. Please log in again.');
+              window.localStorage.removeItem(PROFILE_KEY);
+            }
+          }
         }
+      } catch (e) {
+        console.error(e);
+        setError('Failed to restore profile.');
+      } finally {
+        setRestoringProfile(false);
       }
-    } catch (e) {
-      console.error(e);
-    }
+    };
+    autoRestore();
   }, []);
 
+  // Fetch the latest dashboard data helper
   const fetchDashboardData = async (classId: string, studentId: string) => {
     setIsLoading(true);
     setError('');
@@ -55,6 +73,122 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       setIsLoading(false);
     }
   };
+
+  // Realtime subscription setup
+  useEffect(() => {
+    if (!loggedInClass || !loggedInStudent) return;
+
+    const classId = loggedInClass.id;
+    const studentId = loggedInStudent.id;
+
+    // Helper to refresh in background
+    const refreshData = async () => {
+      try {
+        const { classData, studentData } = await db.getStudentDashboardData(classId, studentId);
+        if (classData && studentData) {
+          setLoggedInClass(classData);
+          setLoggedInStudent(studentData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch updated real-time data:", err);
+      }
+    };
+
+    // 1. Subscribe to the logged-in student row specifically (for instantaneous updates)
+    const studentSubscription = supabase
+      .channel(`student-self-${studentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'students',
+          filter: `id=eq.${studentId}`,
+        },
+        (payload) => {
+          const updatedRow = payload.new as any;
+          if (updatedRow) {
+            setLoggedInStudent(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                name: updatedRow.name,
+                nickname: updatedRow.nickname || '',
+                lives: updatedRow.lives,
+                points: updatedRow.points,
+                pin: updatedRow.pin,
+              };
+            });
+          }
+          // Also trigger background refresh of full class data to keep things in perfect sync
+          refreshData();
+        }
+      )
+      .subscribe();
+
+    // 2. Subscribe to all student changes in the same class (to recalculate rank/leaderboard)
+    const classStudentsSubscription = supabase
+      .channel(`class-students-${classId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'students',
+          filter: `class_id=eq.${classId}`,
+        },
+        (payload) => {
+          // If update is for someone else or is an insert/delete, pull fresh class list
+          if (payload.new && (payload.new as any).id !== studentId) {
+            refreshData();
+          } else if (payload.eventType === 'DELETE' || payload.eventType === 'INSERT') {
+            refreshData();
+          }
+        }
+      )
+      .subscribe();
+
+    // 3. Subscribe to current class detail updates (e.g., changing maxLives, level, or name)
+    const classSubscription = supabase
+      .channel(`class-details-${classId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'classes',
+          filter: `id=eq.${classId}`,
+        },
+        () => {
+          refreshData();
+        }
+      )
+      .subscribe();
+
+    // 4. Subscribe to meetings INSERT for this class
+    const meetingsSubscription = supabase
+      .channel(`class-meetings-${classId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'meetings',
+          filter: `class_id=eq.${classId}`,
+        },
+        () => {
+          refreshData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(studentSubscription);
+      supabase.removeChannel(classStudentsSubscription);
+      supabase.removeChannel(classSubscription);
+      supabase.removeChannel(meetingsSubscription);
+    };
+  }, [loggedInClass?.id, loggedInStudent?.id]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,11 +231,24 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   };
 
   const handleLogout = () => {
+    window.localStorage.removeItem(PROFILE_KEY);
     setLoggedInClass(null);
     setLoggedInStudent(null);
     setJoinCode('');
     setPin('');
   };
+
+  if (restoringProfile) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-center">
+          <Loader2 className="mx-auto h-12 w-12 text-emerald-500 animate-spin mb-4" />
+          <p className="text-slate-400">Loading student profile...</p>
+        </div>
+      </div>
+    );
+  }
+
 
   if (loggedInClass && loggedInStudent) {
     const student = loggedInStudent;

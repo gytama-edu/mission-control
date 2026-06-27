@@ -13,7 +13,26 @@ import { isSupabaseConfigured } from './lib/supabaseClient';
 import { AlertTriangle } from 'lucide-react';
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<'landing' | 'teacher' | 'student'>('landing');
+  const [viewMode, setViewMode] = useState<'landing' | 'teacher' | 'student'>(() => {
+    try {
+      const saved = window.localStorage.getItem('mission_control_view_mode');
+      if (saved === 'landing' || saved === 'teacher' || saved === 'student') {
+        return saved;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return 'landing';
+  });
+
+  const handleSetViewMode = (mode: 'landing' | 'teacher' | 'student') => {
+    setViewMode(mode);
+    try {
+      window.localStorage.setItem('mission_control_view_mode', mode);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   if (!isSupabaseConfigured) {
     return (
@@ -63,11 +82,11 @@ export default function App() {
   const activeClass = classes.find(c => c.id === activeClassId);
 
   if (viewMode === 'landing') {
-    return <Landing onSelectTeacher={() => setViewMode('teacher')} onSelectStudent={() => setViewMode('student')} />;
+    return <Landing onSelectTeacher={() => handleSetViewMode('teacher')} onSelectStudent={() => handleSetViewMode('student')} />;
   }
 
   if (viewMode === 'student') {
-    return <StudentAccess onBack={() => setViewMode('landing')} />;
+    return <StudentAccess onBack={() => handleSetViewMode('landing')} />;
   }
 
   return (
@@ -94,7 +113,7 @@ export default function App() {
         <div className="min-h-screen bg-slate-950 text-slate-100 p-4">
           <div className="w-full max-w-7xl mx-auto mb-4">
             <button
-              onClick={() => setViewMode('landing')}
+              onClick={() => handleSetViewMode('landing')}
               className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
             >
               ← Back to Main Menu
