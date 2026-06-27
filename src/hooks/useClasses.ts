@@ -4,7 +4,7 @@ import * as db from '../services/missionControlData';
 
 const STORAGE_KEY = 'mission_control_classes';
 
-export function useClasses() {
+export function useClasses(teacherId: string | null) {
   const generateJoinCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
   const generatePin = () => Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -16,7 +16,7 @@ export function useClasses() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await db.fetchClasses();
+      const data = await db.fetchClasses(teacherId);
       setClasses(data);
     } catch (err: any) {
       console.error(err);
@@ -28,7 +28,7 @@ export function useClasses() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [teacherId]);
 
   const importLocalData = async () => {
     try {
@@ -38,7 +38,7 @@ export function useClasses() {
       const localClasses = JSON.parse(item);
       for (const c of localClasses) {
         const joinCode = c.joinCode || generateJoinCode();
-        const newClass = await db.createClass(c.name, c.level || '', c.maxLives, joinCode);
+        const newClass = await db.createClass(c.name, c.level || '', c.maxLives, joinCode, teacherId || undefined);
         
         for (const s of c.students || []) {
           const pin = s.pin || generatePin();
@@ -63,7 +63,15 @@ export function useClasses() {
 
   const addClass = async (name: string, level: string, maxLives: number) => {
     try {
-      await db.createClass(name, level, maxLives, generateJoinCode());
+      await db.createClass(name, level, maxLives, generateJoinCode(), teacherId || undefined);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const claimClass = async (classId: string) => {
+    if (!teacherId) return;
+    try {
+      await db.claimClass(classId, teacherId);
       await loadData();
     } catch (err: any) { alert(err.message); }
   };
@@ -150,6 +158,7 @@ export function useClasses() {
     error,
     importLocalData,
     addClass,
+    claimClass,
     editClass,
     deleteClass,
     addStudent,
