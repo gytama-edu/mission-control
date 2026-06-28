@@ -397,7 +397,7 @@ export function ClassDetail({
         currentClassId: classData.id
       });
       if (normalizedTaskType === 'group') {
-        setSubmissionsError('Failed to load group submissions.');
+        setSubmissionsError('Failed to load group submissions: ' + err.message);
       } else {
         setSubmissionsError('Failed to load submissions: ' + err.message);
       }
@@ -2644,7 +2644,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         currentClassId: classData.id
                       });
                       if (selectedTaskForSubmissions.task_type === 'group') {
-                        setSubmissionsError('Failed to load group submissions.');
+                        setSubmissionsError('Failed to load group submissions: ' + err.message);
                       } else {
                         setSubmissionsError('Failed to refresh: ' + err.message);
                       }

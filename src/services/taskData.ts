@@ -749,6 +749,9 @@ export const fetchGroupTaskSubmissions = async (
   taskId: string,
   classId: string
 ): Promise<any[]> => {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+
   const { data, error } = await supabase.rpc(
     'fetch_group_task_submissions_for_teacher',
     {
@@ -757,7 +760,11 @@ export const fetchGroupTaskSubmissions = async (
     }
   );
 
-  if (error) throw error;
+  if (error) {
+    console.error('Failed to fetch group submissions:', error);
+    console.error('Context:', { taskId, classId, userId });
+    throw error;
+  }
 
   const groups = data || [];
 
