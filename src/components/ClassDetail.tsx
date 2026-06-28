@@ -133,6 +133,7 @@ export function ClassDetail({
   const [taskFormAllowAttachment, setTaskFormAllowAttachment] = useState(false);
   const [taskFormMaxAttachments, setTaskFormMaxAttachments] = useState(1);
   const [taskFormMaxSizeMb, setTaskFormMaxSizeMb] = useState(10);
+  const [taskFormAllowResubmission, setTaskFormAllowResubmission] = useState(true);
 
   // Auto-group states
   const [numGroupsToCreate, setNumGroupsToCreate] = useState(3);
@@ -247,6 +248,7 @@ export function ClassDetail({
     setTaskFormAllowAttachment(false);
     setTaskFormMaxAttachments(1);
     setTaskFormMaxSizeMb(10);
+    setTaskFormAllowResubmission(true);
     setIsTaskModalOpen(true);
   };
 
@@ -261,6 +263,7 @@ export function ClassDetail({
     setTaskFormAllowAttachment(task.allow_attachment_submission);
     setTaskFormMaxAttachments(task.max_attachments);
     setTaskFormMaxSizeMb(task.max_attachment_size_mb);
+    setTaskFormAllowResubmission(task.allow_resubmission !== false);
     setIsTaskModalOpen(true);
   };
 
@@ -281,7 +284,8 @@ export function ClassDetail({
         allow_text_submission: taskFormAllowText,
         allow_attachment_submission: taskFormAllowAttachment,
         max_attachments: Number(taskFormMaxAttachments),
-        max_attachment_size_mb: Number(taskFormMaxSizeMb)
+        max_attachment_size_mb: Number(taskFormMaxSizeMb),
+        allow_resubmission: taskFormAllowResubmission
       };
 
       if (editingTask) {
@@ -339,6 +343,16 @@ export function ClassDetail({
     }
   };
 
+  const handleReopenTask = async (task: Task) => {
+    try {
+      await taskDb.reopenTask(task.id, classData.id, task.title);
+      alert('Task reopened successfully!');
+      loadTasks();
+    } catch (err: any) {
+      alert('Failed to reopen task: ' + err.message);
+    }
+  };
+
   const handleOpenSubmissionsModal = async (task: Task) => {
     setSelectedTaskForSubmissions(task);
     setIsFetchingSubmissions(true);
@@ -373,7 +387,8 @@ export function ClassDetail({
           isGroup: true,
           status: s.submission_status || 'not submitted',
           created_at: s.created_at || null,
-          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name)
+          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name),
+          group_members_raw: s.group_members || []
         }));
       } else {
         console.log('[DEBUG] which fetch function is being called: fetchTaskSubmissions');
@@ -454,7 +469,8 @@ export function ClassDetail({
           isGroup: true,
           status: s.submission_status || 'not submitted',
           created_at: s.created_at || null,
-          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name)
+          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name),
+          group_members_raw: s.group_members || []
         }));
       } else {
         console.log('[DEBUG] SaveReview Refresh individual submissions:', {
@@ -1810,21 +1826,37 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         )}
 
                         {isClosed && (
-                          <button
-                            onClick={() => handleArchiveTask(task)}
-                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                          >
-                            Archive Task
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleReopenTask(task)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Reopen Task
+                            </button>
+                            <button
+                              onClick={() => handleArchiveTask(task)}
+                              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Archive Task
+                            </button>
+                          </>
                         )}
 
                         {isArchived && (
-                          <button
-                            onClick={() => setTaskDeleteConfirmId(task.id)}
-                            className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
-                          >
-                            <Trash2 size={14} /> Delete
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleReopenTask(task)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              Reopen Task
+                            </button>
+                            <button
+                              onClick={() => setTaskDeleteConfirmId(task.id)}
+                              className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
+                            >
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -2166,7 +2198,17 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                           onChange={(e) => setTaskFormAllowAttachment(e.target.checked)}
                           className="rounded bg-slate-950 border-slate-850 text-purple-600 focus:ring-purple-500 h-4 w-4"
                         />
-                        <span>Allow file attachment uploads (coming in Phase 7D)</span>
+                        <span>Allow file attachment uploads</span>
+                      </label>
+
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={taskFormAllowResubmission}
+                          onChange={(e) => setTaskFormAllowResubmission(e.target.checked)}
+                          className="rounded bg-slate-950 border-slate-850 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                        />
+                        <span>Allow student resubmissions</span>
                       </label>
                     </div>
                   </div>
@@ -2618,7 +2660,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                           isGroup: true,
                           status: s.submission_status || 'not submitted',
                           created_at: s.created_at || null,
-                          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name)
+                          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name),
+                          group_members_raw: s.group_members || []
                         }));
                       } else {
                         console.log('[DEBUG] Refresh click individual submissions:', {
@@ -2693,32 +2736,160 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     </p>
                   </div>
                 </div>
-              ) : taskSubmissions.length === 0 ? (
-                <div className="py-20 text-center space-y-4 max-w-md mx-auto">
-                  <div className="w-16 h-16 bg-purple-500/10 text-purple-400 rounded-full flex items-center justify-center mx-auto border border-purple-500/20 animate-pulse">
-                    <FileText size={28} />
-                  </div>
-                  <div>
-                    <h4 className="text-base font-bold text-white">This task has no submissions yet.</h4>
-                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                      No student submissions are available yet. Students can submit answers directly from their dashboard.
-                    </p>
-                  </div>
-                </div>
               ) : (
-                <div className="space-y-4 max-w-4xl mx-auto">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      All Submissions ({taskSubmissions.length})
-                    </h4>
-                    {submissionsError && (
-                      <span className="text-red-400 text-xs">{submissionsError}</span>
-                    )}
-                  </div>
+                <div className="space-y-6 max-w-4xl mx-auto">
+                  {/* Statistics & Completion Summary */}
+                  {(() => {
+                    const isGroupTask = selectedTaskForSubmissions.task_type === 'group';
+                    const totalStudentsCount = classData.students.length;
 
-                  <div className="space-y-4">
-                    {taskSubmissions.map((sub) => {
-                      const isUnsubmittedGroup = sub.isGroup && !sub.submission_id;
+                    let submittedCount = 0;
+                    let reviewedCount = 0;
+                    let returnedCount = 0;
+                    let pendingCount = 0;
+                    let missingStudents: any[] = [];
+
+                    if (isGroupTask) {
+                      const submittedGroups = taskSubmissions.filter(s => s.status && s.status !== 'not submitted' && s.status !== 'Not Submitted');
+                      submittedCount = submittedGroups.length;
+                      reviewedCount = taskSubmissions.filter(s => s.status === 'reviewed').length;
+                      returnedCount = taskSubmissions.filter(s => s.status === 'returned').length;
+                      pendingCount = taskSubmissions.filter(s => s.status === 'submitted' || s.status === 'late').length;
+
+                      const submittedStudentIds = new Set<string>();
+                      submittedGroups.forEach(g => {
+                        const rawMembers = g.group_members_raw || g.group_members || [];
+                        rawMembers.forEach((m: any) => {
+                          if (m && m.student_id) submittedStudentIds.add(m.student_id);
+                        });
+                      });
+                      missingStudents = classData.students.filter(st => !submittedStudentIds.has(st.id));
+                    } else {
+                      const submittedSubs = taskSubmissions.filter(s => s.status === 'submitted' || s.status === 'reviewed' || s.status === 'returned' || s.status === 'late');
+                      submittedCount = submittedSubs.length;
+                      reviewedCount = taskSubmissions.filter(s => s.status === 'reviewed').length;
+                      returnedCount = taskSubmissions.filter(s => s.status === 'returned').length;
+                      pendingCount = taskSubmissions.filter(s => s.status === 'submitted' || s.status === 'late').length;
+
+                      missingStudents = classData.students.filter(student => !taskSubmissions.some(sub => sub.student_id === student.id));
+                    }
+
+                    const denominator = isGroupTask ? taskSubmissions.length || 1 : totalStudentsCount;
+                    const completionPercentage = denominator > 0 ? Math.round((submittedCount / denominator) * 100) : 0;
+
+                    return (
+                      <div className="space-y-6 font-sans">
+                        {/* Bento Stats Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {/* Completion Card */}
+                          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between">
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Completion Rate</span>
+                              <div className="flex items-baseline gap-2 mt-2">
+                                <span className="text-3xl font-bold text-white font-mono">{completionPercentage}%</span>
+                                <span className="text-xs text-slate-400">
+                                  {isGroupTask ? `${submittedCount} / ${denominator} Groups` : `${submittedCount} / ${totalStudentsCount} Students`}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-slate-950 rounded-full h-2 mt-4 overflow-hidden border border-slate-850">
+                              <div 
+                                className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${completionPercentage}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Status Breakdown Card */}
+                          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-3">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Submission Status</span>
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="bg-slate-950 p-2 rounded-lg border border-slate-850">
+                                <span className="text-xs text-slate-400 block">Pending</span>
+                                <span className="text-base font-bold text-blue-400 font-mono">{pendingCount}</span>
+                              </div>
+                              <div className="bg-slate-950 p-2 rounded-lg border border-slate-850">
+                                <span className="text-xs text-slate-400 block">Reviewed</span>
+                                <span className="text-base font-bold text-emerald-400 font-mono">{reviewedCount}</span>
+                              </div>
+                              <div className="bg-slate-950 p-2 rounded-lg border border-slate-850">
+                                <span className="text-xs text-slate-400 block">Returned</span>
+                                <span className="text-base font-bold text-amber-400 font-mono">{returnedCount}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Missing Submissions Tracker Mini List */}
+                          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between">
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Missing Tracker</span>
+                              <span className="text-xs text-slate-400 mt-1 block">
+                                {missingStudents.length === 0 ? 'All submissions accounted for!' : `${missingStudents.length} students pending`}
+                              </span>
+                            </div>
+                            <div className="mt-2 flex -space-x-2 overflow-hidden">
+                              {missingStudents.slice(0, 5).map((st) => (
+                                <div 
+                                  key={st.id} 
+                                  className="inline-block h-7 w-7 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold text-slate-300 shadow"
+                                  title={st.nickname ? `${st.name} (${st.nickname})` : st.name}
+                                >
+                                  {st.name.charAt(0)}
+                                </div>
+                              ))}
+                              {missingStudents.length > 5 && (
+                                <div className="inline-block h-7 w-7 rounded-full bg-slate-950 border-2 border-slate-900 flex items-center justify-center text-[9px] font-extrabold text-purple-400">
+                                  +{missingStudents.length - 5}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Full Missing Submissions Panel */}
+                        {missingStudents.length > 0 && (
+                          <div className="bg-slate-900/50 border border-slate-800/80 p-5 rounded-xl space-y-3">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="text-rose-400" size={16} />
+                              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Missing Submissions ({missingStudents.length})</h4>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {missingStudents.map((st) => (
+                                <span 
+                                  key={st.id} 
+                                  className="text-xs text-slate-300 bg-slate-950 border border-slate-850 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                                  {st.name} {st.nickname ? `(${st.nickname})` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  <div className="border-t border-slate-800/60 pt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Submitted Responses ({taskSubmissions.filter(s => s.status && s.status !== 'not submitted' && s.status !== 'Not Submitted').length})
+                      </h4>
+                    </div>
+
+                    {taskSubmissions.filter(s => s.status && s.status !== 'not submitted' && s.status !== 'Not Submitted').length === 0 ? (
+                      <div className="py-12 text-center space-y-3 bg-slate-900/40 border border-dashed border-slate-800 rounded-xl">
+                        <FileText size={24} className="mx-auto text-slate-600" />
+                        <h4 className="text-sm font-bold text-slate-400">No active student submissions yet</h4>
+                        <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                          As students submit their tasks, their graded and ungraded responses will display below.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {taskSubmissions.map((sub) => {
+                          const isUnsubmittedGroup = sub.isGroup && !sub.submission_id;
+                          if (isUnsubmittedGroup) return null;
 
                       let statusBadgeText = sub.status;
                       let statusStyle = '';
@@ -2934,6 +3105,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         </div>
                       );
                     })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

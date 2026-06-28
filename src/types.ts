@@ -75,6 +75,11 @@ export interface Task {
   allow_attachment_submission: boolean;
   max_attachments: number;
   max_attachment_size_mb: number;
+  allow_resubmission: boolean;
+  closed_at: string | null;
+  closed_by: string | null;
+  reopened_at: string | null;
+  reopened_by: string | null;
   created_at: string;
   updated_at: string;
 }

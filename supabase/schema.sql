@@ -201,6 +201,11 @@ create table if not exists public.tasks (
   allow_attachment_submission boolean not null default false,
   max_attachments integer not null default 1,
   max_attachment_size_mb integer not null default 10,
+  allow_resubmission boolean not null default true,
+  closed_at timestamptz,
+  closed_by uuid references auth.users(id) on delete set null,
+  reopened_at timestamptz,
+  reopened_by uuid references auth.users(id) on delete set null,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
 
@@ -488,10 +493,12 @@ declare
   v_submission_status text;
   v_existing_status text;
   v_existing_id uuid;
+  v_allow_resubmission boolean;
+  v_meeting_id uuid;
 begin
   -- 1. Find the task details
-  select task_type, status, due_at, class_id
-  into v_task_type, v_status, v_due_at, v_class_id
+  select task_type, status, due_at, class_id, allow_resubmission
+  into v_task_type, v_status, v_due_at, v_class_id, v_allow_resubmission
   from public.tasks
   where id = task_id_input;
 
@@ -539,15 +546,50 @@ begin
     and student_id = student_id_input
     and task_group_id is null;
 
+  -- Fetch active meeting id if any
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = v_class_id and status = 'active'
+  limit 1;
+
   if v_existing_id is not null then
+    -- Check allow_resubmission
+    if not v_allow_resubmission and v_existing_status <> 'returned' then
+      raise exception 'Resubmission is not allowed for this task.';
+    end if;
+
     -- Update existing submission
     update public.task_submissions
     set 
       submission_text = submission_text_input,
-      status = case when v_existing_status = 'reviewed' then 'reviewed' else v_submission_status end,
+      status = case when v_existing_status = 'returned' then v_submission_status else (case when v_existing_status = 'reviewed' then 'reviewed' else v_submission_status end) end,
       updated_at = now()
     where id = v_existing_id
     returning id into v_submission_id;
+
+    -- Log resubmission
+    insert into public.activity_logs (
+      class_id,
+      student_id,
+      meeting_id,
+      action_type,
+      points_delta,
+      reason,
+      metadata
+    )
+    values (
+      v_class_id,
+      student_id_input,
+      v_meeting_id,
+      'individual_submission_resubmitted',
+      0,
+      'Individual task submission resubmitted',
+      jsonb_build_object(
+        'task_id', task_id_input,
+        'submission_id', v_submission_id,
+        'student_id', student_id_input
+      )
+    );
   else
     -- Insert new submission
     insert into public.task_submissions (
@@ -567,6 +609,30 @@ begin
       v_submission_status
     )
     returning id into v_submission_id;
+
+    -- Log submission
+    insert into public.activity_logs (
+      class_id,
+      student_id,
+      meeting_id,
+      action_type,
+      points_delta,
+      reason,
+      metadata
+    )
+    values (
+      v_class_id,
+      student_id_input,
+      v_meeting_id,
+      'individual_submission_submitted',
+      0,
+      'Individual task submission submitted',
+      jsonb_build_object(
+        'task_id', task_id_input,
+        'submission_id', v_submission_id,
+        'student_id', student_id_input
+      )
+    );
   end if;
 
   return v_submission_id;
@@ -1045,10 +1111,11 @@ declare
   v_existing_id uuid;
   v_meeting_id uuid;
   v_is_resubmission boolean := false;
+  v_allow_resubmission boolean;
 begin
   -- 1. Find the task details
-  select task_type, status, due_at, class_id
-  into v_task_type, v_status, v_due_at, v_class_id
+  select task_type, status, due_at, class_id, allow_resubmission
+  into v_task_type, v_status, v_due_at, v_class_id, v_allow_resubmission
   from public.tasks
   where id = task_id_input;
 
@@ -1132,12 +1199,17 @@ begin
 
   if v_existing_id is not null then
     v_is_resubmission := true;
+    -- Check allow_resubmission
+    if not v_allow_resubmission and v_existing_status <> 'returned' then
+      raise exception 'Resubmission is not allowed for this task.';
+    end if;
+
     -- Update existing submission
     update public.task_submissions
     set 
       submission_text = submission_text_input,
       submitted_by_student_id = submitted_by_student_id_input,
-      status = case when v_existing_status = 'reviewed' then 'reviewed' else v_submission_status end,
+      status = case when v_existing_status = 'returned' then v_submission_status else (case when v_existing_status = 'reviewed' then 'reviewed' else v_submission_status end) end,
       updated_at = now()
     where id = v_existing_id
     returning id into v_submission_id;
@@ -1176,7 +1248,7 @@ begin
     v_class_id,
     submitted_by_student_id_input,
     v_meeting_id,
-    case when v_is_resubmission then 'group_task_resubmitted' else 'group_task_submitted' end,
+    case when v_is_resubmission then 'group_submission_resubmitted' else 'group_task_submitted' end,
     0,
     case when v_is_resubmission then 'Group task resubmitted' else 'Group task submitted' end,
     jsonb_build_object(
@@ -1636,6 +1708,352 @@ end;
 $$;
 
 grant execute on function public.review_group_submission(uuid, integer, text) to authenticated;
+
+-- RPC 3: close_task_for_teacher
+create or replace function public.close_task_for_teacher(task_id_input uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_class_id uuid;
+  v_teacher_id uuid;
+  v_title text;
+  v_meeting_id uuid;
+begin
+  -- Find task details
+  select class_id, title
+  into v_class_id, v_title
+  from public.tasks
+  where id = task_id_input;
+
+  if not found then
+    raise exception 'Task not found';
+  end if;
+
+  -- Confirm teacher owns the class
+  select teacher_id
+  into v_teacher_id
+  from public.classes
+  where id = v_class_id;
+
+  if v_teacher_id is not null and v_teacher_id <> auth.uid() then
+    raise exception 'You do not own this class';
+  end if;
+
+  -- Update task status
+  update public.tasks
+  set
+    status = 'closed',
+    closed_at = now(),
+    closed_by = auth.uid(),
+    updated_at = now()
+  where id = task_id_input;
+
+  -- Fetch active meeting id if any
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = v_class_id and status = 'active'
+  limit 1;
+
+  -- Log the activity
+  insert into public.activity_logs (
+    teacher_id,
+    class_id,
+    meeting_id,
+    action_type,
+    points_delta,
+    reason,
+    metadata
+  )
+  values (
+    auth.uid(),
+    v_class_id,
+    v_meeting_id,
+    'task_closed',
+    0,
+    'Task closed: ' || v_title,
+    jsonb_build_object(
+      'task_id', task_id_input,
+      'title', v_title
+    )
+  );
+end;
+$$;
+
+grant execute on function public.close_task_for_teacher(uuid) to authenticated;
+
+-- RPC 4: reopen_task_for_teacher
+create or replace function public.reopen_task_for_teacher(task_id_input uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_class_id uuid;
+  v_teacher_id uuid;
+  v_title text;
+  v_meeting_id uuid;
+begin
+  -- Find task details
+  select class_id, title
+  into v_class_id, v_title
+  from public.tasks
+  where id = task_id_input;
+
+  if not found then
+    raise exception 'Task not found';
+  end if;
+
+  -- Confirm teacher owns the class
+  select teacher_id
+  into v_teacher_id
+  from public.classes
+  where id = v_class_id;
+
+  if v_teacher_id is not null and v_teacher_id <> auth.uid() then
+    raise exception 'You do not own this class';
+  end if;
+
+  -- Update task status to published
+  update public.tasks
+  set
+    status = 'published',
+    reopened_at = now(),
+    reopened_by = auth.uid(),
+    updated_at = now()
+  where id = task_id_input;
+
+  -- Fetch active meeting id if any
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = v_class_id and status = 'active'
+  limit 1;
+
+  -- Log the activity
+  insert into public.activity_logs (
+    teacher_id,
+    class_id,
+    meeting_id,
+    action_type,
+    points_delta,
+    reason,
+    metadata
+  )
+  values (
+    auth.uid(),
+    v_class_id,
+    v_meeting_id,
+    'task_reopened',
+    0,
+    'Task reopened: ' || v_title,
+    jsonb_build_object(
+      'task_id', task_id_input,
+      'title', v_title
+    )
+  );
+end;
+$$;
+
+grant execute on function public.reopen_task_for_teacher(uuid) to authenticated;
+
+-- RPC 5: return_individual_submission
+create or replace function public.return_individual_submission(
+  submission_id_input uuid,
+  teacher_feedback_input text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_class_id uuid;
+  v_teacher_id uuid;
+  v_task_id uuid;
+  v_title text;
+  v_student_id uuid;
+  v_meeting_id uuid;
+begin
+  -- Find submission details
+  select class_id, task_id, student_id
+  into v_class_id, v_task_id, v_student_id
+  from public.task_submissions
+  where id = submission_id_input;
+
+  if not found then
+    raise exception 'Submission not found';
+  end if;
+
+  -- Find task details
+  select title
+  into v_title
+  from public.tasks
+  where id = v_task_id;
+
+  -- Confirm teacher owns the class
+  select teacher_id
+  into v_teacher_id
+  from public.classes
+  where id = v_class_id;
+
+  if v_teacher_id is not null and v_teacher_id <> auth.uid() then
+    raise exception 'You do not own this class';
+  end if;
+
+  -- Update submission status to returned
+  update public.task_submissions
+  set
+    status = 'returned',
+    teacher_feedback = teacher_feedback_input,
+    updated_at = now()
+  where id = submission_id_input;
+
+  -- Fetch active meeting id if any
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = v_class_id and status = 'active'
+  limit 1;
+
+  -- Log the activity
+  insert into public.activity_logs (
+    teacher_id,
+    class_id,
+    student_id,
+    meeting_id,
+    action_type,
+    points_delta,
+    reason,
+    metadata
+  )
+  values (
+    auth.uid(),
+    v_class_id,
+    v_student_id,
+    v_meeting_id,
+    'individual_submission_returned',
+    0,
+    'Task submission returned: ' || v_title,
+    jsonb_build_object(
+      'task_id', v_task_id,
+      'submission_id', submission_id_input,
+      'student_id', v_student_id,
+      'title', v_title
+    )
+  );
+end;
+$$;
+
+grant execute on function public.return_individual_submission(uuid, text) to authenticated;
+
+-- RPC 6: return_group_submission
+create or replace function public.return_group_submission(
+  submission_id_input uuid,
+  teacher_feedback_input text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_class_id uuid;
+  v_teacher_id uuid;
+  v_task_id uuid;
+  v_title text;
+  v_task_group_id uuid;
+  v_submitted_by_student_id uuid;
+  v_member_ids uuid[];
+  v_group_record public.task_groups%rowtype;
+  v_meeting_id uuid;
+begin
+  -- Find submission details
+  select class_id, task_id, task_group_id, submitted_by_student_id
+  into v_class_id, v_task_id, v_task_group_id, v_submitted_by_student_id
+  from public.task_submissions
+  where id = submission_id_input;
+
+  if not found then
+    raise exception 'Submission not found';
+  end if;
+
+  -- Find task details
+  select title
+  into v_title
+  from public.tasks
+  where id = v_task_id;
+
+  -- Confirm teacher owns the class
+  select teacher_id
+  into v_teacher_id
+  from public.classes
+  where id = v_class_id;
+
+  if v_teacher_id is not null and v_teacher_id <> auth.uid() then
+    raise exception 'You do not own this class';
+  end if;
+
+  -- Get group details
+  select *
+  into v_group_record
+  from public.task_groups
+  where id = v_task_group_id;
+
+  -- Get member student IDs
+  select array_agg(student_id)
+  into v_member_ids
+  from public.task_group_members
+  where task_group_id = v_task_group_id;
+
+  -- Update submission status to returned
+  update public.task_submissions
+  set
+    status = 'returned',
+    teacher_feedback = teacher_feedback_input,
+    updated_at = now()
+  where id = submission_id_input;
+
+  -- Fetch active meeting id if any
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = v_class_id and status = 'active'
+  limit 1;
+
+  -- Log the activity for each group member
+  if v_member_ids is not null then
+    insert into public.activity_logs (
+      teacher_id,
+      class_id,
+      student_id,
+      meeting_id,
+      action_type,
+      points_delta,
+      reason,
+      metadata
+    )
+    select
+      auth.uid(),
+      v_class_id,
+      s_id,
+      v_meeting_id,
+      'group_submission_returned',
+      0,
+      'Group task submission returned: ' || v_title,
+      jsonb_build_object(
+        'task_id', v_task_id,
+        'submission_id', submission_id_input,
+        'task_group_id', v_task_group_id,
+        'group_name', v_group_record.name,
+        'title', v_title
+      )
+    from unnest(v_member_ids) as s_id;
+  end if;
+end;
+$$;
+
+grant execute on function public.return_group_submission(uuid, text) to authenticated;
 
 notify pgrst, 'reload schema';
 

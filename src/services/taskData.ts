@@ -24,6 +24,7 @@ export const createTask = async (taskInput: {
   allow_attachment_submission: boolean;
   max_attachments: number;
   max_attachment_size_mb: number;
+  allow_resubmission: boolean;
 }): Promise<Task> => {
   const { data: { user } } = await supabase.auth.getUser();
   const teacherId = user?.id || null;
@@ -107,20 +108,37 @@ export const publishTask = async (taskId: string, classId: string, taskTitle: st
 };
 
 export const closeTask = async (taskId: string, classId: string, taskTitle: string): Promise<Task> => {
-  const task = await updateTask(taskId, { status: 'closed' });
+  const { error } = await supabase.rpc('close_task_for_teacher', {
+    task_id_input: taskId
+  });
 
-  // Log activity
-  await logActivity(
-    classId,
-    'task_closed',
-    null,
-    0,
-    0,
-    null,
-    { task_id: taskId, task_title: taskTitle }
-  );
+  if (error) throw error;
 
-  return task;
+  const { data, error: fetchError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  return data;
+};
+
+export const reopenTask = async (taskId: string, classId: string, taskTitle: string): Promise<Task> => {
+  const { error } = await supabase.rpc('reopen_task_for_teacher', {
+    task_id_input: taskId
+  });
+
+  if (error) throw error;
+
+  const { data, error: fetchError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  return data;
 };
 
 export const archiveTask = async (taskId: string, classId: string, taskTitle: string): Promise<Task> => {
@@ -605,6 +623,18 @@ export const getAttachmentSignedUrl = async (
   return data.signedUrl;
 };
 
+export const returnIndividualSubmission = async (
+  submissionId: string,
+  feedback: string
+): Promise<void> => {
+  const { error } = await supabase.rpc('return_individual_submission', {
+    submission_id_input: submissionId,
+    teacher_feedback_input: feedback
+  });
+
+  if (error) throw error;
+};
+
 export const reviewSubmission = async (
   submissionId: string,
   feedback: string,
@@ -612,6 +642,11 @@ export const reviewSubmission = async (
   awardedPoints?: number | null,
   reviewedBy?: string | null
 ): Promise<any> => {
+  if (status === 'returned') {
+    await returnIndividualSubmission(submissionId, feedback);
+    return { status: 'returned' };
+  }
+
   console.log('[DEBUG] Calling review_individual_submission RPC:', {
     submission_id_input: submissionId,
     awarded_points_input: awardedPoints,
@@ -793,11 +828,29 @@ export const fetchGroupTaskSubmissions = async (
   return groupsWithSignedUrls;
 };
 
+export const returnGroupSubmission = async (
+  submissionId: string,
+  feedback: string
+): Promise<void> => {
+  const { error } = await supabase.rpc('return_group_submission', {
+    submission_id_input: submissionId,
+    teacher_feedback_input: feedback
+  });
+
+  if (error) throw error;
+};
+
 export const reviewGroupSubmission = async (
   submissionId: string,
   feedback: string,
-  awardedPoints: number
+  awardedPoints: number,
+  isReturn: boolean = false
 ): Promise<any> => {
+  if (isReturn) {
+    await returnGroupSubmission(submissionId, feedback);
+    return { status: 'returned' };
+  }
+
   const { data, error } = await supabase.rpc('review_group_submission', {
     submission_id_input: submissionId,
     awarded_points_input: awardedPoints,
