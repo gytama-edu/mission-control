@@ -1108,7 +1108,7 @@ export function ClassDetail({
               <Users className="mx-auto h-12 w-12 text-slate-600 mb-4" />
               <h3 className="text-xl font-display font-bold text-white mb-2">Roster Empty</h3>
               <p className="text-slate-400 text-sm max-w-md mx-auto mb-6 leading-relaxed">
-                Add your first student to this command deck using the form above to begin monitoring stats, tracking lives, and issuing merits.
+                Add your first student to this class roster using the form above to begin monitoring stats, tracking lives, and issuing merits.
               </p>
             </div>
           ) : (
@@ -4275,22 +4275,25 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
 
       {/* Teacher Submissions Viewer Modal */}
       {selectedTaskForSubmissions && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in font-sans submissions-modal-backdrop">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-[calc(100vw-32px)] max-w-[1050px] max-h-[calc(100vh-32px)] h-[85vh] overflow-hidden shadow-2xl flex flex-col submissions-modal">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in font-sans submissions-modal-backdrop">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-[calc(100vw-32px)] max-w-[1000px] max-h-[calc(100vh-32px)] h-[85vh] overflow-hidden shadow-2xl flex flex-col submissions-modal">
             
             {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between shrink-0 submissions-modal-header">
+            <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between shrink-0 submissions-modal-header">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <FileText className="text-purple-400" size={20} />
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20 uppercase tracking-wider">
+                    {selectedTaskForSubmissions.task_type === 'group' ? 'Group Task' : 'Individual Task'}
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-xs text-slate-500 font-mono">ID: {selectedTaskForSubmissions.id}</span>
+                </div>
+                <h3 className="text-lg font-bold text-white mt-1 flex items-center gap-2">
+                  <FileText className="text-purple-400 shrink-0" size={18} />
                   Submissions: {selectedTaskForSubmissions.title}
                 </h3>
-                <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                  <span>Task ID: <span className="font-mono text-slate-500">{selectedTaskForSubmissions.id}</span></span>
-                  <span>•</span>
-                  <span>Type: <span className="text-white capitalize font-medium">{selectedTaskForSubmissions.task_type}</span></span>
-                </p>
               </div>
+              
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -4355,10 +4358,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                     }
                   }}
                   disabled={isFetchingSubmissions}
-                  className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs cursor-pointer border border-slate-800"
+                  className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer border border-slate-850"
                   title="Refresh Submissions"
                 >
-                  <RefreshCw size={14} className={isFetchingSubmissions ? "animate-spin text-purple-400" : ""} />
+                  <RefreshCw size={13} className={isFetchingSubmissions ? "animate-spin text-purple-400" : ""} />
                   Refresh
                 </button>
                 <button
@@ -4367,9 +4370,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                     setSelectedTaskForSubmissions(null);
                     setSelectedSubmissionForReview(null);
                   }}
-                  className="text-slate-400 hover:text-white transition-colors p-1"
+                  className="text-slate-500 hover:text-white hover:bg-slate-800/80 p-1.5 rounded-lg transition-colors cursor-pointer"
+                  title="Close"
                 >
-                  ✕
+                  <X size={18} />
                 </button>
               </div>
             </div>
@@ -4378,13 +4382,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 submissions-modal-body bg-slate-950/20">
               {isFetchingSubmissions ? (
                 <div className="py-20 text-center text-slate-500 text-sm">
-                  <Loader2 className="animate-spin mx-auto mb-2 text-purple-400" size={24} />
+                  <Loader2 className="animate-spin mx-auto mb-2 text-purple-500" size={24} />
                   {selectedTaskForSubmissions.task_type === 'group' ? 'Loading group submissions...' : 'Loading task submissions...'}
                 </div>
               ) : submissionsError ? (
-                <div className="py-20 text-center space-y-4 max-w-md mx-auto">
-                  <div className="w-16 h-16 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
-                    <FileText size={28} />
+                <div className="py-16 text-center space-y-4 max-w-md mx-auto">
+                  <div className="w-14 h-14 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
+                    <AlertTriangle size={24} />
                   </div>
                   <div>
                     <h4 className="text-base font-bold text-white">
@@ -4437,21 +4441,21 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                     const completionPercentage = denominator > 0 ? Math.round((submittedCount / denominator) * 100) : 0;
 
                     return (
-                      <div className="space-y-6 font-sans">
+                      <div className="space-y-5 font-sans">
                         {/* Bento Stats Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           {/* Completion Card */}
-                          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between">
+                          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
                             <div>
                               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Completion Rate</span>
-                              <div className="flex items-baseline gap-2 mt-2">
-                                <span className="text-3xl font-bold text-white font-mono">{completionPercentage}%</span>
-                                <span className="text-xs text-slate-400">
+                              <div className="flex items-baseline gap-2 mt-1.5">
+                                <span className="text-2xl font-bold text-white font-mono">{completionPercentage}%</span>
+                                <span className="text-[11px] text-slate-400">
                                   {isGroupTask ? `${submittedCount} / ${denominator} Groups` : `${submittedCount} / ${totalStudentsCount} Students`}
                                 </span>
                               </div>
                             </div>
-                            <div className="w-full bg-slate-950 rounded-full h-2 mt-4 overflow-hidden border border-slate-850">
+                            <div className="w-full bg-slate-950 rounded-full h-1.5 mt-3.5 overflow-hidden border border-slate-850">
                               <div 
                                 className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all duration-500"
                                 style={{ width: `${completionPercentage}%` }}
@@ -4460,45 +4464,45 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                           </div>
 
                           {/* Status Breakdown Card */}
-                          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-3">
+                          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Submission Status</span>
                             <div className="grid grid-cols-3 gap-2 text-center">
                               <div className="bg-slate-950 p-2 rounded-lg border border-slate-850">
-                                <span className="text-xs text-slate-400 block">Pending</span>
-                                <span className="text-base font-bold text-blue-400 font-mono">{pendingCount}</span>
+                                <span className="text-[10px] text-slate-400 block">Pending</span>
+                                <span className="text-sm font-bold text-blue-400 font-mono">{pendingCount}</span>
                               </div>
                               <div className="bg-slate-950 p-2 rounded-lg border border-slate-850">
-                                <span className="text-xs text-slate-400 block">Reviewed</span>
-                                <span className="text-base font-bold text-emerald-400 font-mono">{reviewedCount}</span>
+                                <span className="text-[10px] text-slate-400 block">Reviewed</span>
+                                <span className="text-sm font-bold text-emerald-400 font-mono">{reviewedCount}</span>
                               </div>
                               <div className="bg-slate-950 p-2 rounded-lg border border-slate-850">
-                                <span className="text-xs text-slate-400 block">Returned</span>
-                                <span className="text-base font-bold text-amber-400 font-mono">{returnedCount}</span>
+                                <span className="text-[10px] text-slate-400 block">Returned</span>
+                                <span className="text-sm font-bold text-amber-400 font-mono">{returnedCount}</span>
                               </div>
                             </div>
                           </div>
 
                           {/* Missing Submissions Tracker Mini List */}
-                          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between">
+                          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
                             <div>
                               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Missing Tracker</span>
                               <span className="text-xs text-slate-400 mt-1 block">
                                 {missingStudents.length === 0 ? 'All submissions accounted for!' : `${missingStudents.length} students pending`}
                               </span>
                             </div>
-                            <div className="mt-2 flex -space-x-2 overflow-hidden">
-                              {missingStudents.slice(0, 5).map((st) => (
+                            <div className="mt-2.5 flex -space-x-1.5 overflow-hidden">
+                              {missingStudents.slice(0, 6).map((st) => (
                                 <div 
                                   key={st.id} 
-                                  className="inline-block h-7 w-7 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold text-slate-300 shadow"
+                                  className="inline-block h-6 w-6 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center text-[9px] font-bold text-slate-300 shadow"
                                   title={st.nickname ? `${st.name} (${st.nickname})` : st.name}
                                 >
                                   {st.name.charAt(0)}
                                 </div>
                               ))}
-                              {missingStudents.length > 5 && (
-                                <div className="inline-block h-7 w-7 rounded-full bg-slate-950 border-2 border-slate-900 flex items-center justify-center text-[9px] font-extrabold text-purple-400">
-                                  +{missingStudents.length - 5}
+                              {missingStudents.length > 6 && (
+                                <div className="inline-block h-6 w-6 rounded-full bg-slate-950 border-2 border-slate-900 flex items-center justify-center text-[8px] font-extrabold text-purple-400">
+                                  +{missingStudents.length - 6}
                                 </div>
                               )}
                             </div>
@@ -4507,18 +4511,18 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
 
                         {/* Full Missing Submissions Panel */}
                         {missingStudents.length > 0 && (
-                          <div className="bg-slate-900/50 border border-slate-800/80 p-5 rounded-xl space-y-3">
+                          <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-2.5">
                             <div className="flex items-center gap-2">
-                              <AlertTriangle className="text-rose-400" size={16} />
-                              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Missing Submissions ({missingStudents.length})</h4>
+                              <AlertTriangle className="text-rose-400/90 shrink-0" size={14} />
+                              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Missing Submissions ({missingStudents.length})</h4>
                             </div>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-1.5">
                               {missingStudents.map((st) => (
                                 <span 
                                   key={st.id} 
-                                  className="text-xs text-slate-300 bg-slate-950 border border-slate-850 px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium"
+                                  className="text-[11px] text-slate-300 bg-slate-950/80 border border-slate-850/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium"
                                 >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                                  <span className="w-1 h-1 rounded-full bg-rose-500 shrink-0 animate-pulse" />
                                   {st.name} {st.nickname ? `(${st.nickname})` : ''}
                                 </span>
                               ))}
@@ -4529,7 +4533,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                     );
                   })()}
 
-                  <div className="border-t border-slate-800/60 pt-6">
+                  <div className="border-t border-slate-800/60 pt-5">
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                         Submitted Responses ({taskSubmissions.filter(s => s.status && s.status !== 'not submitted' && s.status !== 'Not Submitted').length})
@@ -4537,9 +4541,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                     </div>
 
                     {taskSubmissions.filter(s => s.status && s.status !== 'not submitted' && s.status !== 'Not Submitted').length === 0 ? (
-                      <div className="py-12 text-center space-y-3 bg-slate-900/40 border border-dashed border-slate-800 rounded-xl">
-                        <FileText size={24} className="mx-auto text-slate-600" />
-                        <h4 className="text-sm font-bold text-slate-400">No active student submissions yet</h4>
+                      <div className="py-12 text-center space-y-3 bg-slate-900/20 border border-dashed border-slate-800/80 rounded-xl">
+                        <FileText size={20} className="mx-auto text-slate-600" />
+                        <h4 className="text-sm font-semibold text-slate-400">No active student submissions yet</h4>
                         <p className="text-xs text-slate-500 max-w-xs mx-auto">
                           As students submit their tasks, their graded and ungraded responses will display below.
                         </p>
@@ -4550,220 +4554,252 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                           const isUnsubmittedGroup = sub.isGroup && !sub.submission_id;
                           if (isUnsubmittedGroup) return null;
 
-                      let statusBadgeText = sub.status;
-                      let statusStyle = '';
-                      if (isUnsubmittedGroup) {
-                        statusBadgeText = 'Not Submitted';
-                        statusStyle = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-                      } else {
-                        const statusColors: Record<string, string> = {
-                          reviewed: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-                          returned: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-                          late: 'text-red-400 bg-red-500/10 border-red-500/20',
-                          submitted: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
-                        };
-                        statusStyle = statusColors[sub.status] || statusColors.submitted;
-                      }
+                          let statusBadgeText = sub.status;
+                          let statusStyle = '';
+                          if (isUnsubmittedGroup) {
+                            statusBadgeText = 'Not Submitted';
+                            statusStyle = 'text-slate-400 bg-slate-800/50 border-slate-700/50';
+                          } else {
+                            const statusColors: Record<string, string> = {
+                              reviewed: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+                              returned: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                              late: 'text-red-400 bg-red-500/10 border-red-500/20',
+                              submitted: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                            };
+                            statusStyle = statusColors[sub.status] || statusColors.submitted;
+                            if (sub.status === 'submitted' || sub.status === 'late') {
+                              statusBadgeText = sub.status === 'late' ? 'Needs Review (Late)' : 'Needs Review';
+                            }
+                          }
 
-                      const isReviewingThis = selectedSubmissionForReview?.id === sub.id;
+                          const isReviewingThis = selectedSubmissionForReview?.id === sub.id;
 
-                      return (
-                        <div
-                          key={sub.id}
-                          className={`bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col transition-all hover:border-slate-700 submission-card ${
-                            isUnsubmittedGroup ? 'border-dashed border-slate-800 bg-slate-900/40 opacity-75' : ''
-                          }`}
-                        >
-                          {/* Card Header */}
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <h5 className="text-sm font-bold text-white flex items-center gap-2">
-                                {sub.studentName}
-                              </h5>
-                              {sub.isGroup && sub.members && (
-                                <div className="text-[11px] text-slate-400 font-sans mt-1">
-                                  <span className="text-slate-500">Members:</span> {sub.members.join(', ')}
+                          return (
+                            <div
+                              key={sub.id}
+                              className={`bg-slate-900 border border-slate-800/80 rounded-xl p-4 md:p-5 space-y-4 flex flex-col transition-all hover:border-slate-700 submission-card ${
+                                isReviewingThis ? 'ring-1 ring-purple-500/50 border-purple-500/30 shadow-md shadow-purple-950/20' : ''
+                              }`}
+                            >
+                              {/* Card Header */}
+                              <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h5 className="text-sm font-bold text-white">
+                                      {sub.studentName}
+                                    </h5>
+                                    {sub.isGroup && (
+                                      <span className="text-[9px] font-bold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 uppercase tracking-wider">
+                                        Group
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {sub.isGroup && sub.members && (
+                                    <div className="text-[11px] text-slate-400 font-sans mt-1">
+                                      <span className="text-slate-500 font-medium">Group Members:</span> {sub.members.join(', ')}
+                                    </div>
+                                  )}
+                                  
+                                  {sub.isGroup && sub.submitted_by_student_name && (
+                                    <div className="text-[11px] text-slate-400 font-sans mt-1 flex items-center gap-1.5">
+                                      <span className="text-slate-500">Submitted by:</span>
+                                      <span className="text-slate-300 font-semibold">{sub.submitted_by_student_name}</span>
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                                    <Clock size={10} />
+                                    {sub.created_at ? (
+                                      `Submitted: ${new Date(sub.created_at).toLocaleString()}`
+                                    ) : (
+                                      <span className="text-amber-500/90 font-semibold font-mono bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10">Awaiting submission...</span>
+                                    )}
+                                  </p>
                                 </div>
-                              )}
-                              {sub.isGroup && sub.submitted_by_student_name && (
-                                <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-md border border-slate-850">
-                                  <span>📢 Submitted by</span>
-                                  <span className="text-slate-300 font-semibold">{sub.submitted_by_student_name}</span>
-                                </div>
-                              )}
-                              <p className="text-[10px] text-slate-500 mt-1.5">
-                                {sub.created_at ? (
-                                  `Submitted: ${new Date(sub.created_at).toLocaleString()}`
-                                ) : (
-                                  <span className="text-amber-500/90 font-semibold font-mono bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10">Awaiting transmission...</span>
-                                )}
-                              </p>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border capitalize ${statusStyle}`}>
-                              {statusBadgeText}
-                            </span>
-                          </div>
-
-                          {/* Text Answer */}
-                          {selectedTaskForSubmissions.allow_text_submission && (
-                            <div className="space-y-1.5">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Student Response</span>
-                              <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 text-xs text-slate-300 italic whitespace-pre-wrap leading-relaxed">
-                                {sub.submission_text || (
-                                  <span className="text-slate-600 italic">No text response.</span>
-                                )}
+                                
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border capitalize ${statusStyle}`}>
+                                  {statusBadgeText}
+                                </span>
                               </div>
-                            </div>
-                          )}
 
-                          {/* Attachments */}
-                          {selectedTaskForSubmissions.allow_attachment_submission && (
-                            <div className="space-y-1.5">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Uploaded Files</span>
-                              {sub.attachments && sub.attachments.length > 0 ? (
-                                <div className="grid sm:grid-cols-2 gap-2">
-                                  {sub.attachments.map((file: any) => (
-                                    <div
-                                      key={file.id}
-                                      className="bg-slate-950 border border-slate-850 p-2.5 rounded-lg flex items-center justify-between gap-3 text-xs"
-                                    >
-                                      <div className="truncate">
-                                        <p className="font-mono text-slate-300 truncate font-semibold flex items-center gap-1">
-                                          <Paperclip size={11} className="text-slate-500 shrink-0" />
-                                          {file.file_name}
-                                        </p>
-                                        <p className="text-[9px] text-slate-500 mt-0.5 font-mono">
-                                          Size: {(file.file_size_bytes ? (file.file_size_bytes / (1024 * 1024)).toFixed(2) : '0.00')} MB
-                                        </p>
+                              {/* Text Answer */}
+                              {selectedTaskForSubmissions.allow_text_submission && (
+                                <div className="space-y-1.5">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Student Response</span>
+                                  <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-850/80 text-xs text-slate-300 italic whitespace-pre-wrap leading-relaxed">
+                                    {sub.submission_text || (
+                                      <span className="text-slate-600 italic">No text response.</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Attachments */}
+                              {selectedTaskForSubmissions.allow_attachment_submission && (
+                                <div className="space-y-1.5">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Uploaded Attachments</span>
+                                  {sub.attachments && sub.attachments.length > 0 ? (
+                                    <div className="grid sm:grid-cols-2 gap-2">
+                                      {sub.attachments.map((file: any) => (
+                                        <div
+                                          key={file.id}
+                                          className="bg-slate-950 border border-slate-850/80 p-2.5 rounded-lg flex items-center justify-between gap-3 text-xs hover:border-slate-800 transition-colors"
+                                        >
+                                          <div className="truncate min-w-0 flex-1">
+                                            <p className="font-mono text-slate-300 truncate font-semibold flex items-center gap-1.5">
+                                              <Paperclip size={12} className="text-purple-400 shrink-0" />
+                                              {file.file_name}
+                                            </p>
+                                            <p className="text-[9px] text-slate-500 mt-0.5 font-mono">
+                                              Size: {(file.file_size_bytes ? (file.file_size_bytes / (1024 * 1024)).toFixed(2) : '0.00')} MB
+                                            </p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (file.signed_url) {
+                                                window.open(file.signed_url, '_blank');
+                                              } else {
+                                                handleDownloadAttachment(file.file_path);
+                                              }
+                                            }}
+                                            className="text-purple-400 hover:text-white font-bold bg-purple-500/10 hover:bg-purple-600 px-3 py-1 rounded-md border border-purple-500/20 transition-all text-[10px] cursor-pointer shrink-0"
+                                          >
+                                            Open File
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-slate-500 italic bg-slate-950/20 p-2.5 border border-dashed border-slate-850/60 rounded-lg">
+                                      No files uploaded.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Review/Grade Section */}
+                              <div className="border-t border-slate-850 pt-4 mt-1">
+                                {isUnsubmittedGroup ? (
+                                  <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800 text-xs text-slate-500 italic text-center">
+                                    Awaiting group transmission. Cannot review until submitted.
+                                  </div>
+                                ) : isReviewingThis ? (
+                                  /* Active Review Form */
+                                  <div className="space-y-4 bg-slate-950/30 p-4 rounded-xl border border-slate-850 animate-fade-in">
+                                    <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-850/60">
+                                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        <CheckSquare size={13} className="text-purple-400" />
+                                        Task Review & Feedback Form
+                                      </h4>
+                                      <span className="text-[10px] font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                                        Reviewing: {sub.studentName}
+                                      </span>
+                                    </div>
+
+                                    <div className="grid sm:grid-cols-3 gap-4">
+                                      <div className="sm:col-span-2 space-y-1.5">
+                                        <label className="block text-[11px] text-slate-400 font-medium">Feedback / Evaluation comments</label>
+                                        <textarea
+                                          rows={3}
+                                          value={reviewFeedback}
+                                          onChange={(e) => setReviewFeedback(e.target.value)}
+                                          placeholder="Add supportive comments, constructive notes, or instructions..."
+                                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500 leading-relaxed"
+                                        />
                                       </div>
+                                      <div className="space-y-1.5 flex flex-col justify-between">
+                                        <div>
+                                          <label className="block text-[11px] text-slate-400 font-medium">Awarded Points</label>
+                                          <div className="relative mt-1">
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              value={reviewScore}
+                                              onChange={(e) => setReviewScore(Number(e.target.value))}
+                                              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono pr-12"
+                                            />
+                                            <span className="absolute right-3 top-2 text-[10px] font-bold text-slate-500 font-mono">PTS</span>
+                                          </div>
+                                          <p className="text-[10px] text-slate-500 italic mt-1">Max reward suggested: <span className="text-slate-300 font-semibold font-mono">{selectedTaskForSubmissions.reward_points}</span></p>
+                                        </div>
+                                        
+                                        {/* Points delta warning help text */}
+                                        <div className="bg-blue-500/5 border border-blue-500/10 p-2 rounded-lg text-[9px] text-blue-400/90 leading-normal mt-2">
+                                          ℹ️ Points are updated safely based on the difference from the previous review.
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap justify-end gap-2 pt-1 border-t border-slate-850/60">
                                       <button
                                         type="button"
-                                        onClick={() => {
-                                          if (file.signed_url) {
-                                            window.open(file.signed_url, '_blank');
-                                          } else {
-                                            handleDownloadAttachment(file.file_path);
-                                          }
-                                        }}
-                                        className="text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/20 transition-all text-[10px] cursor-pointer"
+                                        onClick={() => setSelectedSubmissionForReview(null)}
+                                        className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                       >
-                                        Open File
+                                        Cancel
+                                      </button>
+                                      {!selectedTaskForSubmissions.task_type || selectedTaskForSubmissions.task_type !== 'group' ? (
+                                        <button
+                                          type="button"
+                                          disabled={isSavingReview}
+                                          onClick={() => handleSaveReview('returned')}
+                                          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-amber-500 hover:text-amber-400 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                          {isSavingReview ? <Loader2 size={11} className="animate-spin" /> : null}
+                                          Return for Revision
+                                        </button>
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        disabled={isSavingReview}
+                                        onClick={() => handleSaveReview('reviewed')}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        {isSavingReview ? <Loader2 size={11} className="animate-spin" /> : null}
+                                        Complete & Grade
                                       </button>
                                     </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-[10px] text-slate-500 italic bg-slate-950/20 p-2.5 border border-dashed border-slate-850 rounded-lg">
-                                  No attachments submitted.
-                                </p>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Review/Grade Section */}
-                          <div className="border-t border-slate-800/60 pt-4 mt-2">
-                            {isUnsubmittedGroup ? (
-                              <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800 text-xs text-slate-500 italic text-center">
-                                🛸 Awaiting group transmission. Cannot review until submitted.
-                              </div>
-                            ) : isReviewingThis ? (
-                              /* Active Review Form */
-                              <div className="space-y-4 bg-slate-950/40 p-4 rounded-xl border border-slate-800 animate-fade-in">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                  <CheckSquare size={14} className="text-purple-400" />
-                                  Grading & Commander Feedback
-                                </h4>
-
-                                <div className="grid sm:grid-cols-3 gap-4">
-                                  <div className="sm:col-span-2 space-y-1.5">
-                                    <label className="block text-[11px] text-slate-400">Feedback Comments</label>
-                                    <textarea
-                                      rows={3}
-                                      value={reviewFeedback}
-                                      onChange={(e) => setReviewFeedback(e.target.value)}
-                                      placeholder="Add directive feedback, corrections, or praise here..."
-                                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className="block text-[11px] text-slate-400">Score / Grade Points</label>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      value={reviewScore}
-                                      onChange={(e) => setReviewScore(Number(e.target.value))}
-                                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
-                                    />
-                                    <p className="text-[10px] text-slate-500 italic">Max suggested: {selectedTaskForSubmissions.reward_points} pts</p>
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap justify-end gap-2 pt-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedSubmissionForReview(null)}
-                                    className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                                  >
-                                    Cancel
-                                  </button>
-                                  {!selectedTaskForSubmissions.task_type || selectedTaskForSubmissions.task_type !== 'group' ? (
-                                    <button
-                                      type="button"
-                                      disabled={isSavingReview}
-                                      onClick={() => handleSaveReview('returned')}
-                                      className="bg-slate-900 hover:bg-slate-800 border border-slate-850 text-amber-400 hover:text-amber-300 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                      {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
-                                      Return for Resubmission
-                                    </button>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    disabled={isSavingReview}
-                                    onClick={() => handleSaveReview('reviewed')}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer"
-                                  >
-                                    {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
-                                    Complete & Review
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              /* Static review info or button to start reviewing */
-                              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                                {sub.awarded_points !== undefined && sub.awarded_points !== null ? (
-                                  <div className="space-y-1 w-full sm:w-auto">
-                                    <span className="text-xs text-yellow-500 font-mono font-bold bg-yellow-500/5 px-2.5 py-1 rounded border border-yellow-500/10 inline-block">
-                                      ⭐ Points Awarded: {sub.awarded_points} / {selectedTaskForSubmissions.reward_points} pts
-                                    </span>
-                                    {sub.teacher_feedback && (
-                                      <p className="text-xs text-slate-400 bg-slate-950/30 border border-slate-850/60 p-2.5 rounded-lg mt-1 italic">
-                                        <span className="text-[10px] text-slate-500 block uppercase font-bold not-italic tracking-wider">Feedback comments</span>
-                                        "{sub.teacher_feedback}"
-                                      </p>
-                                    )}
-                                    {sub.reviewed_at && (
-                                      <p className="text-[10px] text-slate-500 font-mono mt-1">
-                                        Reviewed at: {new Date(sub.reviewed_at).toLocaleString()}
-                                      </p>
-                                    )}
                                   </div>
                                 ) : (
-                                  <span className="text-[11px] text-slate-500 italic">Ungraded</span>
+                                  /* Static review info or button to start reviewing */
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    {sub.awarded_points !== undefined && sub.awarded_points !== null ? (
+                                      <div className="space-y-1 w-full sm:w-auto flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs text-yellow-500 font-mono font-bold bg-yellow-500/5 px-2.5 py-0.5 rounded border border-yellow-500/10 inline-block">
+                                            ⭐ Awarded Points: {sub.awarded_points} / {selectedTaskForSubmissions.reward_points} pts
+                                          </span>
+                                          {sub.reviewed_at && (
+                                            <p className="text-[10px] text-slate-500 font-mono">
+                                              Reviewed: {new Date(sub.reviewed_at).toLocaleDateString()}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {sub.teacher_feedback && (
+                                          <p className="text-xs text-slate-300 bg-slate-950/40 border border-slate-850 p-3 rounded-lg mt-1.5 italic leading-relaxed">
+                                            <span className="text-[10px] text-slate-500 block uppercase font-bold not-italic tracking-wider mb-0.5">Teacher Feedback</span>
+                                            "{sub.teacher_feedback}"
+                                          </p>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[11px] text-slate-500 italic bg-slate-950 px-2 py-0.5 rounded border border-slate-850">Needs Evaluation</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectSubmissionForReview(sub)}
+                                      className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-600 text-xs font-semibold px-3 py-1.5 rounded-lg border border-purple-500/20 hover:border-transparent transition-all cursor-pointer ml-auto"
+                                    >
+                                      {sub.awarded_points !== undefined && sub.awarded_points !== null ? 'Edit Review' : 'Grade & Feedback'}
+                                    </button>
+                                  </div>
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleSelectSubmissionForReview(sub)}
-                                  className="text-purple-400 hover:text-white bg-purple-600/15 hover:bg-purple-600 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-purple-500/20 transition-all cursor-pointer ml-auto"
-                                >
-                                  {sub.awarded_points !== undefined && sub.awarded_points !== null ? 'Edit Review' : 'Review & Grade'}
-                                </button>
                               </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -4772,14 +4808,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/40 flex justify-end gap-3 shrink-0 submissions-modal-footer">
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3 shrink-0 submissions-modal-footer">
               <button
                 type="button"
                 onClick={() => {
                   setSelectedTaskForSubmissions(null);
                   setSelectedSubmissionForReview(null);
                 }}
-                className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border border-slate-750"
               >
                 Close Submissions Viewer
               </button>

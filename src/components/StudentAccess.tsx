@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClassData, Student, ActivityLog, Task, StudentBadge } from '../types';
-import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle, Award } from 'lucide-react';
+import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle, Award, GraduationCap } from 'lucide-react';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
@@ -1499,79 +1499,107 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col p-6 items-center justify-between">
-      <header className="w-full max-w-4xl flex items-center justify-between pb-4 border-b border-slate-900/60 mb-auto select-none">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-6 font-sans relative overflow-hidden">
+      {/* Background radial glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950/40 to-slate-950 pointer-events-none" />
+
+      {/* Top Navigation Row */}
+      <div className="w-full max-w-md mx-auto relative z-10 pt-2">
         <button
           onClick={onBack}
-          className="mc-back-link"
+          className="inline-flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors py-1.5 px-3 rounded-lg bg-slate-900/40 hover:bg-slate-900 border border-slate-800/60 cursor-pointer"
         >
-          <ArrowLeft size={14} className="mc-back-icon" /> Back to Main Menu
+          <ArrowLeft size={13} /> Back to Main Menu
         </button>
-        <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Student Command Post</span>
-      </header>
-
-      <div className="w-full max-w-md mx-auto my-12 bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl p-8 shadow-2xl relative">
-        <div className="text-center mb-8">
-          <div className="inline-block text-[10px] font-mono uppercase tracking-wider bg-rose-500/10 text-rose-400 px-2.5 py-1 rounded-full border border-rose-500/20 mb-4 select-none">
-            Presented by GYTama EDU
-          </div>
-          <div className="relative inline-block">
-            <Rocket className="mx-auto h-12 w-12 text-rose-500 mb-4 drop-shadow-[0_0_12px_rgba(244,63,94,0.25)]" />
-          </div>
-          <h1 className="text-3xl font-display font-bold text-white mb-2">Student Access</h1>
-          <p className="text-sm text-slate-400">Enter Class Code & PIN to access your status board.</p>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-5">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm text-center font-medium">
-              {error}
-            </div>
-          )}
-          <div>
-            <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-1.5">Class Code</label>
-            <div className="relative">
-              <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input
-                type="text"
-                required
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                placeholder="e.g. SPACE1"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all font-mono uppercase text-sm"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-1.5">Student PIN</label>
-            <div className="relative">
-              <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input
-                type="password"
-                required
-                maxLength={4}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="4-digit PIN"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all font-mono text-sm"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white px-4 py-3 rounded-xl font-bold transition-all duration-200 mt-2 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-rose-600/15"
-          >
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Access Dashboard'}
-          </button>
-        </form>
       </div>
 
-      <footer className="w-full flex justify-center mt-auto pt-6 border-t border-slate-900 select-none">
-        <p className="text-xs font-mono uppercase tracking-widest text-slate-600">
+      {/* Center Form Container */}
+      <div className="max-w-md w-full mx-auto my-auto py-8 relative z-10">
+        <div className="bg-slate-900/65 backdrop-blur-md border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl relative">
+          
+          {/* Header */}
+          <div className="text-center mb-6 select-none">
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider bg-emerald-500/10 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/20 mb-3.5">
+              Presented by GYTama EDU
+            </div>
+            <div className="relative inline-block mb-3.5">
+              <div className="bg-emerald-500/10 text-emerald-400 p-2.5 rounded-xl border border-emerald-500/20">
+                <GraduationCap size={20} />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Student Access</h1>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Enter your Class Code and secure student PIN to enter your command post.
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleLogin} className="space-y-4">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-3.5 py-3 rounded-xl text-xs flex items-start gap-2 leading-relaxed">
+                <AlertTriangle size={14} className="shrink-0 text-red-400 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Class Code</label>
+              <div className="relative">
+                <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                <input
+                  type="text"
+                  required
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. ALPHA1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-mono uppercase text-xs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Student PIN</label>
+              <div className="relative">
+                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                <input
+                  type="password"
+                  required
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="4-digit PIN"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-mono text-xs"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                * Ask your teacher for your custom classroom access credentials.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl font-bold transition-all duration-200 mt-2 flex items-center justify-center gap-2 cursor-pointer shadow-md text-xs"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin" size={14} />
+                  <span>Loading dashboard...</span>
+                </>
+              ) : (
+                <span>Access Dashboard</span>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Footer Branding */}
+      <div className="w-full flex justify-center py-4 select-none relative z-10 border-t border-slate-900/40">
+        <p className="text-[10px] font-mono uppercase tracking-widest text-slate-600">
           Mission Control &copy; {new Date().getFullYear()} &bull; GYTama EDU
         </p>
-      </footer>
+      </div>
     </div>
   );
 }
