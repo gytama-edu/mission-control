@@ -849,28 +849,31 @@ export function ClassDetail({
       <header className="mb-8">
         <button
           onClick={onBack}
-          className="text-slate-400 hover:text-white flex items-center gap-2 mb-6 transition-colors"
+          className="mc-back-link mb-6"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={14} className="mc-back-icon" />
           Back to Dashboard
         </button>
 
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
-          <div>
-            <div className="flex items-center gap-4 mb-2">
-              <h1 className="text-3xl font-display font-bold text-white">{classData.name}</h1>
-              <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-700">
-                <Key size={14} className="text-blue-400" />
-                <span className="font-mono font-bold text-blue-400">{classData.joinCode}</span>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden select-none">
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-rose-500/20 to-transparent" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+              <h1 className="text-xl sm:text-2xl font-display font-black text-white tracking-tight truncate">
+                {classData.name}
+              </h1>
+              <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 shadow-inner">
+                <Key size={12} className="text-rose-400" />
+                <span className="font-mono font-bold text-xs text-rose-400 tracking-wider">{classData.joinCode}</span>
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(classData.joinCode);
                     alert('Join code copied!');
                   }}
-                  className="text-slate-400 hover:text-white p-1 ml-1 transition-colors"
+                  className="text-slate-500 hover:text-white p-0.5 ml-1 transition-colors cursor-pointer"
                   title="Copy Join Code"
                 >
-                  <Copy size={14} />
+                  <Copy size={11} />
                 </button>
                 <button 
                   onClick={() => {
@@ -878,361 +881,532 @@ export function ClassDetail({
                       onRegenerateJoinCode();
                     }
                   }}
-                  className="text-slate-400 hover:text-white p-1 transition-colors"
+                  className="text-slate-500 hover:text-white p-0.5 transition-colors cursor-pointer"
                   title="Regenerate Join Code"
                 >
-                  <RefreshCw size={14} />
+                  <RefreshCw size={11} />
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap gap-4 text-sm text-slate-400">
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300">
-                <Users size={14} /> Level: {classData.level}
+            <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-900 text-slate-300 font-mono">
+                <Users size={12} className="text-rose-500/70" /> LEVEL: <strong className="text-white font-semibold">{classData.level}</strong>
               </span>
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300">
-                <Shield size={14} /> Max Lives: {classData.maxLives}
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-900 text-slate-300 font-mono">
+                <Shield size={12} className="text-rose-500/70" /> MAX LIVES: <strong className="text-white font-semibold">{classData.maxLives}</strong>
               </span>
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300">
-                <Play size={14} /> Meetings: {classData.meetings.length}
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-900 text-slate-300 font-mono">
+                <Play size={12} className="text-rose-500/70" /> SESSIONS: <strong className="text-white font-semibold">{classData.meetings.length}</strong>
               </span>
             </div>
           </div>
 
-          {activeMeeting ? (
-            <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-950 p-4 rounded-xl border border-emerald-500/30">
-              <div className="flex items-center gap-2.5">
-                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <div className="text-left">
-                  <div className="text-sm font-bold text-emerald-400">Meeting in progress</div>
-                  <div className="text-xs text-slate-400">
-                    Started: {new Date(activeMeeting.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <div className="shrink-0">
+            {activeMeeting ? (
+              <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-950/80 p-3 rounded-xl border border-emerald-500/20">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <div className="text-left">
+                    <div className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">Active Stream</div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      Started: {new Date(activeMeeting.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => setIsEndMeetingModalOpen(true)}
+                  className="bg-red-950/40 hover:bg-red-600 border border-red-500/20 hover:border-red-500/50 text-red-400 hover:text-white px-3.5 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-all font-bold cursor-pointer"
+                >
+                  End Meeting
+                </button>
               </div>
+            ) : (
               <button
-                onClick={() => setIsEndMeetingModalOpen(true)}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer shrink-0"
+                onClick={() => setIsMeetingModalOpen(true)}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-rose-600/15"
               >
-                End Class Meeting
+                <Play size={14} className="fill-current text-white" />
+                Initialize Meeting
               </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsMeetingModalOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
-            >
-              <Play size={20} className="fill-current" />
-              Start New Meeting
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </header>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 mb-8 overflow-x-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-wrap gap-2 mb-6 select-none bg-slate-900/30 p-1.5 rounded-2xl border border-slate-800/60 backdrop-blur-sm">
         <button
           onClick={() => setActiveTab('roster')}
-          className={`px-6 py-3 font-medium transition-colors relative whitespace-nowrap ${
-            activeTab === 'roster' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'roster'
+              ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 font-bold shadow-[0_0_10px_rgba(244,63,94,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          Class Roster
-          {activeTab === 'roster' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
-          )}
+          <Users size={13} /> Roster
         </button>
         <button
           onClick={() => setActiveTab('leaderboard')}
-          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'leaderboard' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'leaderboard'
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold shadow-[0_0_10px_rgba(245,158,11,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          <Trophy size={16} /> Leaderboard
-          {activeTab === 'leaderboard' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-yellow-500" />
-          )}
+          <Trophy size={13} /> Leaderboard
         </button>
         <button
           onClick={() => setActiveTab('activity_log')}
-          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'activity_log' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'activity_log'
+              ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 font-bold shadow-[0_0_10px_rgba(99,102,241,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          <Clock size={16} /> Activity Log
-          {activeTab === 'activity_log' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" />
-          )}
+          <Clock size={13} /> Activity Log
         </button>
         <button
           onClick={() => setActiveTab('meetings')}
-          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'meetings' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'meetings'
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold shadow-[0_0_10px_rgba(16,185,129,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          <Play size={16} /> Meeting History
-          {activeTab === 'meetings' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
-          )}
+          <Play size={13} /> Session History
         </button>
         <button
           onClick={() => setActiveTab('tasks')}
-          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'tasks' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'tasks'
+              ? 'bg-purple-500/10 text-purple-400 border-purple-500/30 font-bold shadow-[0_0_10px_rgba(168,85,247,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          <CheckSquare size={16} /> Classroom Tasks
-          {activeTab === 'tasks' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500" />
-          )}
+          <CheckSquare size={13} /> Tasks
         </button>
         <button
           onClick={() => setActiveTab('badges')}
-          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'badges' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'badges'
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold shadow-[0_0_10px_rgba(245,158,11,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          <Award size={16} /> Badges & Achievements
-          {activeTab === 'badges' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
-          )}
+          <Award size={13} /> Badges
         </button>
         <button
           onClick={() => setActiveTab('reports')}
-          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'reports' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'reports'
+              ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 font-bold shadow-[0_0_10px_rgba(244,63,94,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          <BarChart2 size={16} /> Reports & Analytics
-          {activeTab === 'reports' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500" />
-          )}
+          <BarChart2 size={13} /> Reports
         </button>
         <button
           onClick={() => setActiveTab('settings')}
-          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'settings' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+            activeTab === 'settings'
+              ? 'bg-slate-500/10 text-slate-300 border-slate-500/30 font-bold shadow-[0_0_10px_rgba(100,116,139,0.12)]'
+              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
           }`}
         >
-          <Settings size={16} /> Settings
-          {activeTab === 'settings' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-400" />
-          )}
+          <Settings size={13} /> Settings
         </button>
       </div>
 
       {activeTab === 'roster' && (
-        <div className="space-y-8">
-          {/* Add Student Form */}
-          <form onSubmit={handleAddStudent} className="flex gap-3">
-            <input
-              type="text"
-              required
-              value={newStudentName}
-              onChange={(e) => setNewStudentName(e.target.value)}
-              placeholder="New student name..."
-              className="flex-1 max-w-md bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-            >
-              <Plus size={18} /> Add Student
-            </button>
-          </form>
+        <div className="space-y-6">
+          {/* Roster Command Bar (Integrated Form & Reason modifier) */}
+          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800/80 p-4 rounded-2xl shadow-xl flex flex-col xl:flex-row gap-4 xl:items-center justify-between select-none">
+            {/* Left: Add Student form */}
+            <form onSubmit={handleAddStudent} className="flex flex-col sm:flex-row items-stretch gap-2.5 flex-1 max-w-2xl">
+              <input
+                type="text"
+                required
+                value={newStudentName}
+                onChange={(e) => setNewStudentName(e.target.value)}
+                placeholder="Enter new student name..."
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-sm font-sans"
+              />
+              <button
+                type="submit"
+                className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg shadow-rose-600/15"
+              >
+                <Plus size={15} /> Add Student
+              </button>
+            </form>
 
-          {/* Preset Reason Selector (Optional) */}
-          {classData.students.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-inner">
-              <div className="text-sm font-medium text-slate-300">
-                Attach Reason (Optional):
-              </div>
-              <div className="flex flex-wrap gap-2 items-center">
-                <select
-                  value={selectedReason}
-                  onChange={(e) => {
-                    setSelectedReason(e.target.value);
-                    if (e.target.value !== 'custom') setCustomReason('');
-                  }}
-                  className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">-- No Reason (Quick Change) --</option>
-                  <optgroup label="Points Options">
-                    <option value="Good answer">Good answer</option>
-                    <option value="Great effort">Great effort</option>
-                    <option value="Teamwork">Teamwork</option>
-                    <option value="Completed homework">Completed homework</option>
-                    <option value="Excellent participation">Excellent participation</option>
-                  </optgroup>
-                  <optgroup label="Lives Options">
-                    <option value="Speaking L1 in class">Speaking L1 in class</option>
-                    <option value="Off-task behavior">Off-task behavior</option>
-                    <option value="Arriving late">Arriving late</option>
-                    <option value="Disruptive behavior">Disruptive behavior</option>
-                    <option value="No homework">No homework</option>
-                  </optgroup>
-                  <option value="custom">-- Custom Reason --</option>
-                </select>
-                
-                {selectedReason === 'custom' && (
-                  <input
-                    type="text"
-                    placeholder="Enter custom reason..."
-                    value={customReason}
-                    onChange={(e) => setCustomReason(e.target.value)}
-                    className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
-                  />
-                )}
-
-                {(selectedReason !== '') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedReason('');
-                      setCustomReason('');
+            {/* Right: Attach Reason (Quick Change modifier) */}
+            {classData.students.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2.5 border-t xl:border-t-0 border-slate-800/80 pt-3 xl:pt-0 shrink-0">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                  Attach Reason:
+                </span>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedReason}
+                    onChange={(e) => {
+                      setSelectedReason(e.target.value);
+                      if (e.target.value !== 'custom') setCustomReason('');
                     }}
-                    className="text-slate-400 hover:text-white text-xs underline cursor-pointer px-2"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-rose-500/40 transition-all max-w-[180px] font-sans"
                   >
-                    Clear reason
-                  </button>
-                )}
+                    <option value="">-- No Reason (Quick Change) --</option>
+                    <optgroup label="Points Options">
+                      <option value="Good answer">Good answer</option>
+                      <option value="Great effort">Great effort</option>
+                      <option value="Teamwork">Teamwork</option>
+                      <option value="Completed homework">Completed homework</option>
+                      <option value="Excellent participation">Excellent participation</option>
+                    </optgroup>
+                    <optgroup label="Lives Options">
+                      <option value="Speaking L1 in class">Speaking L1 in class</option>
+                      <option value="Off-task behavior">Off-task behavior</option>
+                      <option value="Arriving late">Arriving late</option>
+                      <option value="Disruptive behavior">Disruptive behavior</option>
+                      <option value="No homework">No homework</option>
+                    </optgroup>
+                    <option value="custom">-- Custom Reason --</option>
+                  </select>
+                  
+                  {selectedReason === 'custom' && (
+                    <input
+                      type="text"
+                      placeholder="Enter custom reason..."
+                      value={customReason}
+                      onChange={(e) => setCustomReason(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 transition-all w-40 font-sans"
+                    />
+                  )}
+
+                  {selectedReason !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReason('');
+                        setCustomReason('');
+                      }}
+                      className="text-slate-400 hover:text-rose-400 text-xs font-mono uppercase tracking-wider underline cursor-pointer px-1.5 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Roster Grid */}
           {classData.students.length === 0 ? (
-            <div className="text-center py-16 bg-slate-900 border border-slate-800 rounded-xl border-dashed">
+            <div className="text-center py-20 bg-slate-900/35 border border-dashed border-slate-800/80 rounded-2xl backdrop-blur-sm px-6 max-w-xl mx-auto my-12">
               <Users className="mx-auto h-12 w-12 text-slate-600 mb-4" />
-              <h3 className="text-lg font-medium text-slate-300">No students yet</h3>
-              <p className="text-slate-500 mt-1">Use the form above to add students to the roster.</p>
+              <h3 className="text-xl font-display font-bold text-white mb-2">Roster Empty</h3>
+              <p className="text-slate-400 text-sm max-w-md mx-auto mb-6 leading-relaxed">
+                Add your first student to this command deck using the form above to begin monitoring stats, tracking lives, and issuing merits.
+              </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {classData.students.map((student) => {
-                const status = getStudentStatus(student.lives, classData.maxLives);
-                return (
-                <div key={student.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col gap-4 relative group">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-lg text-white flex items-center gap-2">
-                        {student.nickname || student.name}
-                        {student.nickname && <span className="text-sm font-normal text-slate-500">({student.name})</span>}
-                      </h3>
-                      <div className={`mt-1 inline-block px-2 py-0.5 rounded text-xs font-medium border ${status.color}`}>
-                        {status.label}
-                      </div>
-                      <div className="mt-2 text-xs text-slate-400 flex items-center gap-1 font-mono">
-                        <Key size={10} /> PIN: {student.pin}
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => handleOpenAwardModal(student.id)}
-                        className="text-slate-500 hover:text-amber-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Award Badge"
-                      >
-                        <Award size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingStudentId(student.id);
-                          setEditStudentName(student.name);
-                          setEditStudentNickname(student.nickname || '');
-                        }}
-                        className="text-slate-500 hover:text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
-                  </div>
+            <div className="space-y-4">
+              {/* Desktop/Tablet Table View */}
+              <div className="hidden sm:block overflow-hidden bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl shadow-xl">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 select-none bg-slate-950/20">
+                      <th className="py-2.5 px-4 font-semibold">Student Name</th>
+                      <th className="py-2.5 px-4 font-semibold text-center w-24">PIN</th>
+                      <th className="py-2.5 px-4 font-semibold text-center w-36">Lives</th>
+                      <th className="py-2.5 px-4 font-semibold text-center w-64">Points Control</th>
+                      <th className="py-2.5 px-4 font-semibold text-right w-24">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/40">
+                    {classData.students.map((student) => {
+                      const status = getStudentStatus(student.lives, classData.maxLives);
+                      return (
+                        <tr key={student.id} className="hover:bg-slate-900/40 transition-colors">
+                          <td className="py-2 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-display font-bold text-sm text-white">
+                                {student.nickname || student.name}
+                              </span>
+                              {student.nickname && (
+                                <span className="text-[10px] text-slate-500 font-medium font-sans">
+                                  ({student.name})
+                                </span>
+                              )}
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
+                                {status.label}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-4 text-center font-mono text-xs text-slate-300 font-bold select-none">
+                            {student.pin}
+                          </td>
+                          <td className="py-2 px-4">
+                            <div className="flex items-center justify-center gap-2 select-none">
+                              <button
+                                onClick={() => onUpdateLives(student.id, -1, getActiveReason())}
+                                disabled={student.lives <= 0}
+                                className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              >
+                                <Minus size={11} />
+                              </button>
+                              <span className={`font-mono font-bold text-sm ${student.lives === 0 ? 'text-red-500' : 'text-white'} w-6 text-center`}>
+                                {student.lives}
+                              </span>
+                              <button
+                                onClick={() => onUpdateLives(student.id, 1, getActiveReason())}
+                                disabled={student.lives >= classData.maxLives}
+                                className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              >
+                                <Plus size={11} />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-2 px-4">
+                            <div className="flex items-center justify-center gap-3 select-none">
+                              <span className="font-mono font-bold text-white text-sm w-10 text-right pr-2 border-r border-slate-800">
+                                {student.points}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button 
+                                  onClick={() => onUpdatePoints(student.id, -5, getActiveReason())} 
+                                  disabled={student.points < 5} 
+                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  -5
+                                </button>
+                                <button 
+                                  onClick={() => onUpdatePoints(student.id, -1, getActiveReason())} 
+                                  disabled={student.points < 1} 
+                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  -1
+                                </button>
+                                <button 
+                                  onClick={() => onUpdatePoints(student.id, 1, getActiveReason())} 
+                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
+                                >
+                                  +1
+                                </button>
+                                <button 
+                                  onClick={() => onUpdatePoints(student.id, 5, getActiveReason())} 
+                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-semibold cursor-pointer"
+                                >
+                                  +5
+                                </button>
+                                <button 
+                                  onClick={() => onUpdatePoints(student.id, 10, getActiveReason())} 
+                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-600/20 border border-rose-500/30 hover:bg-rose-600/30 text-white font-bold cursor-pointer"
+                                >
+                                  +10
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleOpenAwardModal(student.id)}
+                                className="text-slate-500 hover:text-amber-400 p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                                title="Award Badge"
+                              >
+                                <Award size={13} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingStudentId(student.id);
+                                  setEditStudentName(student.name);
+                                  setEditStudentNickname(student.nickname || '');
+                                }}
+                                className="text-slate-500 hover:text-white p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                                title="Edit Student"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Lives Control */}
-                    <div className="bg-slate-950 rounded-lg p-3 border border-slate-800 flex flex-col justify-between">
-                      <div className="text-xs text-slate-500 font-medium mb-2 uppercase tracking-wider flex items-center gap-1">
-                        <Shield size={12} className="text-red-400" /> Lives
+              {/* Mobile Grid Card View */}
+              <div className="grid grid-cols-1 gap-3 sm:hidden">
+                {classData.students.map((student) => {
+                  const status = getStudentStatus(student.lives, classData.maxLives);
+                  return (
+                    <div key={student.id} className="bg-slate-900/50 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3 relative group hover:border-slate-700/60 transition-all duration-200 shadow-md">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-display font-bold text-sm text-white truncate flex items-center gap-1.5">
+                            {student.nickname || student.name}
+                          </h3>
+                          {student.nickname && (
+                            <p className="text-[10px] text-slate-500 font-medium truncate">
+                              Real Name: {student.name}
+                            </p>
+                          )}
+                          <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
+                            {status.label}
+                          </div>
+                          <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-1 font-mono select-none">
+                            <Key size={10} className="text-rose-500/70" /> PIN: <strong className="text-slate-300 font-semibold">{student.pin}</strong>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            onClick={() => handleOpenAwardModal(student.id)}
+                            className="text-slate-500 hover:text-amber-400 p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                            title="Award Badge"
+                          >
+                            <Award size={14} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingStudentId(student.id);
+                              setEditStudentName(student.name);
+                              setEditStudentNickname(student.nickname || '');
+                            }}
+                            className="text-slate-500 hover:text-white p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                            title="Edit Student"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <button
-                          onClick={() => onUpdateLives(student.id, -1, getActiveReason())}
-                          disabled={student.lives <= 0}
-                          className="w-8 h-8 rounded bg-slate-800 text-white flex items-center justify-center hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Minus size={16} />
-                        </button>
-                        <span className={`font-mono text-2xl font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
-                          {student.lives}
-                        </span>
-                        <button
-                          onClick={() => onUpdateLives(student.id, 1, getActiveReason())}
-                          disabled={student.lives >= classData.maxLives}
-                          className="w-8 h-8 rounded bg-slate-800 text-white flex items-center justify-center hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Plus size={16} />
-                        </button>
-                      </div>
-                    </div>
 
-                    {/* Points Control */}
-                    <div className="bg-slate-950 rounded-lg p-3 border border-slate-800 flex flex-col justify-between">
-                      <div className="text-xs text-slate-500 font-medium mb-2 uppercase tracking-wider flex items-center justify-between">
-                        <span className="flex items-center gap-1"><Star size={12} className="text-yellow-400" /> Points</span>
-                        <span className="font-mono text-lg font-bold text-white">{student.points}</span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-1 justify-between flex-wrap">
-                        <div className="flex gap-1">
-                          <button onClick={() => onUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="w-7 h-7 text-xs rounded bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">-1</button>
-                          <button onClick={() => onUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="w-7 h-7 text-xs rounded bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">-5</button>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* Lives Control */}
+                        <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/80 flex flex-col justify-between select-none">
+                          <div className="text-[9px] text-slate-500 font-mono uppercase tracking-widest flex items-center gap-1">
+                            <Shield size={10} className="text-red-400" /> Lives
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <button
+                              onClick={() => onUpdateLives(student.id, -1, getActiveReason())}
+                              disabled={student.lives <= 0}
+                              className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <span className={`font-mono text-base font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
+                              {student.lives}
+                            </span>
+                            <button
+                              onClick={() => onUpdateLives(student.id, 1, getActiveReason())}
+                              disabled={student.lives >= classData.maxLives}
+                              className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-1">
-                          <button onClick={() => onUpdatePoints(student.id, 1, getActiveReason())} className="w-7 h-7 text-xs rounded bg-emerald-900/50 text-emerald-400 hover:bg-emerald-800 hover:text-emerald-300">+1</button>
-                          <button onClick={() => onUpdatePoints(student.id, 5, getActiveReason())} className="w-7 h-7 text-xs rounded bg-emerald-900/50 text-emerald-400 hover:bg-emerald-800 hover:text-emerald-300">+5</button>
-                          <button onClick={() => onUpdatePoints(student.id, 10, getActiveReason())} className="w-8 h-7 text-xs rounded bg-emerald-900/50 text-emerald-400 hover:bg-emerald-800 hover:text-emerald-300">+10</button>
+
+                        {/* Points Control */}
+                        <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/80 flex flex-col justify-between select-none">
+                          <div className="text-[9px] text-slate-500 font-mono uppercase tracking-widest flex items-center justify-between">
+                            <span className="flex items-center gap-1"><Star size={10} className="text-amber-400" /> Points</span>
+                            <span className="font-mono font-bold text-white text-xs">{student.points}</span>
+                          </div>
+                          <div className="flex flex-col gap-1.5 mt-1.5">
+                            <div className="flex items-center justify-between gap-1">
+                              <button onClick={() => onUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
+                              <button onClick={() => onUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
+                            </div>
+                            <div className="flex items-center justify-between gap-1">
+                              <button onClick={() => onUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer">+1</button>
+                              <button onClick={() => onUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer font-semibold">+5</button>
+                              <button onClick={() => onUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-rose-600/25 border border-rose-500/30 hover:bg-rose-600/35 text-white font-bold cursor-pointer">+10</button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )})}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
       )}
 
       {activeTab === 'leaderboard' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden max-w-3xl">
-          {sortedStudents.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">No students available for the leaderboard.</div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-950 border-b border-slate-800">
-                  <th className="p-4 text-slate-400 font-medium w-16 text-center">Rank</th>
-                  <th className="p-4 text-slate-400 font-medium">Student Name</th>
-                  <th className="p-4 text-slate-400 font-medium text-right w-32">Points</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedStudents.map((student, idx) => (
-                  <tr key={student.id} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20">
-                    <td className="p-4 text-center">
-                      {idx === 0 ? (
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-yellow-500/20 text-yellow-500 font-bold">1</span>
-                      ) : idx === 1 ? (
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-300/20 text-slate-300 font-bold">2</span>
-                      ) : idx === 2 ? (
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-600/20 text-amber-500 font-bold">3</span>
-                      ) : (
-                        <span className="text-slate-500 font-mono">{idx + 1}</span>
-                      )}
-                    </td>
-                    <td className="p-4 font-medium text-white">{student.name}</td>
-                    <td className="p-4 text-right font-mono text-yellow-400 font-bold">{student.points}</td>
+        <div className="space-y-4 animate-fade-in">
+          <div className="overflow-hidden bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl shadow-xl max-w-2xl">
+            {sortedStudents.length === 0 ? (
+              <div className="p-6 text-center text-slate-500 font-sans text-xs">No students registered to display on the leaderboard.</div>
+            ) : (
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 select-none bg-slate-950/25">
+                    <th className="py-2 px-3.5 font-bold w-16 text-center">Rank</th>
+                    <th className="py-2 px-3.5 font-bold">Student Name</th>
+                    <th className="py-2 px-3.5 font-bold text-center w-28">Status / Lives</th>
+                    <th className="py-2 px-3.5 font-bold text-right w-28">Points</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody className="divide-y divide-slate-800/40">
+                  {sortedStudents.map((student, idx) => {
+                    const rank = idx + 1;
+                    const maxLives = classData.maxLives || 5;
+                    const livesArr = Array.from({ length: maxLives });
+
+                    return (
+                      <tr key={student.id} className="hover:bg-slate-900/30 transition-all text-xs">
+                        <td className="py-1.5 px-3.5 text-center select-none">
+                          {rank === 1 ? (
+                            <span className="inline-flex items-center justify-center w-5.5 h-5.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold text-xs" title="1st Place">🥇</span>
+                          ) : rank === 2 ? (
+                            <span className="inline-flex items-center justify-center w-5.5 h-5.5 rounded-full bg-slate-400/10 border border-slate-400/20 text-slate-300 font-bold text-xs" title="2nd Place">🥈</span>
+                          ) : rank === 3 ? (
+                            <span className="inline-flex items-center justify-center w-5.5 h-5.5 rounded-full bg-amber-700/10 border border-amber-700/20 text-amber-600 font-bold text-xs" title="3rd Place">🥉</span>
+                          ) : (
+                            <span className="text-slate-500 font-mono text-[11px] font-bold">#{rank}</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-display font-bold text-slate-200">
+                              {student.nickname || student.name}
+                            </span>
+                            {student.nickname && (
+                              <span className="text-[10px] text-slate-500 font-medium font-sans">
+                                ({student.name})
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-3.5 text-center">
+                          <div className="inline-flex items-center gap-0.5 justify-center">
+                            {livesArr.map((_, i) => (
+                              <span
+                                key={i}
+                                className={`text-[10px] ${
+                                  i < (student.lives ?? 5) ? 'text-red-500 drop-shadow-[0_0_2px_rgba(239,68,68,0.2)]' : 'text-slate-800'
+                                }`}
+                              >
+                                ❤️
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-3.5 text-right font-mono text-xs text-rose-400 font-extrabold">{student.points.toLocaleString()} pts</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 
@@ -1406,10 +1580,10 @@ alter publication supabase_realtime add table public.activity_logs;`}
                       <button
                         key={filter}
                         onClick={() => setLogFilter(filter)}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors capitalize cursor-pointer ${
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all capitalize cursor-pointer ${
                           logFilter === filter
-                            ? 'bg-indigo-600 text-white shadow'
-                            : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                            ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/15'
+                            : 'bg-slate-900/50 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800/60'
                         }`}
                       >
                         {filter === 'all' ? 'All Activities' : filter === 'system' ? 'Roster / Class' : `${filter} changes`}
@@ -1418,7 +1592,7 @@ alter publication supabase_realtime add table public.activity_logs;`}
                   </div>
 
                   {activeMeeting && (
-                    <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-850">
+                    <div className="flex gap-1 bg-slate-900/50 p-1 rounded-lg border border-slate-800/60">
                       <button
                         onClick={() => setTimelineMeetingFilter('all')}
                         className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-all cursor-pointer ${
@@ -1433,7 +1607,7 @@ alter publication supabase_realtime add table public.activity_logs;`}
                         onClick={() => setTimelineMeetingFilter('current')}
                         className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-all cursor-pointer ${
                           timelineMeetingFilter === 'current'
-                            ? 'bg-emerald-600 text-white font-bold'
+                            ? 'bg-rose-600 text-white font-bold'
                             : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
@@ -1445,7 +1619,7 @@ alter publication supabase_realtime add table public.activity_logs;`}
                 
                 <button
                   onClick={loadLogs}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 font-mono flex items-center gap-1 bg-indigo-500/10 hover:bg-indigo-500/20 px-2.5 py-1.5 rounded-lg border border-indigo-500/20 cursor-pointer"
+                  className="text-xs text-rose-400 hover:text-rose-300 font-mono flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-xl border border-rose-500/20 cursor-pointer transition-all"
                 >
                   <RefreshCw size={12} className={isLogsLoading ? 'animate-spin' : ''} />
                   Sync Logs
@@ -1575,51 +1749,51 @@ alter publication supabase_realtime add table public.activity_logs;`}
                         return (
                           <div
                             key={log.id}
-                            className={`bg-slate-900 border border-slate-800/80 rounded-xl p-4 flex items-center justify-between gap-4 transition-all ${
-                              log.undone ? 'opacity-40 select-none' : ''
+                            className={`bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-xl p-2 px-3.5 flex items-center justify-between gap-4 transition-all ${
+                              log.undone ? 'opacity-30 select-none' : ''
                             }`}
                           >
-                            <div className="flex items-start gap-3">
-                              <div className="flex flex-col gap-1.5 items-start">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold uppercase tracking-wider shrink-0 border ${badgeColor}`}>
-                                    {title}
-                                  </span>
-                                  {isCurrentSessionLog && (
-                                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
-                                      Current Session
+                            <div className="flex flex-1 items-center gap-3 min-w-0">
+                              {/* Left: action type badge */}
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 border ${badgeColor}`}>
+                                {title}
+                              </span>
+
+                              {/* Middle: Name/Detail info and Timestamp */}
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-x-3 gap-y-0.5 flex-1 min-w-0">
+                                <p className={`text-xs font-semibold text-slate-200 truncate ${log.undone ? 'line-through' : ''}`}>
+                                  {details}
+                                  {log.reason && (
+                                    <span className="text-slate-400 font-sans italic text-[11px] ml-2 normal-case">
+                                      — "{log.reason}"
                                     </span>
                                   )}
-                                </div>
-                                <div className="space-y-1">
-                                  <p className={`text-sm font-medium text-slate-200 ${log.undone ? 'line-through' : ''}`}>
-                                    {details}
-                                    {log.reason && (
-                                      <span className="text-slate-400 block text-xs mt-1 font-sans italic line-through-none">
-                                        Reason: "{log.reason}"
-                                      </span>
-                                    )}
-                                  </p>
-                                  <span className="text-[10px] text-slate-500 font-mono block">
-                                    {new Date(log.created_at).toLocaleString()}
+                                </p>
+                                {isCurrentSessionLog && (
+                                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-extrabold px-1.5 py-0.25 rounded uppercase tracking-wider shrink-0 self-start sm:self-auto">
+                                    Current Session
                                   </span>
-                                </div>
+                                )}
+                                <span className="text-[10px] text-slate-500 font-mono sm:ml-auto shrink-0 select-none">
+                                  {new Date(log.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                </span>
                               </div>
                             </div>
 
+                            {/* Right: Actions */}
                             {isUndoable && (
                               <button
                                 onClick={() => handleUndo(log.id)}
-                                className="text-xs bg-slate-950 border border-slate-800 hover:bg-slate-800 hover:text-red-400 text-slate-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all font-semibold shadow cursor-pointer shrink-0"
+                                className="text-[10px] bg-slate-950 border border-slate-850 hover:border-slate-750 hover:text-red-400 text-slate-400 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all font-bold uppercase tracking-wider cursor-pointer shrink-0"
                               >
-                                <Undo2 size={12} />
+                                <Undo2 size={10} />
                                 Undo
                               </button>
                             )}
 
                             {log.undone && (
-                              <span className="text-xs bg-red-500/10 text-red-500 border border-red-500/20 px-2.5 py-1 rounded-lg font-bold font-mono tracking-wide shrink-0">
-                                UNDONE
+                              <span className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded font-extrabold font-mono tracking-wider uppercase shrink-0">
+                                Undone
                               </span>
                             )}
                           </div>
@@ -1644,82 +1818,82 @@ alter publication supabase_realtime add table public.activity_logs;`}
           </div>
 
           {classData.meetings.length === 0 ? (
-            <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500">
+            <div className="p-12 text-center bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl text-slate-500">
               No meetings recorded for this class yet.
             </div>
           ) : (
-            <div className="space-y-4 max-w-3xl">
+            <div className="space-y-3 max-w-4xl animate-fade-in">
               {classData.meetings.map((meeting) => {
                 const isActive = meeting.status === 'active';
-                const startedTime = new Date(meeting.startedAt).toLocaleString();
-                const endedTime = meeting.endedAt ? new Date(meeting.endedAt).toLocaleString() : 'Active Now';
+                const startedTime = new Date(meeting.startedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                const endedTime = meeting.endedAt 
+                  ? new Date(meeting.endedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) 
+                  : 'Active Now';
 
                 return (
                   <div
                     key={meeting.id}
-                    className={`bg-slate-900 border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
-                      isActive ? 'border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.05)] bg-slate-900/90' : 'border-slate-800'
+                    className={`bg-slate-900/30 backdrop-blur-sm border rounded-2xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
+                      isActive ? 'border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.04)] bg-slate-900/80' : 'border-slate-800/80 hover:border-slate-700/60'
                     }`}
                   >
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2.5">
-                        {isActive ? (
-                          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider animate-pulse">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                            Active Session
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+                      {/* Left: Status and Timing info */}
+                      <div className="space-y-1 min-w-[200px]">
+                        <div className="flex items-center gap-2">
+                          {isActive ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider animate-pulse">
+                              <span className="h-1 w-1 rounded-full bg-emerald-400" />
+                              Active
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-slate-800 text-slate-400 border border-slate-700 uppercase tracking-wider">
+                              Ended
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Lives reset: {meeting.resetLivesTo}
                           </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-850 text-slate-400 border border-slate-800">
-                            Ended Session
-                          </span>
-                        )}
-                        <span className="text-xs text-slate-500 font-mono">
-                          Lives Reset Target: {meeting.resetLivesTo}
-                        </span>
-                      </div>
-
-                      <div className="text-sm text-slate-300 space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-slate-500 text-xs w-14">Started:</span>
-                          <span className="font-medium text-slate-200">{startedTime}</span>
                         </div>
-                        {!isActive && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-500 text-xs w-14">Ended:</span>
-                            <span className="font-medium text-slate-200">{endedTime}</span>
-                          </div>
-                        )}
+                        <div className="text-xs text-slate-300 space-y-0.5">
+                          <div><span className="text-slate-500 text-[11px]">Start:</span> <span className="font-semibold">{startedTime}</span></div>
+                          {!isActive && <div><span className="text-slate-500 text-[11px]">End:</span> <span className="font-semibold text-slate-400">{endedTime}</span></div>}
+                        </div>
                       </div>
 
-                      {meeting.summary && (
-                        <div className="text-xs text-slate-400 bg-slate-950/50 p-2.5 rounded-lg border border-slate-850 max-w-md">
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-sans">
-                            <div>Duration: <span className="font-semibold text-slate-300">{meeting.summary.duration}</span></div>
-                            <div>Total Actions: <span className="font-semibold text-slate-300">{meeting.summary.total_actions}</span></div>
-                            <div>Point Changes: <span className="font-semibold text-slate-300">{meeting.summary.total_point_changes}</span></div>
-                            <div>Lives Lost: <span className="font-semibold text-slate-300 text-red-400">{meeting.summary.total_lives_lost}</span></div>
-                          </div>
+                      {/* Middle: Summary Stats */}
+                      {meeting.summary ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 bg-slate-950/40 px-3 py-2 rounded-lg border border-slate-850/60 flex-1 max-w-xl text-[11px] font-mono text-slate-400">
+                          <div>Duration: <span className="text-slate-200 font-bold">{meeting.summary.duration}</span></div>
+                          <div>Actions: <span className="text-slate-200 font-bold">{meeting.summary.total_actions}</span></div>
+                          <div>Points: <span className="text-rose-400 font-bold">{meeting.summary.total_point_changes}</span></div>
+                          <div>Lives Lost: <span className="text-red-400 font-bold">❤️ {meeting.summary.total_lives_lost}</span></div>
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-slate-500 italic bg-slate-950/20 px-3 py-2 rounded-lg border border-slate-850/30 flex-1 max-w-xl">
+                          No intermediate summary statistics generated yet
                         </div>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center font-sans">
                       {isActive ? (
                         <button
                           onClick={() => setIsEndMeetingModalOpen(true)}
-                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
                         >
-                          End Class Meeting
+                          End Meeting
                         </button>
                       ) : meeting.summary ? (
                         <button
                           onClick={() => setSelectedMeetingForSummary(meeting)}
-                          className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 hover:border-slate-600 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="bg-slate-950 hover:bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer shadow"
                         >
-                          View Summary Report
+                          Summary Report
                         </button>
                       ) : (
-                        <span className="text-xs text-slate-500 italic">No summary generated</span>
+                        <span className="text-[10px] text-slate-500 italic font-mono uppercase">No Report</span>
                       )}
                     </div>
                   </div>
@@ -1914,199 +2088,205 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
             </div>
           ) : (
             <>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center select-none">
                 <div>
-                  <h2 className="text-xl font-display font-bold text-white">Classroom Tasks & Mission Control</h2>
-                  <p className="text-sm text-slate-400">Manage mission tasks, award extra points, structure team assignments, and set due dates.</p>
+                  <h2 className="text-xl font-display font-bold text-white">Classroom Tasks</h2>
+                  <p className="text-sm text-slate-400">Manage assignments, submissions, points, and task status.</p>
                 </div>
                 <button
                   onClick={openCreateTaskModal}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-lg hover:shadow-purple-500/10"
+                  className="bg-purple-650 hover:bg-purple-750 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-lg hover:shadow-purple-550/10"
                 >
-                  <PlusCircle size={16} />
+                  <PlusCircle size={14} />
                   Create Classroom Task
                 </button>
               </div>
 
               {isTasksLoading ? (
-                <div className="text-center py-12 text-slate-500 font-mono text-sm">
+                <div className="text-center py-12 text-slate-500 font-mono text-xs">
                   Loading classroom tasks...
                 </div>
               ) : tasks.length === 0 ? (
-                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500 space-y-4">
-                  <p>No tasks created for this class yet.</p>
+                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500 space-y-3">
+                  <p className="text-sm">No tasks created for this class yet.</p>
                   <button
                     onClick={openCreateTaskModal}
-                    className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    className="bg-slate-850 hover:bg-slate-800 border border-slate-750 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
                     Create Your First Task
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4 max-w-4xl">
+                <div className="space-y-3 max-w-4xl animate-fade-in">
                   {tasks.map((task) => {
-                const isDraft = task.status === 'draft';
-                const isPublished = task.status === 'published';
-                const isClosed = task.status === 'closed';
-                const isArchived = task.status === 'archived';
+                    const isDraft = task.status === 'draft';
+                    const isPublished = task.status === 'published';
+                    const isClosed = task.status === 'closed';
+                    const isArchived = task.status === 'archived';
+                    const normalizedTaskType = String(task.task_type || 'individual').toLowerCase();
 
-                let statusBadgeColor = 'bg-slate-800 text-slate-400 border border-slate-700';
-                if (isPublished) statusBadgeColor = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20';
-                if (isClosed) statusBadgeColor = 'bg-amber-500/15 text-amber-400 border border-amber-500/20';
-                if (isArchived) statusBadgeColor = 'bg-slate-900 text-slate-600 border border-slate-850';
+                    let statusBadgeColor = 'bg-slate-800 text-slate-400 border border-slate-700';
+                    if (isPublished) statusBadgeColor = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20';
+                    if (isClosed) statusBadgeColor = 'bg-amber-500/15 text-amber-400 border border-amber-500/20';
+                    if (isArchived) statusBadgeColor = 'bg-slate-900 text-slate-600 border border-slate-855';
 
-                return (
-                  <div
-                    key={task.id}
-                    className={`bg-slate-900 border rounded-xl p-5 flex flex-col transition-all ${
-                      isPublished ? 'border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.02)]' : 'border-slate-800'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${statusBadgeColor}`}>
-                            {task.status}
-                          </span>
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-950 text-slate-400 border border-slate-850 capitalize">
-                            {task.task_type} Task
-                          </span>
-                          <span className="text-yellow-500 text-xs font-mono font-bold flex items-center gap-1 ml-1 bg-yellow-500/5 px-2 py-0.5 rounded border border-yellow-500/10">
-                            ⭐ {task.reward_points} pts
-                          </span>
+                    return (
+                      <div
+                        key={task.id}
+                        className={`bg-slate-900/30 backdrop-blur-sm border rounded-xl p-3.5 transition-all hover:bg-slate-900/50 ${
+                          isPublished ? 'border-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.03)]' : 'border-slate-800/80'
+                        }`}
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2 select-none">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider border ${statusBadgeColor}`}>
+                              {task.status}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-950 text-slate-400 border border-slate-850 uppercase tracking-wider">
+                              {task.task_type}
+                            </span>
+                            <span className="text-yellow-400 text-[10px] font-mono font-bold flex items-center gap-1 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
+                              ★ {task.reward_points} pts
+                            </span>
+                            {task.due_at && (
+                              <span className="text-slate-500 font-mono text-[10px] ml-1">
+                                Due: {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <h3 className="text-sm font-bold text-slate-100">{task.title}</h3>
+                            {task.description && (
+                              <p className="text-xs text-slate-400 line-clamp-1 leading-relaxed max-w-2xl">{task.description}</p>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-3 text-[10px] text-slate-500 font-mono">
+                            <span>
+                              Allowed: {task.allow_text_submission ? 'Text' : ''}
+                              {task.allow_text_submission && task.allow_attachment_submission ? ' + ' : ''}
+                              {task.allow_attachment_submission ? `Attachments (Max ${task.max_attachments}, Limit ${task.max_attachment_size_mb}MB)` : ''}
+                            </span>
+                          </div>
                         </div>
 
-                        <div>
-                          <h3 className="text-base font-bold text-white leading-snug">{task.title}</h3>
-                          {task.description && (
-                            <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed whitespace-pre-wrap">{task.description}</p>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500 pt-1">
-                          <span className="flex items-center gap-1">
-                            📅 Due: {task.due_at ? new Date(task.due_at).toLocaleString() : 'No due date set'}
-                          </span>
-                          <span className="flex items-center gap-1.5 border-l border-slate-800 pl-4">
-                            Submissions allowed: {task.allow_text_submission ? 'Text' : ''}
-                            {task.allow_text_submission && task.allow_attachment_submission ? ' / ' : ''}
-                            {task.allow_attachment_submission ? `Attachments (Max ${task.max_attachments}, Limit ${task.max_attachment_size_mb}MB)` : ''}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Management Buttons */}
-                      <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-start font-sans">
-                        {(() => {
-                          const normalizedTaskType = String(task.task_type || 'individual').toLowerCase();
-                          return (
-                            <div className="flex items-center gap-2">
-                              {normalizedTaskType === 'individual' ? (
-                                <span className="text-xs text-slate-400 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-medium">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${(submissionCounts[task.id] || 0) === classData.students.length && classData.students.length > 0 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : (submissionCounts[task.id] || 0) > 0 ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-slate-500'}`} />
-                                  Submissions: <span className="text-white font-bold font-mono">{submissionCounts[task.id] || 0}/{classData.students.length}</span>
-                                </span>
-                              ) : (
-                                <span className="text-xs text-slate-400 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-medium">
-                                  <Users className="text-purple-400" size={12} />
-                                  <span className="text-slate-300 font-bold">Group Task</span>
-                                </span>
-                              )}
-                              <button
-                                onClick={() => {
-                                  console.log('[DEBUG] clicked task id:', task.id);
-                                  console.log('[DEBUG] clicked task title:', task.title);
-                                  console.log('[DEBUG] clicked task type:', task.task_type);
-                                  console.log('[DEBUG] current class id:', classData.id);
-                                  openSubmissionsViewer(task);
-                                }}
-                                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md font-sans"
-                              >
-                                <FileText size={14} /> 
-                                {normalizedTaskType === 'group' ? 'View Group Submissions' : 'View Submissions'}
-                                {isDraft && <span className="text-[10px] font-extrabold uppercase bg-purple-850 text-purple-200 px-1 py-0.5 rounded ml-1 border border-purple-700/30">Draft</span>}
-                              </button>
+                        {/* Submissions & Quick Actions on the Right */}
+                        <div className="flex flex-wrap lg:flex-nowrap items-center gap-3 shrink-0 self-start lg:self-center">
+                          {/* Submission Tracker */}
+                          {normalizedTaskType === 'individual' ? (
+                            <div className="text-[11px] text-slate-400 bg-slate-950/40 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-semibold font-mono select-none">
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                (submissionCounts[task.id] || 0) === classData.students.length && classData.students.length > 0 
+                                  ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                                  : (submissionCounts[task.id] || 0) > 0 
+                                    ? 'bg-amber-500 shadow-[0_0_6px_#f59e0b]' 
+                                    : 'bg-slate-650'
+                              }`} />
+                              Submissions: <span className="text-slate-100 font-bold">{submissionCounts[task.id] || 0}{'/'}{classData.students.length}</span>
                             </div>
-                          );
-                        })()}
-                        {isDraft && (
-                          <>
-                            <button
-                              onClick={() => handlePublishTask(task)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                            >
-                              Publish Task
-                            </button>
-                            <button
-                              onClick={() => openEditTaskModal(task)}
-                              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => setTaskDeleteConfirmId(task.id)}
-                              className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer"
-                              title="Delete Draft"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </>
-                        )}
+                          ) : (
+                            <div className="text-[11px] text-slate-400 bg-slate-950/40 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-semibold font-mono select-none">
+                              <Users size={11} className="text-purple-400" />
+                              <span>Group Task</span>
+                            </div>
+                          )}
 
-                        {isPublished && (
-                          <>
+                          {/* Controls Group */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <button
-                              onClick={() => handleCloseTask(task)}
-                              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                              onClick={() => {
+                                console.log('[DEBUG] clicked task id:', task.id);
+                                openSubmissionsViewer(task);
+                              }}
+                              className="bg-purple-650 hover:bg-purple-750 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 font-sans"
                             >
-                              Close Task
+                              <FileText size={11} /> 
+                              Inbox
+                              {isDraft && <span className="text-[8px] font-extrabold uppercase bg-purple-850 text-purple-200 px-1 py-0.25 rounded border border-purple-750">Draft</span>}
                             </button>
-                            <button
-                              onClick={() => handleArchiveTask(task)}
-                              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                            >
-                              Archive Task
-                            </button>
-                          </>
-                        )}
 
-                        {isClosed && (
-                          <>
-                            <button
-                              onClick={() => handleReopenTask(task)}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                            >
-                              Reopen Task
-                            </button>
-                            <button
-                              onClick={() => handleArchiveTask(task)}
-                              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                            >
-                              Archive Task
-                            </button>
-                          </>
-                        )}
+                            {isDraft && (
+                              <>
+                                <button
+                                  onClick={() => handlePublishTask(task)}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  Publish
+                                </button>
+                                <button
+                                  onClick={() => openEditTaskModal(task)}
+                                  className="bg-slate-800 hover:bg-slate-705 text-slate-300 border border-slate-700 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => setTaskDeleteConfirmId(task.id)}
+                                  className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer"
+                                  title="Delete Draft"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
 
-                        {isArchived && (
-                          <>
-                            <button
-                              onClick={() => handleReopenTask(task)}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                            >
-                              Reopen Task
-                            </button>
-                            <button
-                              onClick={() => setTaskDeleteConfirmId(task.id)}
-                              className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
-                            >
-                              <Trash2 size={14} /> Delete
-                            </button>
-                          </>
-                        )}
+                            {isPublished && (
+                              <>
+                                <button
+                                  onClick={() => handleCloseTask(task)}
+                                  className="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  Close
+                                </button>
+                                <button
+                                  onClick={() => handleArchiveTask(task)}
+                                  className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-750 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  Archive
+                                </button>
+                              </>
+                            )}
+
+                            {isClosed && (
+                              <>
+                                <button
+                                  onClick={() => handleReopenTask(task)}
+                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  Reopen
+                                </button>
+                                <button
+                                  onClick={() => handleArchiveTask(task)}
+                                  className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-750 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  Archive
+                                </button>
+                              </>
+                            )}
+
+                            {isArchived && (
+                              <>
+                                <button
+                                  onClick={() => handleReopenTask(task)}
+                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  Reopen
+                                </button>
+                                <button
+                                  onClick={() => setTaskDeleteConfirmId(task.id)}
+                                  className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer"
+                                  title="Delete Task"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Group Management Area */}
+                      {/* Group Management Area */}
                     {task.task_type === 'group' && (
                       <div className="mt-4 border-t border-slate-800/60 pt-4">
                         <button
@@ -2600,29 +2780,29 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                   <div className="space-y-6">
                     {/* Key Stats Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Crew Members</span>
+                      <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+                        <span className="text-xs font-mono font-semibold text-slate-500 uppercase tracking-wider">Total Crew Members</span>
                         <div className="flex items-baseline gap-2 mt-2">
                           <span className="text-3xl font-bold text-white">{totalStudents}</span>
                           <span className="text-xs text-slate-500">students enlisted</span>
                         </div>
                       </div>
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Class Points</span>
+                      <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+                        <span className="text-xs font-mono font-semibold text-slate-500 uppercase tracking-wider">Total Class Points</span>
                         <div className="flex items-baseline gap-2 mt-2">
                           <span className="text-3xl font-bold text-rose-500">{totalPoints.toLocaleString()}</span>
                           <span className="text-xs text-slate-500">avg: {avgPoints}/student</span>
                         </div>
                       </div>
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Badges Awarded</span>
+                      <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+                        <span className="text-xs font-mono font-semibold text-slate-500 uppercase tracking-wider">Badges Awarded</span>
                         <div className="flex items-baseline gap-2 mt-2">
                           <span className="text-3xl font-bold text-amber-500">{totalBadgesEarned}</span>
                           <span className="text-xs text-slate-500">achievements unlocked</span>
                         </div>
                       </div>
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Logbook Entries</span>
+                      <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+                        <span className="text-xs font-mono font-semibold text-slate-500 uppercase tracking-wider">Logbook Entries</span>
                         <div className="flex items-baseline gap-2 mt-2">
                           <span className="text-3xl font-bold text-purple-500">{activityLogs.length}</span>
                           <span className="text-xs text-slate-500">actions registered</span>
@@ -2632,7 +2812,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
 
                     {/* Class Standings Panel */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                      <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-6 shadow-xl">
                         <h3 className="text-lg font-display font-bold text-white mb-4">Class Performance Highlights</h3>
                         <div className="space-y-4">
                           <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
@@ -2674,7 +2854,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         </div>
                       </div>
 
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                      <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-6 shadow-xl">
                         <h3 className="text-lg font-display font-bold text-white mb-4">Classroom Task Activity Summary</h3>
                         <div className="space-y-4">
                           <div className="flex justify-between items-center">
@@ -2732,14 +2912,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
 
                   return (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center select-none">
                         <button
                           onClick={() => setSelectedReportStudentId(null)}
-                          className="flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5"
+                          className="mc-back-link"
                         >
-                          <ArrowLeft size={14} /> Back to Student List
+                          <ArrowLeft size={14} className="mc-back-icon" /> Back to Student List
                         </button>
-                        <span className="text-xs text-slate-500 font-mono">STUDENT ID: {student.id}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">STUDENT ID: {student.id}</span>
                       </div>
 
                       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
@@ -2875,26 +3055,26 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                 }
 
                 return (
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                    <div className="p-5 border-b border-slate-800">
-                      <h3 className="text-lg font-display font-bold text-white">Student Progress Records</h3>
-                      <p className="text-sm text-slate-400 mt-0.5">Click a student to view their detailed academic progress and feedback summary.</p>
+                  <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden">
+                    <div className="p-4 border-b border-slate-800/60 bg-slate-950/20">
+                      <h3 className="text-base font-display font-bold text-white">Student Progress Records</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Click a student to view their detailed academic progress and feedback summary.</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
-                            <th className="p-4">Rank</th>
-                            <th className="p-4">Crew Member</th>
-                            <th className="p-4 text-center">Lives</th>
-                            <th className="p-4 text-center">Points</th>
-                            <th className="p-4 text-center">Submissions</th>
-                            <th className="p-4 text-center">Badges</th>
-                            <th className="p-4 text-center">Logs Count</th>
-                            <th className="p-4 text-right">Action</th>
+                          <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 bg-slate-950/20 select-none">
+                            <th className="py-2.5 px-4 font-semibold">Rank</th>
+                            <th className="py-2.5 px-4 font-semibold">Student Name</th>
+                            <th className="py-2.5 px-4 font-semibold text-center">Lives</th>
+                            <th className="py-2.5 px-4 font-semibold text-center">Points</th>
+                            <th className="py-2.5 px-4 font-semibold text-center">Submissions</th>
+                            <th className="py-2.5 px-4 font-semibold text-center">Badges</th>
+                            <th className="py-2.5 px-4 font-semibold text-center">Logs</th>
+                            <th className="py-2.5 px-4 font-semibold text-right">Action</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                        <tbody className="divide-y divide-slate-800/40 text-slate-300">
                           {studentsSorted.map((student, idx) => {
                             const rank = idx + 1;
                             const studentSubs = getStudentSubmissions(student.id);
@@ -2902,20 +3082,27 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                             const logsCount = activityLogs.filter(log => log.student_id === student.id).length;
 
                             return (
-                              <tr key={student.id} className="hover:bg-slate-850/30 transition-colors">
-                                <td className="p-4 font-mono text-sm text-amber-500">#{rank}</td>
-                                <td className="p-4 font-medium text-white">
-                                  {student.name} {student.nickname && <span className="text-slate-500 font-normal">({student.nickname})</span>}
+                              <tr key={student.id} className="hover:bg-slate-900/40 transition-colors">
+                                <td className="py-2 px-4 font-mono text-xs text-amber-500 font-bold">#{rank}</td>
+                                <td className="py-2 px-4">
+                                  <span className="font-display font-bold text-sm text-white">
+                                    {student.nickname || student.name}
+                                  </span>
+                                  {student.nickname && (
+                                    <span className="text-[10px] text-slate-500 font-sans ml-1">
+                                      ({student.name})
+                                    </span>
+                                  )}
                                 </td>
-                                <td className="p-4 text-center font-mono text-sm text-red-400 font-medium">❤️ {student.lives}</td>
-                                <td className="p-4 text-center font-mono text-sm font-semibold text-rose-400">{student.points}</td>
-                                <td className="p-4 text-center font-mono text-sm">{studentSubs.length}</td>
-                                <td className="p-4 text-center font-mono text-sm text-amber-400">{badgesCount} ⭐</td>
-                                <td className="p-4 text-center font-mono text-sm text-purple-400">{logsCount}</td>
-                                <td className="p-4 text-right">
+                                <td className="py-2 px-4 text-center font-mono text-xs text-red-400 font-medium">❤️ {student.lives}</td>
+                                <td className="py-2 px-4 text-center font-mono text-xs font-semibold text-rose-400">{student.points}</td>
+                                <td className="py-2 px-4 text-center font-mono text-xs">{studentSubs.length}</td>
+                                <td className="py-2 px-4 text-center font-mono text-xs text-amber-400">{badgesCount} ⭐</td>
+                                <td className="py-2 px-4 text-center font-mono text-xs text-purple-400">{logsCount}</td>
+                                <td className="py-2 px-4 text-right">
                                   <button
                                     onClick={() => setSelectedReportStudentId(student.id)}
-                                    className="text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium py-1 px-2.5 rounded transition-colors cursor-pointer border border-slate-700"
+                                    className="text-[10px] bg-slate-950 border border-slate-800 hover:border-slate-700 hover:bg-slate-900 text-slate-300 font-semibold py-1 px-2.5 rounded-lg transition-all cursor-pointer shadow"
                                   >
                                     View Report
                                   </button>
@@ -2932,10 +3119,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
 
               {reportsSubTab === 'tasks' && (() => {
                 return (
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                    <div className="p-5 border-b border-slate-800">
-                      <h3 className="text-lg font-display font-bold text-white">Classroom Task Performance</h3>
-                      <p className="text-sm text-slate-400 mt-0.5">Summary of academic completions, submission counts, and evaluation percentages.</p>
+                  <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden">
+                    <div className="p-4 border-b border-slate-800/60 bg-slate-950/20">
+                      <h3 className="text-base font-display font-bold text-white">Classroom Task Performance</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Summary of academic completions, submission counts, and evaluation percentages.</p>
                     </div>
                     {allTasks.length === 0 ? (
                       <div className="p-10 text-center text-slate-500 italic">No tasks created yet in this class.</div>
@@ -2943,18 +3130,18 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
-                              <th className="p-4">Task Name</th>
-                              <th className="p-4">Type</th>
-                              <th className="p-4">Status</th>
-                              <th className="p-4 text-center">Reward</th>
-                              <th className="p-4 text-center">Submissions</th>
-                              <th className="p-4 text-center">Reviewed</th>
-                              <th className="p-4 text-center">Missing</th>
-                              <th className="p-4 text-right">Completion %</th>
+                            <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 bg-slate-950/20 select-none">
+                              <th className="py-2.5 px-4 font-semibold">Task Name</th>
+                              <th className="py-2.5 px-4 font-semibold">Type</th>
+                              <th className="py-2.5 px-4 font-semibold">Status</th>
+                              <th className="py-2.5 px-4 font-semibold text-center">Reward</th>
+                              <th className="py-2.5 px-4 font-semibold text-center">Submissions</th>
+                              <th className="py-2.5 px-4 font-semibold text-center">Reviewed</th>
+                              <th className="py-2.5 px-4 font-semibold text-center">Missing</th>
+                              <th className="py-2.5 px-4 font-semibold text-right">Completion %</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                          <tbody className="divide-y divide-slate-800/40 text-slate-300">
                             {allTasks.map((task) => {
                               const taskSubs = reportSubmissions.filter(sub => sub.task_id === task.id);
                               const totalStudentsCount = classData.students?.length || 0;
@@ -2974,15 +3161,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                               }
 
                               return (
-                                <tr key={task.id} className="hover:bg-slate-850/30 transition-colors">
-                                  <td className="p-4">
-                                    <p className="font-semibold text-white">{task.title}</p>
+                                <tr key={task.id} className="hover:bg-slate-900/40 transition-colors">
+                                  <td className="py-2.5 px-4">
+                                    <p className="font-semibold text-white text-sm">{task.title}</p>
                                     {task.due_at && (
-                                      <span className="text-xs text-slate-500 font-mono">Due: {new Date(task.due_at).toLocaleDateString()}</span>
+                                      <span className="text-[10px] text-slate-500 font-mono">Due: {new Date(task.due_at).toLocaleDateString()}</span>
                                     )}
                                   </td>
-                                  <td className="p-4 font-mono text-xs text-slate-400 uppercase">{task.task_type}</td>
-                                  <td className="p-4 text-xs font-medium uppercase">
+                                  <td className="py-2.5 px-4 font-mono text-[10px] text-slate-400 uppercase tracking-wider">{task.task_type}</td>
+                                  <td className="py-2.5 px-4 text-[10px] font-medium uppercase tracking-wider">
                                     <span className={`px-2 py-0.5 rounded-full ${
                                       task.status === 'published' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
                                       task.status === 'closed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
@@ -2991,14 +3178,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                       {task.status}
                                     </span>
                                   </td>
-                                  <td className="p-4 text-center font-mono text-sm text-rose-400 font-semibold">+{task.reward_points} pts</td>
-                                  <td className="p-4 text-center font-mono text-sm font-medium">{submittedCount}</td>
-                                  <td className="p-4 text-center font-mono text-sm text-emerald-400">{reviewedCount}</td>
-                                  <td className="p-4 text-center font-mono text-sm text-red-400">{missingCount}</td>
-                                  <td className="p-4 text-right">
+                                  <td className="py-2.5 px-4 text-center font-mono text-xs text-rose-400 font-semibold">+{task.reward_points} pts</td>
+                                  <td className="py-2.5 px-4 text-center font-mono text-xs font-medium">{submittedCount}</td>
+                                  <td className="py-2.5 px-4 text-center font-mono text-xs text-emerald-400">{reviewedCount}</td>
+                                  <td className="py-2.5 px-4 text-center font-mono text-xs text-red-400">{missingCount}</td>
+                                  <td className="py-2.5 px-4 text-right">
                                     <div className="flex items-center justify-end gap-3">
-                                      <span className="font-mono text-sm font-bold text-slate-200">{completionRate}%</span>
-                                      <div className="w-16 bg-slate-800 h-2 rounded-full overflow-hidden hidden sm:block">
+                                      <span className="font-mono text-xs font-bold text-slate-200">{completionRate}%</span>
+                                      <div className="w-16 bg-slate-800 h-2 rounded-full overflow-hidden hidden sm:block border border-slate-700/30">
                                         <div
                                           className={`h-full ${completionRate >= 80 ? 'bg-emerald-500' : completionRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
                                           style={{ width: `${completionRate}%` }}
@@ -3287,43 +3474,49 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
       )}
 
       {activeTab === 'settings' && (
-        <div className="max-w-2xl bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h2 className="text-xl font-display font-bold text-white mb-6">Class Settings</h2>
+        <div className="max-w-lg bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 shadow-xl animate-fade-in">
+          <div className="border-b border-slate-800/60 pb-3 mb-4">
+            <h2 className="text-base font-display font-bold text-white">Class Settings</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Update classroom rules, parameters, and basic info.</p>
+          </div>
           <form onSubmit={handleSaveClass} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Class Name</label>
-              <input
-                type="text"
-                required
-                value={editClassName}
-                onChange={(e) => setEditClassName(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Level / Grade</label>
-              <input
-                type="text"
-                value={editClassLevel}
-                onChange={(e) => setEditClassLevel(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Max Lives (1-20)</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                required
-                value={editClassMaxLives}
-                onChange={(e) => setEditClassMaxLives(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-slate-500 mt-1">If reduced, students above the new max will be capped.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Class Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editClassName}
+                  onChange={(e) => setEditClassName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Level / Grade</label>
+                <input
+                  type="text"
+                  value={editClassLevel}
+                  onChange={(e) => setEditClassLevel(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Max Lives (1-20)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  required
+                  value={editClassMaxLives}
+                  onChange={(e) => setEditClassMaxLives(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs font-mono"
+                />
+              </div>
             </div>
             
-            <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+            <p className="text-[10px] text-slate-500 font-sans">If max lives are reduced, any students exceeding the new maximum will be automatically capped.</p>
+
+            <div className="pt-4 border-t border-slate-800/60 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => {
@@ -3331,13 +3524,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     onDeleteClass();
                   }
                 }}
-                className="text-red-500 hover:text-red-400 font-medium flex items-center gap-2 px-3 py-2 rounded hover:bg-red-500/10 transition-colors"
+                className="text-red-500 hover:text-red-400 font-bold text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer"
               >
-                <Trash2 size={18} /> Delete Class
+                <Trash2 size={14} /> Delete Class
               </button>
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-rose-600/15 cursor-pointer text-xs uppercase tracking-wider"
               >
                 Save Changes
               </button>
@@ -3349,14 +3542,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
       {activeTab === 'badges' && (
         <div className="space-y-6 animate-fade-in">
           {/* Header Action Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-6 shadow-xl">
             <div>
               <h2 className="text-xl font-display font-bold text-white flex items-center gap-2">
                 <Award className="text-amber-500" size={24} />
                 Badges & Achievements
               </h2>
               <p className="text-sm text-slate-400 mt-1">
-                Configure passive automatic unlocks or award manual credentials to recognize active cockpit flight progress.
+                Configure automatic unlocks or award manual credentials to recognize student learning milestones.
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0 flex-wrap">
@@ -3364,7 +3557,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                 <button
                   type="button"
                   onClick={handleAddStarterBadges}
-                  className="bg-slate-850 hover:bg-slate-800 text-amber-400 hover:text-amber-300 border border-amber-500/20 px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer"
+                  className="bg-slate-900/50 hover:bg-slate-800/60 text-amber-400 hover:text-amber-300 border border-amber-500/20 px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 cursor-pointer shadow"
                 >
                   ✨ Load Starter Suite
                 </button>
@@ -3372,14 +3565,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               <button
                 type="button"
                 onClick={() => handleOpenBadgeModal(null)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 shadow-md cursor-pointer"
+                className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-rose-600/15 cursor-pointer"
               >
                 <Plus size={16} /> Create Custom Badge
               </button>
               <button
                 type="button"
                 onClick={() => handleOpenAwardModal('')}
-                className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 shadow-md cursor-pointer"
+                className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-amber-600/15 cursor-pointer"
               >
                 <Award size={16} /> Award Student Manually
               </button>
@@ -4623,7 +4816,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                   placeholder="e.g. Flight Captain"
                   value={badgeFormName}
                   onChange={(e) => setBadgeFormName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-650"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-500"
                 />
               </div>
 
@@ -4634,7 +4827,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                   placeholder="e.g. Awarded to pilots demonstrating outstanding cockpit management."
                   value={badgeFormDescription}
                   onChange={(e) => setBadgeFormDescription(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-650 resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-500 resize-none"
                 />
               </div>
 
@@ -4843,7 +5036,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                   placeholder="Reason for award, e.g. Showed extreme persistence debugging the booster engine!"
                   value={awardReason}
                   onChange={(e) => setAwardReason(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-650 resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-500 resize-none"
                 />
               </div>
 

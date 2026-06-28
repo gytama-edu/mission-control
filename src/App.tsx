@@ -11,7 +11,7 @@ import { Landing } from './components/Landing';
 import { StudentAccess } from './components/StudentAccess';
 import { TeacherAuth } from './components/TeacherAuth';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
 
 export default function App() {
   const [teacherUser, setTeacherUser] = useState<any>(null);
@@ -175,12 +175,13 @@ export default function App() {
         />
       ) : (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-4">
-          <div className="w-full max-w-7xl mx-auto mb-4">
+          <div className="w-full max-w-7xl mx-auto mb-4 select-none">
             <button
               onClick={() => handleSetViewMode('landing')}
-              className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
+              className="mc-back-link"
             >
-              ← Back to Main Menu
+              <ArrowLeft size={14} className="mc-back-icon" />
+              Back to Main Menu
             </button>
           </div>
           <Dashboard
