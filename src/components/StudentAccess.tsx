@@ -781,6 +781,15 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                           )}
                         </div>
 
+                        {submission && (submission.awarded_points !== undefined && submission.awarded_points !== null) && (
+                          <div className="bg-yellow-500/5 border border-yellow-500/10 p-2.5 rounded-lg text-xs space-y-1">
+                            <span className="font-bold text-yellow-500 flex items-center gap-1">⭐ Points Awarded: {submission.awarded_points} / {task.reward_points} pts</span>
+                            {submission.teacher_feedback && (
+                              <p className="text-slate-300 italic">💬 Feedback: "{submission.teacher_feedback}"</p>
+                            )}
+                          </div>
+                        )}
+
                         {task.task_type === 'group' && (
                           <div className="bg-slate-900/65 border border-slate-850 rounded-lg p-2.5 flex items-center gap-2 text-xs">
                             <Users className="text-purple-400" size={14} />

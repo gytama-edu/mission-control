@@ -389,7 +389,7 @@ export function ClassDetail({
       const updatedSub = subs.find(s => s.id === selectedSubmissionForReview.id);
       setSelectedSubmissionForReview(updatedSub || null);
       
-      alert(`Submission marked as ${status}!`);
+      alert("Review saved and points awarded.");
     } catch (err: any) {
       setSubmissionsError('Failed to save review: ' + err.message);
     } finally {
@@ -2725,6 +2725,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                       <p className="text-xs text-slate-400 bg-slate-950/30 border border-slate-850/60 p-2.5 rounded-lg mt-1 italic">
                                         <span className="text-[10px] text-slate-500 block uppercase font-bold not-italic tracking-wider">Feedback comments</span>
                                         "{sub.teacher_feedback}"
+                                      </p>
+                                    )}
+                                    {sub.reviewed_at && (
+                                      <p className="text-[10px] text-slate-500 font-mono mt-1">
+                                        Reviewed at: {new Date(sub.reviewed_at).toLocaleString()}
                                       </p>
                                     )}
                                   </div>

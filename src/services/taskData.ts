@@ -612,23 +612,24 @@ export const reviewSubmission = async (
   awardedPoints?: number | null,
   reviewedBy?: string | null
 ): Promise<any> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  const currentTeacherId = reviewedBy || user?.id || null;
+  console.log('[DEBUG] Calling review_individual_submission RPC:', {
+    submission_id_input: submissionId,
+    awarded_points_input: awardedPoints,
+    teacher_feedback_input: feedback
+  });
 
-  const { data, error } = await supabase
-    .from('task_submissions')
-    .update({
-      teacher_feedback: feedback,
-      status: status,
-      awarded_points: awardedPoints,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: currentTeacherId
-    })
-    .eq('id', submissionId)
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('review_individual_submission', {
+    submission_id_input: submissionId,
+    awarded_points_input: awardedPoints !== undefined && awardedPoints !== null ? awardedPoints : 0,
+    teacher_feedback_input: feedback,
+  });
 
-  if (error) throw error;
+  if (error) {
+    console.error('[DEBUG] review_individual_submission RPC error:', error);
+    throw error;
+  }
+
+  console.log('[DEBUG] review_individual_submission RPC success:', data);
   return data;
 };
 

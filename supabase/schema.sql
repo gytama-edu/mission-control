@@ -857,6 +857,154 @@ add column if not exists reviewed_at timestamptz;
 alter table public.task_submissions
 add column if not exists reviewed_by uuid references auth.users(id) on delete set null;
 
+-- =========================================================================
+-- Phase 7B RPC Function: Review individual submission and award points
+-- =========================================================================
+create or replace function public.review_individual_submission(
+  submission_id_input uuid,
+  awarded_points_input integer,
+  teacher_feedback_input text
+)
+returns table (
+  submission_id uuid,
+  student_id uuid,
+  task_id uuid,
+  class_id uuid,
+  previous_awarded_points integer,
+  new_awarded_points integer,
+  points_delta integer,
+  new_student_points integer,
+  submission_status text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  submission_record public.task_submissions%rowtype;
+  task_record public.tasks%rowtype;
+  class_record public.classes%rowtype;
+  student_record public.students%rowtype;
+  old_points integer := 0;
+  new_points integer := 0;
+  delta_points integer := 0;
+  final_student_points integer := 0;
+begin
+  if awarded_points_input is null then
+    new_points := 0;
+  else
+    new_points := greatest(0, awarded_points_input);
+  end if;
+
+  select *
+  into submission_record
+  from public.task_submissions
+  where id = submission_id_input;
+
+  if not found then
+    raise exception 'Submission not found';
+  end if;
+
+  select *
+  into task_record
+  from public.tasks
+  where id = submission_record.task_id;
+
+  if not found then
+    raise exception 'Task not found';
+  end if;
+
+  if task_record.task_type <> 'individual' then
+    raise exception 'Only individual submissions can be reviewed by this function';
+  end if;
+
+  select *
+  into class_record
+  from public.classes
+  where id = submission_record.class_id;
+
+  if not found then
+    raise exception 'Class not found';
+  end if;
+
+  if class_record.teacher_id is not null and class_record.teacher_id <> auth.uid() then
+    raise exception 'You do not own this class';
+  end if;
+
+  if submission_record.student_id is null then
+    raise exception 'Submission has no student_id';
+  end if;
+
+  select *
+  into student_record
+  from public.students
+  where id = submission_record.student_id;
+
+  if not found then
+    raise exception 'Student not found';
+  end if;
+
+  old_points := coalesce(submission_record.awarded_points, 0);
+  delta_points := new_points - old_points;
+
+  update public.task_submissions
+  set
+    awarded_points = new_points,
+    teacher_feedback = teacher_feedback_input,
+    reviewed_at = now(),
+    reviewed_by = auth.uid(),
+    status = 'reviewed',
+    updated_at = now()
+  where id = submission_id_input;
+
+  update public.students
+  set points = coalesce(points, 0) + delta_points
+  where id = submission_record.student_id
+  returning points into final_student_points;
+
+  insert into public.activity_logs (
+    teacher_id,
+    class_id,
+    student_id,
+    action_type,
+    points_delta,
+    reason,
+    metadata,
+    created_at
+  )
+  values (
+    auth.uid(),
+    submission_record.class_id,
+    submission_record.student_id,
+    'task_reviewed',
+    delta_points,
+    'Task submission reviewed',
+    jsonb_build_object(
+      'task_id', submission_record.task_id,
+      'submission_id', submission_id_input,
+      'task_title', task_record.title,
+      'previous_awarded_points', old_points,
+      'new_awarded_points', new_points
+    ),
+    now()
+  );
+
+  return query
+  select
+    submission_id_input,
+    submission_record.student_id,
+    submission_record.task_id,
+    submission_record.class_id,
+    old_points,
+    new_points,
+    delta_points,
+    final_student_points,
+    'reviewed'::text;
+end;
+$$;
+
+grant execute on function public.review_individual_submission(uuid, integer, text) to authenticated;
+
 notify pgrst, 'reload schema';
 
 
