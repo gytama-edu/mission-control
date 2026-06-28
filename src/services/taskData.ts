@@ -861,3 +861,47 @@ export const reviewGroupSubmission = async (
   return data;
 };
 
+export const fetchClassReportsData = async (classId: string): Promise<{
+  submissions: any[];
+  groups: any[];
+  groupMembers: any[];
+}> => {
+  // Fetch all submissions for this class
+  const { data: submissions, error: subError } = await supabase
+    .from('task_submissions')
+    .select('*')
+    .eq('class_id', classId);
+
+  if (subError) throw subError;
+
+  // Fetch all task groups for this class
+  const { data: groups, error: groupError } = await supabase
+    .from('task_groups')
+    .select('*')
+    .eq('class_id', classId);
+
+  if (groupError) throw groupError;
+
+  // Fetch all task group members for this class if we have any groups
+  let groupMembers: any[] = [];
+  if (groups && groups.length > 0) {
+    const groupIds = groups.map(g => g.id);
+    const { data: members, error: membersError } = await supabase
+      .from('task_group_members')
+      .select('*, students(name)')
+      .in('task_group_id', groupIds);
+
+    if (membersError) throw membersError;
+    groupMembers = (members || []).map((m: any) => ({
+      ...m,
+      studentName: m.students?.name || 'Unknown'
+    }));
+  }
+
+  return {
+    submissions: submissions || [],
+    groups: groups || [],
+    groupMembers
+  };
+};
+

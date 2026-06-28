@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
@@ -38,7 +38,18 @@ export function ClassDetail({
   onEndMeeting
 }: ClassDetailProps) {
   const [newStudentName, setNewStudentName] = useState('');
-  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings' | 'badges'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings' | 'badges' | 'reports'>('roster');
+
+  // Reports & Analytics States
+  const [reportsSubTab, setReportsSubTab] = useState<'overview' | 'students' | 'tasks' | 'meetings' | 'badges' | 'activity'>('overview');
+  const [reportSubmissions, setReportSubmissions] = useState<any[]>([]);
+  const [reportGroups, setReportGroups] = useState<any[]>([]);
+  const [reportGroupMembers, setReportGroupMembers] = useState<any[]>([]);
+  const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [isReportsLoading, setIsReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState('');
+  const [selectedReportStudentId, setSelectedReportStudentId] = useState<string | null>(null);
+  const [reportsActivityFilter, setReportsActivityFilter] = useState<'all' | 'points' | 'lives' | 'tasks' | 'badges' | 'meetings'>('all');
 
   // Badge States
   const [badgeDefinitions, setBadgeDefinitions] = useState<any[]>([]);
@@ -221,6 +232,41 @@ export function ClassDetail({
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [isEndMeetingModalOpen, setIsEndMeetingModalOpen] = useState(false);
   const [selectedMeetingForSummary, setSelectedMeetingForSummary] = useState<any | null>(null);
+
+  const loadReportData = async () => {
+    setIsReportsLoading(true);
+    setReportsError('');
+    try {
+      // 1. Fetch tasks
+      const fetchedTasks = await taskDb.fetchTasksByClass(classData.id);
+      setAllTasks(fetchedTasks);
+
+      // 2. Fetch submissions, groups, group members
+      const reportsData = await taskDb.fetchClassReportsData(classData.id);
+      setReportSubmissions(reportsData.submissions);
+      setReportGroups(reportsData.groups);
+      setReportGroupMembers(reportsData.groupMembers);
+      
+      // 3. Load badges if missing table isn't true
+      if (!isBadgesTableMissing) {
+        await loadBadgesData();
+      }
+
+      // 4. Load activity logs
+      await loadLogs();
+    } catch (err: any) {
+      console.error('Failed to load reports data:', err);
+      setReportsError('Failed to load some report datasets. Please retry.');
+    } finally {
+      setIsReportsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      loadReportData();
+    }
+  }, [classData.id, activeTab]);
 
   const loadLogs = async () => {
     setIsLogsLoading(true);
@@ -948,6 +994,17 @@ export function ClassDetail({
           <Award size={16} /> Badges & Achievements
           {activeTab === 'badges' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('reports')}
+          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'reports' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <BarChart2 size={16} /> Reports & Analytics
+          {activeTab === 'reports' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500" />
           )}
         </button>
         <button
@@ -2451,6 +2508,783 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
       )}
     </div>
   )}
+
+      {activeTab === 'reports' && (
+        <div className="space-y-6">
+          {/* Header Controls */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 rounded-xl p-5">
+            <div>
+              <h2 className="text-2xl font-display font-bold text-white flex items-center gap-2">
+                <BarChart2 className="text-rose-500" /> Mission Control Reports
+              </h2>
+              <p className="text-sm text-slate-400 mt-1">
+                Visual insights, analytics, and printable academic summaries for {classData.name}.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={loadReportData}
+                disabled={isReportsLoading}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors border border-slate-700 text-sm cursor-pointer"
+              >
+                <RefreshCw size={15} className={isReportsLoading ? 'animate-spin' : ''} />
+                Refresh Reports
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer"
+              >
+                <Printer size={15} />
+                Print / Export
+              </button>
+            </div>
+          </div>
+
+          {/* Sub Tab Navigation */}
+          <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+            {[
+              { id: 'overview', label: 'Class Overview' },
+              { id: 'students', label: 'Student Progress' },
+              { id: 'tasks', label: 'Task Performance' },
+              { id: 'meetings', label: 'Meeting Summary' },
+              { id: 'badges', label: 'Badge Summary' },
+              { id: 'activity', label: 'Activity Summary' },
+            ].map((subTab) => (
+              <button
+                key={subTab.id}
+                onClick={() => {
+                  setReportsSubTab(subTab.id as any);
+                  setSelectedReportStudentId(null);
+                }}
+                className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
+                  reportsSubTab === subTab.id
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                }`}
+              >
+                {subTab.label}
+              </button>
+            ))}
+          </div>
+
+          {reportsError && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm flex items-center gap-2">
+              <AlertTriangle size={16} />
+              {reportsError}
+            </div>
+          )}
+
+          {isReportsLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-slate-900 border border-slate-800 rounded-xl space-y-4">
+              <Loader2 className="animate-spin text-rose-500" size={32} />
+              <p className="text-slate-400 text-sm">Loading comprehensive class metrics...</p>
+            </div>
+          ) : (
+            <div className="print:bg-white print:text-black">
+              {/* RENDER ACTIVE SUBTAB */}
+              {reportsSubTab === 'overview' && (() => {
+                const totalStudents = classData.students?.length || 0;
+                const totalPoints = classData.students?.reduce((sum, s) => sum + s.points, 0) || 0;
+                const avgPoints = totalStudents ? Math.round(totalPoints / totalStudents) : 0;
+                const sortedByPoints = [...(classData.students || [])].sort((a, b) => b.points - a.points);
+                const highestStudent = sortedByPoints[0] || null;
+                const lowestStudent = sortedByPoints[sortedByPoints.length - 1] || null;
+                const totalBadgesEarned = studentBadges?.length || 0;
+                const totalMeetings = classData.meetings?.length || 0;
+                const lastMeeting = classData.meetings && classData.meetings.length > 0
+                  ? [...classData.meetings].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
+                  : null;
+                const lastMeetingDate = lastMeeting ? new Date(lastMeeting.startedAt).toLocaleDateString() : 'N/A';
+
+                return (
+                  <div className="space-y-6">
+                    {/* Key Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Crew Members</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-3xl font-bold text-white">{totalStudents}</span>
+                          <span className="text-xs text-slate-500">students enlisted</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Class Points</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-3xl font-bold text-rose-500">{totalPoints.toLocaleString()}</span>
+                          <span className="text-xs text-slate-500">avg: {avgPoints}/student</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Badges Awarded</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-3xl font-bold text-amber-500">{totalBadgesEarned}</span>
+                          <span className="text-xs text-slate-500">achievements unlocked</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Logbook Entries</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-3xl font-bold text-purple-500">{activityLogs.length}</span>
+                          <span className="text-xs text-slate-500">actions registered</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Class Standings Panel */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                        <h3 className="text-lg font-display font-bold text-white mb-4">Class Performance Highlights</h3>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
+                            <div>
+                              <p className="text-sm font-medium text-slate-400">Class Top Performer</p>
+                              <p className="text-base font-bold text-white mt-1">
+                                {highestStudent ? (highestStudent.nickname ? `${highestStudent.name} (${highestStudent.nickname})` : highestStudent.name) : 'None'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs text-slate-500 block">Score</span>
+                              <span className="text-lg font-bold text-rose-500">{highestStudent ? highestStudent.points : 0} pts</span>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
+                            <div>
+                              <p className="text-sm font-medium text-slate-400">Needs Support</p>
+                              <p className="text-base font-bold text-white mt-1">
+                                {lowestStudent ? (lowestStudent.nickname ? `${lowestStudent.name} (${lowestStudent.nickname})` : lowestStudent.name) : 'None'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs text-slate-500 block">Score</span>
+                              <span className="text-lg font-bold text-slate-400">{lowestStudent ? lowestStudent.points : 0} pts</span>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
+                            <div>
+                              <p className="text-sm font-medium text-slate-400">Activity Level</p>
+                              <p className="text-base font-bold text-white mt-1">Meetings Hosted</p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs text-slate-500 block">Last Session</span>
+                              <span className="text-lg font-bold text-purple-400">{lastMeetingDate}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                        <h3 className="text-lg font-display font-bold text-white mb-4">Classroom Task Activity Summary</h3>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-400">Total Tasks Created</span>
+                            <span className="text-sm font-bold text-white">{allTasks.length}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-400">Active Published Tasks</span>
+                            <span className="text-sm font-bold text-purple-400">{allTasks.filter(t => t.status === 'published').length}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-400">Completed/Closed Tasks</span>
+                            <span className="text-sm font-bold text-emerald-400">{allTasks.filter(t => t.status === 'closed').length}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-400">Total Task Submissions</span>
+                            <span className="text-sm font-bold text-amber-400">{reportSubmissions.length}</span>
+                          </div>
+                          <div className="flex justify-between items-center border-t border-slate-800 pt-3">
+                            <span className="text-sm font-medium text-slate-300">Classroom Engagement Rate</span>
+                            <span className="text-sm font-bold text-emerald-400">
+                              {totalStudents && allTasks.length
+                                ? `${Math.round((reportSubmissions.length / (totalStudents * allTasks.length)) * 100)}%`
+                                : '0%'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {reportsSubTab === 'students' && (() => {
+                const getStudentSubmissions = (studentId: string) => {
+                  return reportSubmissions.filter(sub => {
+                    if (sub.student_id === studentId) return true;
+                    if (sub.task_group_id) {
+                      return reportGroupMembers.some(m => m.task_group_id === sub.task_group_id && m.student_id === studentId);
+                    }
+                    return false;
+                  });
+                };
+
+                const studentsSorted = [...(classData.students || [])].sort((a, b) => b.points - a.points);
+
+                if (selectedReportStudentId) {
+                  const student = classData.students?.find(s => s.id === selectedReportStudentId);
+                  if (!student) return null;
+
+                  const studentRank = studentsSorted.findIndex(s => s.id === student.id) + 1;
+                  const studentSubs = getStudentSubmissions(student.id);
+                  const badgesCount = studentBadges.filter(sb => sb.student_id === student.id).length;
+                  const studentLogs = activityLogs.filter(log => log.student_id === student.id);
+
+                  return (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <button
+                          onClick={() => setSelectedReportStudentId(null)}
+                          className="flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5"
+                        >
+                          <ArrowLeft size={14} /> Back to Student List
+                        </button>
+                        <span className="text-xs text-slate-500 font-mono">STUDENT ID: {student.id}</span>
+                      </div>
+
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                          <div>
+                            <h3 className="text-2xl font-display font-bold text-white">
+                              {student.name} {student.nickname && <span className="text-rose-500 text-lg">({student.nickname})</span>}
+                            </h3>
+                            <p className="text-sm text-slate-400 mt-1">Joined: {new Date(student.joinedAt).toLocaleDateString()}</p>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="text-center bg-slate-950/40 p-3 rounded-lg border border-slate-800 min-w-[80px]">
+                              <span className="text-xs text-slate-500 block">Rank</span>
+                              <span className="text-lg font-bold text-amber-500">#{studentRank}</span>
+                            </div>
+                            <div className="text-center bg-slate-950/40 p-3 rounded-lg border border-slate-800 min-w-[80px]">
+                              <span className="text-xs text-slate-500 block">Points</span>
+                              <span className="text-lg font-bold text-rose-500">{student.points}</span>
+                            </div>
+                            <div className="text-center bg-slate-950/40 p-3 rounded-lg border border-slate-800 min-w-[80px]">
+                              <span className="text-xs text-slate-500 block">Lives</span>
+                              <span className="text-lg font-bold text-red-500">❤️ {student.lives}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Task Progress */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                          <h4 className="text-lg font-display font-bold text-white mb-4">Task Submission Log</h4>
+                          {studentSubs.length === 0 ? (
+                            <p className="text-sm text-slate-500 italic py-4">No task submissions recorded yet for this student.</p>
+                          ) : (
+                            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                              {studentSubs.map((sub) => {
+                                const task = allTasks.find(t => t.id === sub.task_id);
+                                return (
+                                  <div key={sub.id} className="bg-slate-950/50 border border-slate-800 p-3.5 rounded-lg flex justify-between items-center">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-200">{task?.title || 'Unknown Task'}</p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-xs font-mono text-slate-500">
+                                          {task?.task_type === 'group' ? '👥 Group Submission' : '👤 Individual Submission'}
+                                        </span>
+                                        <span className="text-xs text-slate-500">•</span>
+                                        <span className="text-xs text-slate-500">{new Date(sub.created_at).toLocaleDateString()}</span>
+                                      </div>
+                                      {sub.teacher_feedback && (
+                                        <div className="bg-slate-900 border border-slate-800 p-2 rounded mt-2 text-xs text-slate-400">
+                                          <strong className="text-slate-300">Feedback:</strong> {sub.teacher_feedback}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-right flex flex-col items-end gap-1.5">
+                                      <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
+                                        sub.status === 'reviewed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                        sub.status === 'returned' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                        'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                      }`}>
+                                        {sub.status.toUpperCase()}
+                                      </span>
+                                      {sub.awarded_points !== null && (
+                                        <span className="text-xs font-bold text-rose-500 font-mono">+{sub.awarded_points} pts</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Recent Student Logs */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                          <h4 className="text-lg font-display font-bold text-white mb-4">Recent Activity History</h4>
+                          {studentLogs.length === 0 ? (
+                            <p className="text-sm text-slate-500 italic py-4">No recent activity logs found for this student.</p>
+                          ) : (
+                            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                              {studentLogs.slice(0, 15).map((log) => (
+                                <div key={log.id} className="bg-slate-950/30 border border-slate-900 p-3 rounded-lg flex justify-between items-center">
+                                  <div>
+                                    <p className="text-sm text-slate-300">{log.reason || log.action_type}</p>
+                                    <span className="text-xs text-slate-500 block mt-0.5">{new Date(log.created_at).toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex gap-1.5">
+                                    {log.points_delta !== 0 && (
+                                      <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${log.points_delta > 0 ? 'bg-rose-500/10 text-rose-400' : 'bg-red-500/10 text-red-400'}`}>
+                                        {log.points_delta > 0 ? `+${log.points_delta}` : log.points_delta} pts
+                                      </span>
+                                    )}
+                                    {log.lives_delta !== 0 && (
+                                      <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${log.lives_delta > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                        {log.lives_delta > 0 ? `+${log.lives_delta}` : log.lives_delta} ❤️
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Earned Badges */}
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                        <h4 className="text-lg font-display font-bold text-white mb-4">Earned Achievements & Badges</h4>
+                        {studentBadges.filter(sb => sb.student_id === student.id).length === 0 ? (
+                          <p className="text-sm text-slate-500 italic py-4">No badges awarded yet to this student.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {studentBadges.filter(sb => sb.student_id === student.id).map((sb) => {
+                              const badgeDef = badgeDefinitions.find(d => d.id === sb.badge_id) || sb.badge;
+                              return (
+                                <div key={sb.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex items-start gap-3">
+                                  <span className="text-2xl p-2 bg-slate-900 border border-slate-800 rounded-lg">{badgeDef?.icon || '⭐'}</span>
+                                  <div>
+                                    <p className="text-sm font-bold text-white">{badgeDef?.name || 'Unknown Achievement'}</p>
+                                    <p className="text-xs text-slate-400 mt-1">{badgeDef?.description}</p>
+                                    <span className="text-[10px] text-slate-500 font-mono block mt-2">
+                                      Awarded: {new Date(sb.awarded_at).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="p-5 border-b border-slate-800">
+                      <h3 className="text-lg font-display font-bold text-white">Student Progress Records</h3>
+                      <p className="text-sm text-slate-400 mt-0.5">Click a student to view their detailed academic progress and feedback summary.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
+                            <th className="p-4">Rank</th>
+                            <th className="p-4">Crew Member</th>
+                            <th className="p-4 text-center">Lives</th>
+                            <th className="p-4 text-center">Points</th>
+                            <th className="p-4 text-center">Submissions</th>
+                            <th className="p-4 text-center">Badges</th>
+                            <th className="p-4 text-center">Logs Count</th>
+                            <th className="p-4 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                          {studentsSorted.map((student, idx) => {
+                            const rank = idx + 1;
+                            const studentSubs = getStudentSubmissions(student.id);
+                            const badgesCount = studentBadges.filter(sb => sb.student_id === student.id).length;
+                            const logsCount = activityLogs.filter(log => log.student_id === student.id).length;
+
+                            return (
+                              <tr key={student.id} className="hover:bg-slate-850/30 transition-colors">
+                                <td className="p-4 font-mono text-sm text-amber-500">#{rank}</td>
+                                <td className="p-4 font-medium text-white">
+                                  {student.name} {student.nickname && <span className="text-slate-500 font-normal">({student.nickname})</span>}
+                                </td>
+                                <td className="p-4 text-center font-mono text-sm text-red-400 font-medium">❤️ {student.lives}</td>
+                                <td className="p-4 text-center font-mono text-sm font-semibold text-rose-400">{student.points}</td>
+                                <td className="p-4 text-center font-mono text-sm">{studentSubs.length}</td>
+                                <td className="p-4 text-center font-mono text-sm text-amber-400">{badgesCount} ⭐</td>
+                                <td className="p-4 text-center font-mono text-sm text-purple-400">{logsCount}</td>
+                                <td className="p-4 text-right">
+                                  <button
+                                    onClick={() => setSelectedReportStudentId(student.id)}
+                                    className="text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium py-1 px-2.5 rounded transition-colors cursor-pointer border border-slate-700"
+                                  >
+                                    View Report
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {reportsSubTab === 'tasks' && (() => {
+                return (
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="p-5 border-b border-slate-800">
+                      <h3 className="text-lg font-display font-bold text-white">Classroom Task Performance</h3>
+                      <p className="text-sm text-slate-400 mt-0.5">Summary of academic completions, submission counts, and evaluation percentages.</p>
+                    </div>
+                    {allTasks.length === 0 ? (
+                      <div className="p-10 text-center text-slate-500 italic">No tasks created yet in this class.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
+                              <th className="p-4">Task Name</th>
+                              <th className="p-4">Type</th>
+                              <th className="p-4">Status</th>
+                              <th className="p-4 text-center">Reward</th>
+                              <th className="p-4 text-center">Submissions</th>
+                              <th className="p-4 text-center">Reviewed</th>
+                              <th className="p-4 text-center">Missing</th>
+                              <th className="p-4 text-right">Completion %</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                            {allTasks.map((task) => {
+                              const taskSubs = reportSubmissions.filter(sub => sub.task_id === task.id);
+                              const totalStudentsCount = classData.students?.length || 0;
+                              const taskGroupsForTask = reportGroups.filter(g => g.task_id === task.id);
+
+                              let submittedCount = taskSubs.length;
+                              let reviewedCount = taskSubs.filter(s => s.status === 'reviewed').length;
+                              let missingCount = 0;
+                              let completionRate = 0;
+
+                              if (task.task_type === 'individual') {
+                                missingCount = Math.max(0, totalStudentsCount - submittedCount);
+                                completionRate = totalStudentsCount ? Math.round((submittedCount / totalStudentsCount) * 100) : 0;
+                              } else {
+                                missingCount = Math.max(0, taskGroupsForTask.length - submittedCount);
+                                completionRate = taskGroupsForTask.length ? Math.round((submittedCount / taskGroupsForTask.length) * 100) : 0;
+                              }
+
+                              return (
+                                <tr key={task.id} className="hover:bg-slate-850/30 transition-colors">
+                                  <td className="p-4">
+                                    <p className="font-semibold text-white">{task.title}</p>
+                                    {task.due_at && (
+                                      <span className="text-xs text-slate-500 font-mono">Due: {new Date(task.due_at).toLocaleDateString()}</span>
+                                    )}
+                                  </td>
+                                  <td className="p-4 font-mono text-xs text-slate-400 uppercase">{task.task_type}</td>
+                                  <td className="p-4 text-xs font-medium uppercase">
+                                    <span className={`px-2 py-0.5 rounded-full ${
+                                      task.status === 'published' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+                                      task.status === 'closed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                      'bg-slate-800 text-slate-400 border border-slate-700'
+                                    }`}>
+                                      {task.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-center font-mono text-sm text-rose-400 font-semibold">+{task.reward_points} pts</td>
+                                  <td className="p-4 text-center font-mono text-sm font-medium">{submittedCount}</td>
+                                  <td className="p-4 text-center font-mono text-sm text-emerald-400">{reviewedCount}</td>
+                                  <td className="p-4 text-center font-mono text-sm text-red-400">{missingCount}</td>
+                                  <td className="p-4 text-right">
+                                    <div className="flex items-center justify-end gap-3">
+                                      <span className="font-mono text-sm font-bold text-slate-200">{completionRate}%</span>
+                                      <div className="w-16 bg-slate-800 h-2 rounded-full overflow-hidden hidden sm:block">
+                                        <div
+                                          className={`h-full ${completionRate >= 80 ? 'bg-emerald-500' : completionRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                          style={{ width: `${completionRate}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {reportsSubTab === 'meetings' && (() => {
+                if (!classData.meetings || classData.meetings.length === 0) {
+                  return (
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center text-slate-500 italic">
+                      No meetings recorded yet in this class.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="p-5 border-b border-slate-800">
+                      <h3 className="text-lg font-display font-bold text-white">Classroom Meeting Summary</h3>
+                      <p className="text-sm text-slate-400 mt-0.5">Historical session logs showing points, lives, and interactions from active meetings.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
+                            <th className="p-4">Session Date</th>
+                            <th className="p-4 text-center">Status</th>
+                            <th className="p-4 text-center">Duration</th>
+                            <th className="p-4 text-center">Actions</th>
+                            <th className="p-4 text-center">Points Awarded</th>
+                            <th className="p-4 text-center">Lives Lost</th>
+                            <th className="p-4 text-center">Lives Gained</th>
+                            <th className="p-4">Most Active Crew</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                          {classData.meetings.map((meeting) => {
+                            const startedDate = new Date(meeting.startedAt).toLocaleString();
+                            const summary = meeting.summary || {};
+                            const logsForMeeting = activityLogs.filter(log => log.meeting_id === meeting.id);
+
+                            const duration = summary.duration || (meeting.endedAt ? `${Math.round((new Date(meeting.endedAt).getTime() - new Date(meeting.startedAt).getTime()) / 1000 / 60)} min` : 'N/A');
+                            const totalActions = logsForMeeting.length;
+                            const totalPoints = logsForMeeting.filter(l => l.points_delta).reduce((sum, l) => sum + (l.points_delta || 0), 0);
+                            const totalLivesLost = logsForMeeting.filter(l => l.lives_delta && l.lives_delta < 0).reduce((sum, l) => sum + Math.abs(l.lives_delta || 0), 0);
+                            const totalLivesGained = logsForMeeting.filter(l => l.lives_delta && l.lives_delta > 0).reduce((sum, l) => sum + (l.lives_delta || 0), 0);
+
+                            return (
+                              <tr key={meeting.id} className="hover:bg-slate-850/30 transition-colors">
+                                <td className="p-4 font-medium text-white">{startedDate}</td>
+                                <td className="p-4 text-center text-xs font-bold uppercase">
+                                  <span className={`px-2 py-0.5 rounded-full ${meeting.status === 'active' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
+                                    {meeting.status}
+                                  </span>
+                                </td>
+                                <td className="p-4 text-center font-mono text-sm">{duration}</td>
+                                <td className="p-4 text-center font-mono text-sm text-purple-400">{totalActions}</td>
+                                <td className="p-4 text-center font-mono text-sm text-rose-400 font-semibold">+{totalPoints}</td>
+                                <td className="p-4 text-center font-mono text-sm text-red-400">-{totalLivesLost}</td>
+                                <td className="p-4 text-center font-mono text-sm text-emerald-400">+{totalLivesGained}</td>
+                                <td className="p-4 font-mono text-sm text-slate-300">{summary.most_active_student || 'N/A'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {reportsSubTab === 'badges' && (() => {
+                const totalBadgesEarned = studentBadges.length;
+                const badgeCounts: { [key: string]: { badge: any; count: number } } = {};
+                studentBadges.forEach(sb => {
+                  if (!sb.badge_id) return;
+                  if (!badgeCounts[sb.badge_id]) {
+                    const badgeDef = badgeDefinitions.find(d => d.id === sb.badge_id) || sb.badge;
+                    badgeCounts[sb.badge_id] = { badge: badgeDef, count: 0 };
+                  }
+                  badgeCounts[sb.badge_id].count++;
+                });
+
+                const sortedBadges = Object.values(badgeCounts).sort((a, b) => b.count - a.count);
+                const mostAwardedBadge = sortedBadges[0] || null;
+
+                const studentBadgeCounts: { [key: string]: { studentName: string; count: number } } = {};
+                studentBadges.forEach(sb => {
+                  if (!sb.student_id) return;
+                  if (!studentBadgeCounts[sb.student_id]) {
+                    const stud = classData.students?.find(s => s.id === sb.student_id);
+                    const sName = stud ? (stud.nickname ? `${stud.name} (${stud.nickname})` : stud.name) : 'Unknown';
+                    studentBadgeCounts[sb.student_id] = { studentName: sName, count: 0 };
+                  }
+                  studentBadgeCounts[sb.student_id].count++;
+                });
+
+                const studentWithMostBadges = Object.values(studentBadgeCounts).sort((a, b) => b.count - a.count)[0] || null;
+                const manualCount = studentBadges.filter(sb => sb.source === 'manual').length;
+                const autoCount = studentBadges.filter(sb => sb.source === 'automatic' || sb.source === 'system').length;
+
+                return (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Badges Earned</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-3xl font-bold text-amber-500">{totalBadgesEarned}</span>
+                          <span className="text-xs text-slate-500">instances unlocked</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Most Awarded Badge</span>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-2xl">{mostAwardedBadge?.badge?.icon || '⭐'}</span>
+                          <span className="text-sm font-bold text-white truncate">{mostAwardedBadge?.badge?.name || 'N/A'}</span>
+                          <span className="text-xs text-slate-500 font-mono">({mostAwardedBadge?.count || 0} times)</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Top Achievement Hunter</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-base font-bold text-white truncate">{studentWithMostBadges?.studentName || 'N/A'}</span>
+                          <span className="text-xs text-slate-500 font-mono">({studentWithMostBadges?.count || 0} badges)</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Award Source Ratio</span>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-sm font-bold text-slate-300">Auto: {autoCount} / Manual: {manualCount}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                      <div className="p-5 border-b border-slate-800">
+                        <h3 className="text-lg font-display font-bold text-white">Academic Achievement Breakdown</h3>
+                        <p className="text-sm text-slate-400 mt-0.5">Award frequency distribution for all customized and automatic badges.</p>
+                      </div>
+                      {badgeDefinitions.length === 0 ? (
+                        <div className="p-10 text-center text-slate-500 italic">No custom badge definitions created.</div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
+                                <th className="p-4">Badge</th>
+                                <th className="p-4">Description</th>
+                                <th className="p-4">Trigger / Category</th>
+                                <th className="p-4 text-center">Awarded Frequency</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                              {badgeDefinitions.map((badge) => {
+                                const count = badgeCounts[badge.id]?.count || 0;
+                                return (
+                                  <tr key={badge.id} className="hover:bg-slate-850/30 transition-colors">
+                                    <td className="p-4 flex items-center gap-3">
+                                      <span className="text-2xl p-1.5 bg-slate-950 border border-slate-800 rounded-lg">{badge.icon || '⭐'}</span>
+                                      <span className="font-semibold text-white">{badge.name}</span>
+                                    </td>
+                                    <td className="p-4 text-sm text-slate-400">{badge.description}</td>
+                                    <td className="p-4 font-mono text-xs text-slate-400 uppercase">
+                                      {badge.trigger_type || badge.badge_type || 'Teacher Manual Choice'}
+                                    </td>
+                                    <td className="p-4 text-center font-mono text-base font-bold text-amber-500">{count}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {reportsSubTab === 'activity' && (() => {
+                const getFilteredLogs = () => {
+                  if (reportsActivityFilter === 'all') return activityLogs;
+                  if (reportsActivityFilter === 'points') return activityLogs.filter(log => log.points_delta !== 0);
+                  if (reportsActivityFilter === 'lives') return activityLogs.filter(log => log.lives_delta !== 0);
+                  if (reportsActivityFilter === 'tasks') {
+                    return activityLogs.filter(log =>
+                      log.action_type.startsWith('task_') ||
+                      log.action_type.startsWith('submission_') ||
+                      log.action_type.startsWith('review_')
+                    );
+                  }
+                  if (reportsActivityFilter === 'badges') return activityLogs.filter(log => log.action_type.startsWith('badge_'));
+                  if (reportsActivityFilter === 'meetings') return activityLogs.filter(log => log.action_type.startsWith('meeting_'));
+                  return activityLogs;
+                };
+
+                const filtered = getFilteredLogs();
+
+                return (
+                  <div className="space-y-6">
+                    {/* Filter buttons */}
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { id: 'all', label: 'All Logbook Entries' },
+                        { id: 'points', label: 'Points Only' },
+                        { id: 'lives', label: 'Lives Only' },
+                        { id: 'tasks', label: 'Tasks & Evaluations' },
+                        { id: 'badges', label: 'Badges Earned' },
+                        { id: 'meetings', label: 'Meetings Sessions' },
+                      ].map((filter) => (
+                        <button
+                          key={filter.id}
+                          onClick={() => setReportsActivityFilter(filter.id as any)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-colors cursor-pointer ${
+                            reportsActivityFilter === filter.id
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                      <div className="p-5 border-b border-slate-800">
+                        <h3 className="text-lg font-display font-bold text-white">Chronological Activity Stream</h3>
+                        <p className="text-sm text-slate-400 mt-0.5">Filter and review classroom developments, point audits, and system notifications.</p>
+                      </div>
+                      {filtered.length === 0 ? (
+                        <div className="p-10 text-center text-slate-500 italic">No activity logs matching the selected filter.</div>
+                      ) : (
+                        <div className="divide-y divide-slate-800/50 max-h-[500px] overflow-y-auto custom-scrollbar">
+                          {filtered.map((log) => (
+                            <div key={log.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-850/10 transition-colors">
+                              <div className="flex items-start gap-3">
+                                <span className={`text-xs font-bold font-mono px-2 py-1 rounded mt-0.5 ${
+                                  log.action_type.includes('task') || log.action_type.includes('submission') ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+                                  log.action_type.includes('badge') ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                  log.action_type.includes('meeting') ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                                  'bg-slate-850 text-slate-400 border border-slate-800'
+                                }`}>
+                                  {log.action_type.toUpperCase()}
+                                </span>
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-200">
+                                    {log.studentName ? `${log.studentName}: ` : ''}{log.reason || 'Classroom modification logged.'}
+                                  </p>
+                                  <span className="text-xs text-slate-500 font-mono">{new Date(log.created_at).toLocaleString()}</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 text-right">
+                                {log.points_delta !== 0 && (
+                                  <span className={`text-xs font-bold font-mono px-2.5 py-0.5 rounded ${log.points_delta > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                    {log.points_delta > 0 ? `+${log.points_delta}` : log.points_delta} pts
+                                  </span>
+                                )}
+                                {log.lives_delta !== 0 && (
+                                  <span className={`text-xs font-bold font-mono px-2.5 py-0.5 rounded ${log.lives_delta > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                    {log.lives_delta > 0 ? `+${log.lives_delta}` : log.lives_delta} ❤️
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
 
       {activeTab === 'settings' && (
         <div className="max-w-2xl bg-slate-900 border border-slate-800 rounded-xl p-6">
