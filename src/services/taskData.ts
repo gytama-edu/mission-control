@@ -745,6 +745,47 @@ export const fetchGroupTaskSubmissionsForTeacher = async (
   return processedSubmissions;
 };
 
+export const fetchGroupTaskSubmissions = async (
+  taskId: string,
+  classId: string
+): Promise<any[]> => {
+  const { data, error } = await supabase.rpc(
+    'fetch_group_task_submissions_for_teacher',
+    {
+      task_id_input: taskId,
+      class_id_input: classId,
+    }
+  );
+
+  if (error) throw error;
+
+  const groups = data || [];
+
+  const groupsWithSignedUrls = await Promise.all(
+    groups.map(async (group: any) => {
+      const attachmentsWithUrls = await Promise.all(
+        (group.attachments || []).map(async (attachment: any) => {
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from(attachment.storage_bucket || 'task-submissions')
+            .createSignedUrl(attachment.file_path, 60 * 10);
+
+          return {
+            ...attachment,
+            signed_url: signedError ? null : signedData?.signedUrl || null,
+          };
+        })
+      );
+
+      return {
+        ...group,
+        attachments: attachmentsWithUrls,
+      };
+    })
+  );
+
+  return groupsWithSignedUrls;
+};
+
 export const reviewGroupSubmission = async (
   submissionId: string,
   feedback: string,

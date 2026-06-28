@@ -346,21 +346,34 @@ export function ClassDetail({
     setSelectedSubmissionForReview(null);
     console.log('[DEBUG] handleOpenSubmissionsModal details:', {
       selectedTaskId: task.id,
+      selectedTaskType: task.task_type,
       currentClassId: classData.id
     });
     try {
       let subs;
       if (task.task_type === 'group') {
-        const rawSubs = await taskDb.fetchGroupTaskSubmissionsForTeacher(task.id, classData.id);
+        console.log('[DEBUG] Fetching group task submissions:', {
+          selectedTaskId: task.id,
+          selectedTaskType: task.task_type,
+          currentClassId: classData.id
+        });
+        const rawSubs = await taskDb.fetchGroupTaskSubmissions(task.id, classData.id);
+        console.log('[DEBUG] Group rows returned:', rawSubs.length, rawSubs);
         subs = rawSubs.map((s: any) => ({
           ...s,
           id: s.submission_id || s.group_id, // Stable ID for select/selection mapping
           studentName: s.group_name, // Renders group name instead of a student name
           isGroup: true,
-          status: s.status || 'not submitted',
-          created_at: s.created_at || null
+          status: s.submission_status || 'not submitted',
+          created_at: s.created_at || null,
+          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name)
         }));
       } else {
+        console.log('[DEBUG] Fetching individual task submissions:', {
+          selectedTaskId: task.id,
+          selectedTaskType: task.task_type,
+          currentClassId: classData.id
+        });
         subs = await taskDb.fetchTaskSubmissions(task.id, classData.id);
       }
 
@@ -370,8 +383,16 @@ export function ClassDetail({
       });
       setTaskSubmissions(subs);
     } catch (err: any) {
-      console.error('[DEBUG] handleOpenSubmissionsModal fetch error:', err);
-      setSubmissionsError('Failed to fetch submissions: ' + err.message);
+      console.error('[DEBUG] handleOpenSubmissionsModal fetch error:', err, {
+        selectedTaskId: task.id,
+        selectedTaskType: task.task_type,
+        currentClassId: classData.id
+      });
+      if (task.task_type === 'group') {
+        setSubmissionsError('Failed to load group submissions.');
+      } else {
+        setSubmissionsError('Failed to load submissions: ' + err.message);
+      }
     } finally {
       setIsFetchingSubmissions(false);
     }
@@ -409,16 +430,28 @@ export function ClassDetail({
       // Refresh list
       let subs;
       if (selectedTaskForSubmissions.task_type === 'group') {
-        const rawSubs = await taskDb.fetchGroupTaskSubmissionsForTeacher(selectedTaskForSubmissions.id, classData.id);
+        console.log('[DEBUG] SaveReview Refresh group submissions:', {
+          selectedTaskId: selectedTaskForSubmissions.id,
+          selectedTaskType: selectedTaskForSubmissions.task_type,
+          currentClassId: classData.id
+        });
+        const rawSubs = await taskDb.fetchGroupTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+        console.log('[DEBUG] Group rows returned:', rawSubs.length, rawSubs);
         subs = rawSubs.map((s: any) => ({
           ...s,
           id: s.submission_id || s.group_id,
           studentName: s.group_name,
           isGroup: true,
-          status: s.status || 'not submitted',
-          created_at: s.created_at || null
+          status: s.submission_status || 'not submitted',
+          created_at: s.created_at || null,
+          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name)
         }));
       } else {
+        console.log('[DEBUG] SaveReview Refresh individual submissions:', {
+          selectedTaskId: selectedTaskForSubmissions.id,
+          selectedTaskType: selectedTaskForSubmissions.task_type,
+          currentClassId: classData.id
+        });
         subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
       }
       setTaskSubmissions(subs);
@@ -429,6 +462,11 @@ export function ClassDetail({
       
       alert("Review saved and points awarded.");
     } catch (err: any) {
+      console.error('[DEBUG] handleSaveReview error:', err, {
+        selectedTaskId: selectedTaskForSubmissions.id,
+        selectedTaskType: selectedTaskForSubmissions.task_type,
+        currentClassId: classData.id
+      });
       setSubmissionsError('Failed to save review: ' + err.message);
     } finally {
       setIsSavingReview(false);
@@ -2532,21 +2570,34 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     setSubmissionsError(null);
                     console.log('[DEBUG] Refresh button details:', {
                       selectedTaskId: selectedTaskForSubmissions.id,
+                      selectedTaskType: selectedTaskForSubmissions.task_type,
                       currentClassId: classData.id
                     });
                     try {
                       let subs;
                       if (selectedTaskForSubmissions.task_type === 'group') {
-                        const rawSubs = await taskDb.fetchGroupTaskSubmissionsForTeacher(selectedTaskForSubmissions.id, classData.id);
+                        console.log('[DEBUG] Refresh click group submissions:', {
+                          selectedTaskId: selectedTaskForSubmissions.id,
+                          selectedTaskType: selectedTaskForSubmissions.task_type,
+                          currentClassId: classData.id
+                        });
+                        const rawSubs = await taskDb.fetchGroupTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+                        console.log('[DEBUG] Group rows returned:', rawSubs.length, rawSubs);
                         subs = rawSubs.map((s: any) => ({
                           ...s,
                           id: s.submission_id || s.group_id,
                           studentName: s.group_name,
                           isGroup: true,
-                          status: s.status || 'not submitted',
-                          created_at: s.created_at || null
+                          status: s.submission_status || 'not submitted',
+                          created_at: s.created_at || null,
+                          members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name)
                         }));
                       } else {
+                        console.log('[DEBUG] Refresh click individual submissions:', {
+                          selectedTaskId: selectedTaskForSubmissions.id,
+                          selectedTaskType: selectedTaskForSubmissions.task_type,
+                          currentClassId: classData.id
+                        });
                         subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
                       }
                       console.log('[DEBUG] Refresh successfully loaded submissions:', {
@@ -2559,8 +2610,16 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         setSelectedSubmissionForReview(updated || null);
                       }
                     } catch (err: any) {
-                      console.error('[DEBUG] Refresh fetch error:', err);
-                      setSubmissionsError('Failed to refresh: ' + err.message);
+                      console.error('[DEBUG] Refresh click fetch error:', err, {
+                        selectedTaskId: selectedTaskForSubmissions.id,
+                        selectedTaskType: selectedTaskForSubmissions.task_type,
+                        currentClassId: classData.id
+                      });
+                      if (selectedTaskForSubmissions.task_type === 'group') {
+                        setSubmissionsError('Failed to load group submissions.');
+                      } else {
+                        setSubmissionsError('Failed to refresh: ' + err.message);
+                      }
                     } finally {
                       setIsFetchingSubmissions(false);
                     }
@@ -2590,7 +2649,21 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               {isFetchingSubmissions ? (
                 <div className="py-20 text-center text-slate-500 text-sm">
                   <Loader2 className="animate-spin mx-auto mb-2 text-purple-400" size={24} />
-                  Loading task submissions...
+                  {selectedTaskForSubmissions.task_type === 'group' ? 'Loading group submissions...' : 'Loading task submissions...'}
+                </div>
+              ) : submissionsError ? (
+                <div className="py-20 text-center space-y-4 max-w-md mx-auto">
+                  <div className="w-16 h-16 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
+                    <FileText size={28} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">
+                      {selectedTaskForSubmissions.task_type === 'group' ? 'Failed to load group submissions.' : 'Failed to load submissions.'}
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                      {submissionsError}
+                    </p>
+                  </div>
                 </div>
               ) : taskSubmissions.length === 0 ? (
                 <div className="py-20 text-center space-y-4 max-w-md mx-auto">

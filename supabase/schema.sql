@@ -1361,67 +1361,71 @@ create or replace function public.fetch_group_task_submissions_for_teacher(
 returns table (
   group_id uuid,
   group_name text,
-  members jsonb,
+  group_members jsonb,
   submission_id uuid,
+  task_id uuid,
+  class_id uuid,
   submitted_by_student_id uuid,
   submitted_by_student_name text,
+  submitted_by_student_nickname text,
   submission_text text,
-  status text,
-  awarded_points integer,
+  submission_status text,
   teacher_feedback text,
-  reviewed_at timestamptz,
-  reviewed_by uuid,
+  awarded_points integer,
   created_at timestamptz,
   updated_at timestamptz,
   attachments jsonb
 )
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = public
 as $$
-declare
-  v_teacher_id uuid;
 begin
-  -- 1. Check if class exists and current user is the owner
-  select teacher_id
-  into v_teacher_id
-  from public.classes
-  where id = class_id_input;
-
-  if not found then
-    raise exception 'Class not found.';
-  end if;
-
-  if v_teacher_id is not null and v_teacher_id <> auth.uid() then
-    raise exception 'You do not own this class.';
+  if not exists (
+    select 1
+    from public.classes c
+    where c.id = class_id_input
+      and c.teacher_id = auth.uid()
+  ) then
+    raise exception 'You do not own this class';
   end if;
 
   return query
-  with group_members_agg as (
-    select
-      tgm.task_group_id,
-      coalesce(
-        jsonb_agg(
+  select
+    tg.id as group_id,
+    tg.name as group_name,
+    coalesce(
+      (
+        select jsonb_agg(
           jsonb_build_object(
-            'id', s.id,
+            'student_id', s.id,
             'name', s.name,
-            'nickname', s.nickname,
-            'points', s.points,
-            'lives', s.lives
-          ) order by s.name
-        ),
-        '[]'::jsonb
-      ) as members_list
-    from public.task_group_members tgm
-    join public.students s on s.id = tgm.student_id
-    where tgm.task_id = task_id_input
-    group by tgm.task_group_id
-  ),
-  submission_attachments_agg as (
-    select
-      sa.submission_id,
-      coalesce(
-        jsonb_agg(
+            'nickname', s.nickname
+          )
+          order by s.name
+        )
+        from public.task_group_members tgm
+        join public.students s
+          on s.id = tgm.student_id
+        where tgm.task_group_id = tg.id
+      ),
+      '[]'::jsonb
+    ) as group_members,
+    ts.id as submission_id,
+    ts.task_id,
+    tg.class_id,
+    ts.submitted_by_student_id,
+    submitter.name as submitted_by_student_name,
+    submitter.nickname as submitted_by_student_nickname,
+    ts.submission_text,
+    ts.status as submission_status,
+    ts.teacher_feedback,
+    ts.awarded_points,
+    ts.created_at,
+    ts.updated_at,
+    coalesce(
+      (
+        select jsonb_agg(
           jsonb_build_object(
             'id', sa.id,
             'file_name', sa.file_name,
@@ -1430,37 +1434,23 @@ begin
             'file_size_bytes', sa.file_size_bytes,
             'storage_bucket', sa.storage_bucket,
             'uploaded_at', sa.uploaded_at
-          ) order by sa.uploaded_at
-        ),
-        '[]'::jsonb
-      ) as attachments_list
-    from public.submission_attachments sa
-    where sa.task_id = task_id_input
-    group by sa.submission_id
-  )
-  select
-    tg.id as group_id,
-    tg.name as group_name,
-    coalesce(gm.members_list, '[]'::jsonb) as members,
-    ts.id as submission_id,
-    ts.submitted_by_student_id,
-    sub_s.name as submitted_by_student_name,
-    ts.submission_text,
-    ts.status,
-    ts.awarded_points,
-    ts.teacher_feedback,
-    ts.reviewed_at,
-    ts.reviewed_by,
-    ts.created_at,
-    ts.updated_at,
-    coalesce(sa.attachments_list, '[]'::jsonb) as attachments
+          )
+          order by sa.uploaded_at desc
+        )
+        from public.submission_attachments sa
+        where sa.submission_id = ts.id
+      ),
+      '[]'::jsonb
+    ) as attachments
   from public.task_groups tg
-  left join group_members_agg gm on gm.task_group_id = tg.id
-  left join public.task_submissions ts on ts.task_id = task_id_input and ts.task_group_id = tg.id
-  left join public.students sub_s on sub_s.id = ts.submitted_by_student_id
-  left join submission_attachments_agg sa on sa.submission_id = ts.id
+  left join public.task_submissions ts
+    on ts.task_group_id = tg.id
+    and ts.task_id = task_id_input
+  left join public.students submitter
+    on submitter.id = ts.submitted_by_student_id
   where tg.task_id = task_id_input
-  order by tg.name;
+    and tg.class_id = class_id_input
+  order by tg.created_at asc;
 end;
 $$;
 
