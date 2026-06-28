@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2 } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
+import * as badgeDb from '../services/badgeData';
 
 interface ClassDetailProps {
   classData: ClassData;
@@ -37,7 +38,174 @@ export function ClassDetail({
   onEndMeeting
 }: ClassDetailProps) {
   const [newStudentName, setNewStudentName] = useState('');
-  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings' | 'badges'>('roster');
+
+  // Badge States
+  const [badgeDefinitions, setBadgeDefinitions] = useState<any[]>([]);
+  const [studentBadges, setStudentBadges] = useState<any[]>([]);
+  const [isBadgesLoading, setIsBadgesLoading] = useState(false);
+  const [isBadgesTableMissing, setIsBadgesTableMissing] = useState(false);
+  const [copiedBadgesSql, setCopiedBadgesSql] = useState(false);
+  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
+  const [editingBadge, setEditingBadge] = useState<any | null>(null);
+  
+  // Badge Form States
+  const [badgeFormName, setBadgeFormName] = useState('');
+  const [badgeFormDescription, setBadgeFormDescription] = useState('');
+  const [badgeFormIcon, setBadgeFormIcon] = useState('⭐');
+  const [badgeFormType, setBadgeFormType] = useState<'manual' | 'automatic'>('manual');
+  const [badgeFormTrigger, setBadgeFormTrigger] = useState<string>('teacher_choice');
+  const [badgeFormPointsThreshold, setBadgeFormPointsThreshold] = useState<number | ''>('');
+  const [badgeFormTaskCount, setBadgeFormTaskCount] = useState<number | ''>('');
+  const [badgeFormGroupTaskCount, setBadgeFormGroupTaskCount] = useState<number | ''>('');
+
+  // Manual Awarding Modal States
+  const [isAwardModalOpen, setIsAwardModalOpen] = useState(false);
+  const [awardSelectedStudentId, setAwardSelectedStudentId] = useState('');
+  const [awardSelectedBadgeId, setAwardSelectedBadgeId] = useState('');
+  const [awardReason, setAwardReason] = useState('');
+  const [isAwardingBadge, setIsAwardingBadge] = useState(false);
+  const [badgeAwardError, setBadgeAwardError] = useState('');
+
+  const loadBadgesData = async () => {
+    setIsBadgesLoading(true);
+    try {
+      const defs = await badgeDb.fetchBadgeDefinitions(classData.id);
+      setBadgeDefinitions(defs);
+      const sBadges = await badgeDb.fetchStudentBadges(classData.id);
+      setStudentBadges(sBadges);
+      setIsBadgesTableMissing(false);
+    } catch (err: any) {
+      if (err && (err.code === 'PGRST205' || (err.message && (err.message.includes('badge_definitions') || err.message.includes('student_badges')) && err.message.includes('schema cache')))) {
+        setIsBadgesTableMissing(true);
+        console.warn('Badges tables are missing in Supabase. Badge management is disabled until migration is run.');
+      } else {
+        console.error('Failed to load badges data:', err);
+      }
+    } finally {
+      setIsBadgesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBadgesData();
+  }, [classData.id, activeTab]);
+
+  const handleAddStarterBadges = async () => {
+    if (confirm('Create the default starter badge suite (7 badges) for this class?')) {
+      setIsBadgesLoading(true);
+      try {
+        await badgeDb.addStarterBadges(classData.id, classData.teacherId);
+        await loadBadgesData();
+      } catch (err: any) {
+        alert(err.message || 'Failed to add starter badges.');
+      } finally {
+        setIsBadgesLoading(false);
+      }
+    }
+  };
+
+  const handleOpenBadgeModal = (badge: any = null) => {
+    if (badge) {
+      setEditingBadge(badge);
+      setBadgeFormName(badge.name);
+      setBadgeFormDescription(badge.description || '');
+      setBadgeFormIcon(badge.icon || '⭐');
+      setBadgeFormType(badge.badge_type as 'manual' | 'automatic');
+      setBadgeFormTrigger(badge.trigger_key || 'teacher_choice');
+      setBadgeFormPointsThreshold(badge.points_threshold ?? '');
+      setBadgeFormTaskCount(badge.task_count_threshold ?? '');
+      setBadgeFormGroupTaskCount(badge.group_task_count_threshold ?? '');
+    } else {
+      setEditingBadge(null);
+      setBadgeFormName('');
+      setBadgeFormDescription('');
+      setBadgeFormIcon('⭐');
+      setBadgeFormType('manual');
+      setBadgeFormTrigger('teacher_choice');
+      setBadgeFormPointsThreshold('');
+      setBadgeFormTaskCount('');
+      setBadgeFormGroupTaskCount('');
+    }
+    setIsBadgeModalOpen(true);
+  };
+
+  const handleSaveBadgeDefinition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!badgeFormName.trim()) return;
+
+    setIsBadgesLoading(true);
+    try {
+      const badgeDataObj = {
+        class_id: classData.id,
+        teacher_id: classData.teacherId,
+        name: badgeFormName.trim(),
+        description: badgeFormDescription.trim() || null,
+        icon: badgeFormIcon,
+        badge_type: badgeFormType,
+        trigger_key: badgeFormType === 'automatic' ? badgeFormTrigger : 'teacher_choice',
+        points_threshold: (badgeFormType === 'automatic' && badgeFormTrigger === 'points_threshold') ? Number(badgeFormPointsThreshold) : null,
+        task_count_threshold: (badgeFormType === 'automatic' && badgeFormTrigger === 'individual_tasks_completed') ? Number(badgeFormTaskCount) : null,
+        group_task_count_threshold: (badgeFormType === 'automatic' && badgeFormTrigger === 'group_tasks_completed') ? Number(badgeFormGroupTaskCount) : null,
+        is_active: true
+      };
+
+      if (editingBadge) {
+        await badgeDb.updateBadgeDefinition(editingBadge.id, classData.id, badgeDataObj);
+      } else {
+        await badgeDb.createBadgeDefinition(badgeDataObj);
+      }
+
+      setIsBadgeModalOpen(false);
+      await loadBadgesData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to save badge definition.');
+    } finally {
+      setIsBadgesLoading(false);
+    }
+  };
+
+  const handleDeleteBadgeDefinition = async (id: string, name: string) => {
+    if (confirm(`Are you sure you want to delete "${name}"?\nAll students who earned this badge will lose it. This cannot be undone.`)) {
+      setIsBadgesLoading(true);
+      try {
+        await badgeDb.deleteBadgeDefinition(id, classData.id, name);
+        await loadBadgesData();
+      } catch (err: any) {
+        alert(err.message || 'Failed to delete badge definition.');
+      } finally {
+        setIsBadgesLoading(false);
+      }
+    }
+  };
+
+  const handleOpenAwardModal = (studentId: string = '') => {
+    setAwardSelectedStudentId(studentId);
+    setAwardSelectedBadgeId('');
+    setAwardReason('');
+    setBadgeAwardError('');
+    setIsAwardModalOpen(true);
+  };
+
+  const handleAwardBadge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!awardSelectedStudentId || !awardSelectedBadgeId) {
+      setBadgeAwardError('Please select both a student and a badge.');
+      return;
+    }
+
+    setIsAwardingBadge(true);
+    setBadgeAwardError('');
+    try {
+      await badgeDb.awardBadgeManually(awardSelectedBadgeId, awardSelectedStudentId, awardReason.trim());
+      setIsAwardModalOpen(false);
+      await loadBadgesData();
+    } catch (err: any) {
+      setBadgeAwardError(err.message || 'Failed to award badge.');
+    } finally {
+      setIsAwardingBadge(false);
+    }
+  };
 
 
   const [selectedReason, setSelectedReason] = useState('');
@@ -772,6 +940,17 @@ export function ClassDetail({
           )}
         </button>
         <button
+          onClick={() => setActiveTab('badges')}
+          className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'badges' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <Award size={16} /> Badges & Achievements
+          {activeTab === 'badges' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('settings')}
           className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'settings' ? 'text-white' : 'text-slate-500 hover:text-slate-300'
@@ -889,16 +1068,25 @@ export function ClassDetail({
                         <Key size={10} /> PIN: {student.pin}
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setEditingStudentId(student.id);
-                        setEditStudentName(student.name);
-                        setEditStudentNickname(student.nickname || '');
-                      }}
-                      className="text-slate-500 hover:text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Edit2 size={16} />
-                    </button>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => handleOpenAwardModal(student.id)}
+                        className="text-slate-500 hover:text-amber-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Award Badge"
+                      >
+                        <Award size={16} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingStudentId(student.id);
+                          setEditStudentName(student.name);
+                          setEditStudentNickname(student.nickname || '');
+                        }}
+                        className="text-slate-500 hover:text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2324,6 +2512,450 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
         </div>
       )}
 
+      {activeTab === 'badges' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Action Row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <div>
+              <h2 className="text-xl font-display font-bold text-white flex items-center gap-2">
+                <Award className="text-amber-500" size={24} />
+                Badges & Achievements
+              </h2>
+              <p className="text-sm text-slate-400 mt-1">
+                Configure passive automatic unlocks or award manual credentials to recognize active cockpit flight progress.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0 flex-wrap">
+              {badgeDefinitions.length === 0 && (
+                <button
+                  type="button"
+                  onClick={handleAddStarterBadges}
+                  className="bg-slate-850 hover:bg-slate-800 text-amber-400 hover:text-amber-300 border border-amber-500/20 px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  ✨ Load Starter Suite
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleOpenBadgeModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 shadow-md cursor-pointer"
+              >
+                <Plus size={16} /> Create Custom Badge
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenAwardModal('')}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 shadow-md cursor-pointer"
+              >
+                <Award size={16} /> Award Student Manually
+              </button>
+            </div>
+          </div>
+
+          {isBadgesTableMissing ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-amber-500/10 border border-amber-500/25 p-3 rounded-xl shrink-0">
+                  <AlertTriangle className="text-amber-500 animate-pulse" size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-display font-bold text-white">Database Migration Required</h3>
+                  <p className="text-sm text-slate-400 mt-1 leading-relaxed">
+                    To enable badges, automatic achievements, and credential tracking, you need to execute a database migration inside your Supabase SQL editor.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/60 rounded-xl border border-slate-850 p-5 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-xs font-mono font-bold text-slate-400 tracking-wider uppercase block">Migration Script</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sqlBlock = `-- Phase 8: Badges and Achievements
+create table if not exists public.badge_definitions (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid references auth.users(id) on delete cascade,
+  class_id uuid references public.classes(id) on delete cascade,
+  name text not null,
+  description text,
+  icon text,
+  badge_type text not null default 'manual',
+  trigger_key text,
+  points_threshold integer,
+  task_count_threshold integer,
+  group_task_count_threshold integer,
+  is_active boolean not null default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.student_badges (
+  id uuid primary key default gen_random_uuid(),
+  badge_id uuid not null references public.badge_definitions(id) on delete cascade,
+  class_id uuid not null references public.classes(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
+  awarded_by uuid references auth.users(id) on delete set null,
+  awarded_reason text,
+  source text not null default 'manual',
+  metadata jsonb default '{}'::jsonb,
+  awarded_at timestamptz default now(),
+  unique (badge_id, student_id)
+);
+
+alter table public.badge_definitions enable row level security;
+alter table public.student_badges enable row level security;
+
+create policy "Teachers can manage badge_definitions for their classes"
+  on public.badge_definitions for all to authenticated
+  using (exists (select 1 from public.classes where classes.id = badge_definitions.class_id and classes.teacher_id = auth.uid()))
+  with check (exists (select 1 from public.classes where classes.id = badge_definitions.class_id and classes.teacher_id = auth.uid()));
+
+create policy "Anyone can select badge_definitions (read-only for students/public)"
+  on public.badge_definitions for select using (is_active = true);
+
+create policy "Teachers can manage student_badges for their classes"
+  on public.student_badges for all to authenticated
+  using (exists (select 1 from public.classes where classes.id = student_badges.class_id and classes.teacher_id = auth.uid()))
+  with check (exists (select 1 from public.classes where classes.id = student_badges.class_id and classes.teacher_id = auth.uid()));
+
+create policy "Anyone can select student_badges (read-only for students/public)"
+  on public.student_badges for select using (true);
+
+create or replace function public.award_badge_to_student(
+  badge_id_input uuid,
+  student_id_input uuid,
+  reason_input text
+)
+returns uuid
+language plpgsql
+security definer
+as $$
+declare
+  v_class_id uuid;
+  v_teacher_id uuid;
+  v_badge_name text;
+  v_student_name text;
+  v_award_id uuid;
+begin
+  select class_id, teacher_id, name into v_class_id, v_teacher_id, v_badge_name
+  from public.badge_definitions
+  where id = badge_id_input;
+
+  if v_class_id is null then
+    raise exception 'Badge definition not found';
+  end if;
+
+  if auth.uid() != v_teacher_id then
+    raise exception 'Unauthorized to award this badge';
+  end if;
+
+  select name into v_student_name
+  from public.students
+  where id = student_id_input and class_id = v_class_id;
+
+  if v_student_name is null then
+    raise exception 'Student does not belong to this class';
+  end if;
+
+  insert into public.student_badges (
+    badge_id, class_id, student_id, awarded_by, awarded_reason, source
+  ) values (
+    badge_id_input, v_class_id, student_id_input, auth.uid(), reason_input, 'manual'
+  )
+  on conflict (badge_id, student_id) do nothing
+  returning id into v_award_id;
+
+  if v_award_id is not null then
+    insert into public.activity_logs (
+      class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+    ) values (
+      v_class_id, 'badge_awarded', student_id_input, 0, 0,
+      'Awarded badge: ' || v_badge_name || coalesce(' - ' || reason_input, ''),
+      jsonb_build_object('badge_id', badge_id_input, 'badge_name', v_badge_name, 'reason', reason_input, 'student_name', v_student_name)
+    );
+  end if;
+
+  return v_award_id;
+end;
+$$;
+
+grant execute on function public.award_badge_to_student(uuid, uuid, text) to authenticated;
+
+alter publication supabase_realtime add table public.student_badges;`;
+                      navigator.clipboard.writeText(sqlBlock);
+                      setCopiedBadgesSql(true);
+                      setTimeout(() => setCopiedBadgesSql(false), 2000);
+                    }}
+                    className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all shadow cursor-pointer"
+                  >
+                    {copiedBadgesSql ? 'Copied!' : 'Copy SQL Script'}
+                  </button>
+                </div>
+
+                <pre className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 font-mono overflow-x-auto max-h-72 leading-relaxed scrollbar-thin">
+                  {`CREATE TABLE IF NOT EXISTS public.badge_definitions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  class_id uuid REFERENCES public.classes(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  description text,
+  icon text,
+  badge_type text NOT NULL DEFAULT 'manual',
+  trigger_key text,
+  points_threshold integer,
+  task_count_threshold integer,
+  group_task_count_threshold integer,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.student_badges (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  badge_id uuid NOT NULL REFERENCES public.badge_definitions(id) ON DELETE CASCADE,
+  class_id uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  awarded_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  awarded_reason text,
+  source text NOT NULL DEFAULT 'manual',
+  metadata jsonb DEFAULT '{}'::jsonb,
+  awarded_at timestamptz DEFAULT now(),
+  UNIQUE (badge_id, student_id)
+);
+
+ALTER TABLE public.badge_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.student_badges ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Teachers can manage badge_definitions for their classes"
+  ON public.badge_definitions FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.classes WHERE classes.id = badge_definitions.class_id AND classes.teacher_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.classes WHERE classes.id = badge_definitions.class_id AND classes.teacher_id = auth.uid()));
+
+CREATE POLICY "Anyone can select badge_definitions (read-only for students/public)"
+  ON public.badge_definitions FOR SELECT USING (is_active = true);
+
+CREATE POLICY "Teachers can manage student_badges for their classes"
+  ON public.student_badges FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.classes WHERE classes.id = student_badges.class_id AND classes.teacher_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.classes WHERE classes.id = student_badges.class_id AND classes.teacher_id = auth.uid()));
+
+CREATE POLICY "Anyone can select student_badges (read-only for students/public)"
+  ON public.student_badges FOR SELECT USING (true);
+
+CREATE OR REPLACE FUNCTION public.award_badge_to_student(
+  badge_id_input uuid,
+  student_id_input uuid,
+  reason_input text
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_class_id uuid;
+  v_teacher_id uuid;
+  v_badge_name text;
+  v_student_name text;
+  v_award_id uuid;
+BEGIN
+  SELECT class_id, teacher_id, name INTO v_class_id, v_teacher_id, v_badge_name
+  FROM public.badge_definitions
+  WHERE id = badge_id_input;
+
+  IF v_class_id IS NULL THEN
+    RAISE EXCEPTION 'Badge definition not found';
+  END IF;
+
+  IF auth.uid() != v_teacher_id THEN
+    RAISE EXCEPTION 'Unauthorized to award this badge';
+  END IF;
+
+  SELECT name INTO v_student_name
+  FROM public.students
+  WHERE id = student_id_input AND class_id = v_class_id;
+
+  IF v_student_name IS NULL THEN
+    RAISE EXCEPTION 'Student does not belong to this class';
+  END IF;
+
+  INSERT INTO public.student_badges (
+    badge_id, class_id, student_id, awarded_by, awarded_reason, source
+  ) VALUES (
+    badge_id_input, v_class_id, student_id_input, auth.uid(), reason_input, 'manual'
+  )
+  ON CONFLICT (badge_id, student_id) DO NOTHING
+  RETURNING id INTO v_award_id;
+
+  IF v_award_id IS NOT NULL THEN
+    INSERT INTO public.activity_logs (
+      class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+    ) VALUES (
+      v_class_id, 'badge_awarded', student_id_input, 0, 0,
+      'Awarded badge: ' || v_badge_name || COALESCE(' - ' || reason_input, ''),
+      jsonb_build_object('badge_id', badge_id_input, 'badge_name', v_badge_name, 'reason', reason_input, 'student_name', v_student_name)
+    );
+  END IF;
+
+  RETURN v_award_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.award_badge_to_student(uuid, uuid, text) TO authenticated;
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
+                </pre>
+              </div>
+            </div>
+          ) : (
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Left Column: Badge Definitions (2 cols on large screen) */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+                  <h3 className="text-lg font-display font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    🏅 Badge Definitions ({badgeDefinitions.length})
+                  </h3>
+
+                  {isBadgesLoading && badgeDefinitions.length === 0 ? (
+                    <div className="py-8 text-center text-slate-500 text-sm">Scanning database definitions...</div>
+                  ) : badgeDefinitions.length === 0 ? (
+                    <div className="py-12 px-4 text-center bg-slate-950/40 rounded-xl border border-slate-850 space-y-3">
+                      <div className="text-slate-400 font-mono text-sm">No Badges Configured</div>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed italic">
+                        There are currently no custom or automatic credentials set up for this classroom. Tap "Load Starter Suite" above to launch instantly with default options.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {badgeDefinitions.map((badge) => {
+                        let ruleLabel = 'Manual Award Only';
+                        if (badge.badge_type === 'automatic') {
+                          if (badge.trigger_key === 'first_submission') {
+                            ruleLabel = 'Automatic: First Mission Submit';
+                          } else if (badge.trigger_key === 'first_reviewed_task') {
+                            ruleLabel = 'Automatic: First Reviewed Task';
+                          } else if (badge.trigger_key === 'points_threshold') {
+                            ruleLabel = `Automatic: Reach ${badge.points_threshold} Points`;
+                          } else if (badge.trigger_key === 'individual_tasks_completed') {
+                            ruleLabel = `Automatic: Complete ${badge.task_count_threshold} Individual Tasks`;
+                          } else if (badge.trigger_key === 'group_tasks_completed') {
+                            ruleLabel = `Automatic: Complete ${badge.group_task_count_threshold} Group Tasks`;
+                          } else if (badge.trigger_key === 'comeback_from_zero_lives') {
+                            ruleLabel = 'Automatic: Recover from Zero Lives';
+                          } else if (badge.trigger_key === 'no_lives_lost_meeting') {
+                            ruleLabel = 'Automatic: Complete Meeting with Perfect Lives';
+                          } else {
+                            ruleLabel = `Automatic Trigger: ${badge.trigger_key}`;
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={badge.id}
+                            className="bg-slate-950 border border-slate-850/80 rounded-xl p-4 flex flex-col justify-between hover:border-slate-800 transition-colors"
+                          >
+                            <div className="space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-3xl p-1 bg-slate-900 rounded-lg shrink-0" role="img" aria-label={badge.name}>
+                                  {badge.icon || '🏅'}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenBadgeModal(badge)}
+                                    className="text-slate-500 hover:text-white p-1 hover:bg-slate-900 rounded transition-colors cursor-pointer"
+                                    title="Edit Definition"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteBadgeDefinition(badge.id, badge.name)}
+                                    className="text-slate-500 hover:text-red-400 p-1 hover:bg-slate-900 rounded transition-colors cursor-pointer"
+                                    title="Delete Definition"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-white text-sm leading-tight">{badge.name}</h4>
+                                {badge.description && (
+                                  <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">{badge.description}</p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="border-t border-slate-900 mt-4 pt-3 flex flex-col gap-1">
+                              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Criteria</div>
+                              <div className="text-xs text-amber-500 font-medium font-sans truncate" title={ruleLabel}>
+                                {ruleLabel}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Recent Award History */}
+              <div className="space-y-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+                  <h3 className="text-lg font-display font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    📜 Recent Award History ({studentBadges.length})
+                  </h3>
+
+                  {isBadgesLoading && studentBadges.length === 0 ? (
+                    <div className="py-6 text-center text-slate-500 text-sm">Reading history records...</div>
+                  ) : studentBadges.length === 0 ? (
+                    <div className="py-8 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-850">
+                      No badges have been awarded to student profiles yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                      {studentBadges.map((sb) => {
+                        const student = classData.students?.find((s: any) => s.id === sb.student_id);
+                        const studentName = student ? (student.nickname ? `${student.name} (${student.nickname})` : student.name) : 'Unknown Student';
+                        const badge = sb.badge;
+
+                        return (
+                          <div key={sb.id} className="bg-slate-950 border border-slate-850 rounded-xl p-3.5 space-y-2 animate-fade-in">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-2xl shrink-0">{badge?.icon || '🏅'}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-bold text-white truncate">{studentName}</div>
+                                <div className="text-[11px] text-purple-400 font-medium truncate mt-0.5">
+                                  Earned <span className="font-semibold text-white">{badge?.name || 'Deleted Badge'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {sb.awarded_reason && (
+                              <div className="bg-slate-900/60 p-2 rounded text-[10px] text-slate-400 italic leading-relaxed border border-slate-850/40">
+                                "{sb.awarded_reason}"
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono border-t border-slate-900/40 pt-2 font-sans">
+                              <span className="capitalize text-slate-400">
+                                {sb.source === 'automatic' ? '🤖 System Triggered' : '👨‍🏫 Teacher Awarded'}
+                              </span>
+                              <span>{new Date(sb.awarded_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Start Meeting Modal */}
       {isMeetingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -3126,6 +3758,279 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Create / Edit Badge Modal */}
+      {isBadgeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
+                <Award className="text-amber-500" size={18} />
+                {editingBadge ? 'Edit Badge Definition' : 'Create Custom Badge'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsBadgeModalOpen(false)}
+                className="text-slate-500 hover:text-white p-1 hover:bg-slate-850 rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBadgeDefinition} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Badge Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Flight Captain"
+                  value={badgeFormName}
+                  onChange={(e) => setBadgeFormName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-650"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Awarded to pilots demonstrating outstanding cockpit management."
+                  value={badgeFormDescription}
+                  onChange={(e) => setBadgeFormDescription(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-650 resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Badge Icon (Emoji)</label>
+                  <select
+                    value={badgeFormIcon}
+                    onChange={(e) => setBadgeFormIcon(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="⭐">⭐ Star</option>
+                    <option value="🚀">🚀 Rocket</option>
+                    <option value="👑">👑 Crown</option>
+                    <option value="🏆">🏆 Trophy</option>
+                    <option value="🎖️">🎖️ Medal</option>
+                    <option value="🏅">🏅 Medal 2</option>
+                    <option value="🤝">🤝 Teamwork</option>
+                    <option value="🔥">🔥 Fire</option>
+                    <option value="🧠">🧠 Brain</option>
+                    <option value="🛸">🛸 UFO</option>
+                    <option value="🪐">🪐 Planet</option>
+                    <option value="🦾">🦾 Cyborg</option>
+                    <option value="🛡️">🛡️ Shield</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Awarding Type</label>
+                  <select
+                    value={badgeFormType}
+                    onChange={(e) => {
+                      setBadgeFormType(e.target.value as 'manual' | 'automatic');
+                      if (e.target.value === 'manual') {
+                        setBadgeFormTrigger('teacher_choice');
+                      } else {
+                        setBadgeFormTrigger('points_threshold');
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="manual">Manual (By Teacher)</option>
+                    <option value="automatic">Automatic (System Triggered)</option>
+                  </select>
+                </div>
+              </div>
+
+              {badgeFormType === 'automatic' && (
+                <div className="space-y-4 bg-slate-950/60 p-4 rounded-xl border border-slate-850 animate-fade-in">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Automatic Trigger Criterion</label>
+                    <select
+                      value={badgeFormTrigger}
+                      onChange={(e) => setBadgeFormTrigger(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    >
+                      <option value="points_threshold">Points Threshold Reached</option>
+                      <option value="individual_tasks_completed">Individual Task Count Completed</option>
+                      <option value="group_tasks_completed">Group Task Count Completed</option>
+                      <option value="first_submission">First Mission Task Submitted</option>
+                      <option value="first_reviewed_task">First Task Reviewed/Graded by Teacher</option>
+                      <option value="no_lives_lost_meeting">Completed a Meeting with Perfect Lives</option>
+                      <option value="comeback_from_zero_lives">Zero Lives Comeback</option>
+                    </select>
+                  </div>
+
+                  {badgeFormTrigger === 'points_threshold' && (
+                    <div className="animate-fade-in">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Target Points Required</label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        placeholder="e.g. 100"
+                        value={badgeFormPointsThreshold}
+                        onChange={(e) => setBadgeFormPointsThreshold(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {badgeFormTrigger === 'individual_tasks_completed' && (
+                    <div className="animate-fade-in">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Individual Tasks Required</label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        placeholder="e.g. 5"
+                        value={badgeFormTaskCount}
+                        onChange={(e) => setBadgeFormTaskCount(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {badgeFormTrigger === 'group_tasks_completed' && (
+                    <div className="animate-fade-in">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Group Tasks Required</label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        placeholder="e.g. 3"
+                        value={badgeFormGroupTaskCount}
+                        onChange={(e) => setBadgeFormGroupTaskCount(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBadgeModalOpen(false)}
+                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 px-5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-all shadow-md cursor-pointer"
+                >
+                  Save Definition
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Awarding Modal */}
+      {isAwardModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
+                <Award className="text-amber-500" size={18} />
+                Award Badge to Student
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAwardModalOpen(false)}
+                className="text-slate-500 hover:text-white p-1 hover:bg-slate-850 rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAwardBadge} className="p-6 space-y-4">
+              {badgeAwardError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-semibold leading-relaxed animate-fade-in">
+                  ⚠️ {badgeAwardError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Select Student</label>
+                <select
+                  required
+                  disabled={!!awardSelectedStudentId}
+                  value={awardSelectedStudentId}
+                  onChange={(e) => setAwardSelectedStudentId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">-- Choose Student --</option>
+                  {classData.students?.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nickname ? `${s.name} (${s.nickname})` : s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Select Manual Badge</label>
+                <select
+                  required
+                  value={awardSelectedBadgeId}
+                  onChange={(e) => setAwardSelectedBadgeId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                >
+                  <option value="">-- Choose Badge --</option>
+                  {badgeDefinitions
+                    .filter((b) => b.badge_type === 'manual')
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.icon || '🏅'} {b.name}
+                      </option>
+                    ))}
+                </select>
+                {badgeDefinitions.filter((b) => b.badge_type === 'manual').length === 0 && (
+                  <p className="text-[10px] text-amber-500 mt-1.5 italic">
+                    No manual-type badge definitions exist yet. Go to definition builder to create one.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Optional Feedback/Reason</label>
+                <textarea
+                  rows={2}
+                  maxLength={150}
+                  placeholder="Reason for award, e.g. Showed extreme persistence debugging the booster engine!"
+                  value={awardReason}
+                  onChange={(e) => setAwardReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-650 resize-none"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAwardModalOpen(false)}
+                  className="bg-slate-800 hover:bg-slate-750 text-slate-300 px-5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAwardingBadge}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+                >
+                  {isAwardingBadge && <Loader2 size={12} className="animate-spin" />}
+                  Award Badge
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

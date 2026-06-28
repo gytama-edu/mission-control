@@ -2055,7 +2055,549 @@ $$;
 
 grant execute on function public.return_group_submission(uuid, text) to authenticated;
 
+-- Phase 8: Badges and Achievements
+create table if not exists public.badge_definitions (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid references auth.users(id) on delete cascade,
+  class_id uuid references public.classes(id) on delete cascade,
+  name text not null,
+  description text,
+  icon text,
+  badge_type text not null default 'manual',
+  trigger_key text,
+  points_threshold integer,
+  task_count_threshold integer,
+  group_task_count_threshold integer,
+  is_active boolean not null default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.student_badges (
+  id uuid primary key default gen_random_uuid(),
+  badge_id uuid not null references public.badge_definitions(id) on delete cascade,
+  class_id uuid not null references public.classes(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
+  awarded_by uuid references auth.users(id) on delete set null,
+  awarded_reason text,
+  source text not null default 'manual',
+  metadata jsonb default '{}'::jsonb,
+  awarded_at timestamptz default now(),
+  unique (badge_id, student_id)
+);
+
+-- Enable RLS
+alter table public.badge_definitions enable row level security;
+alter table public.student_badges enable row level security;
+
+-- Policies for badge_definitions
+create policy "Teachers can manage badge_definitions for their classes"
+  on public.badge_definitions
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1 from public.classes
+      where classes.id = badge_definitions.class_id
+        and classes.teacher_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.classes
+      where classes.id = badge_definitions.class_id
+        and classes.teacher_id = auth.uid()
+    )
+  );
+
+create policy "Anyone can select badge_definitions (read-only for students/public)"
+  on public.badge_definitions
+  for select
+  using (is_active = true);
+
+-- Policies for student_badges
+create policy "Teachers can manage student_badges for their classes"
+  on public.student_badges
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1 from public.classes
+      where classes.id = student_badges.class_id
+        and classes.teacher_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.classes
+      where classes.id = student_badges.class_id
+        and classes.teacher_id = auth.uid()
+    )
+  );
+
+create policy "Anyone can select student_badges (read-only for students/public)"
+  on public.student_badges
+  for select
+  using (true);
+
+-- RPC 1: award_badge_to_student
+create or replace function public.award_badge_to_student(
+  badge_id_input uuid,
+  student_id_input uuid,
+  reason_input text
+)
+returns uuid
+language plpgsql
+security definer
+as $$
+declare
+  v_class_id uuid;
+  v_teacher_id uuid;
+  v_badge_name text;
+  v_student_name text;
+  v_award_id uuid;
+begin
+  select class_id, teacher_id, name into v_class_id, v_teacher_id, v_badge_name
+  from public.badge_definitions
+  where id = badge_id_input;
+
+  if v_class_id is null then
+    raise exception 'Badge definition not found';
+  end if;
+
+  if auth.uid() != v_teacher_id then
+    raise exception 'Unauthorized to award this badge';
+  end if;
+
+  select name into v_student_name
+  from public.students
+  where id = student_id_input and class_id = v_class_id;
+
+  if v_student_name is null then
+    raise exception 'Student does not belong to this class';
+  end if;
+
+  insert into public.student_badges (
+    badge_id,
+    class_id,
+    student_id,
+    awarded_by,
+    awarded_reason,
+    source
+  ) values (
+    badge_id_input,
+    v_class_id,
+    student_id_input,
+    auth.uid(),
+    reason_input,
+    'manual'
+  )
+  on conflict (badge_id, student_id) do nothing
+  returning id into v_award_id;
+
+  if v_award_id is not null then
+    insert into public.activity_logs (
+      class_id,
+      action_type,
+      student_id,
+      points_delta,
+      lives_delta,
+      reason,
+      metadata
+    ) values (
+      v_class_id,
+      'badge_awarded',
+      student_id_input,
+      0,
+      0,
+      'Awarded badge: ' || v_badge_name || coalesce(' - ' || reason_input, ''),
+      jsonb_build_object(
+        'badge_id', badge_id_input,
+        'badge_name', v_badge_name,
+        'reason', reason_input,
+        'student_name', v_student_name
+      )
+    );
+  end if;
+
+  return v_award_id;
+end;
+$$;
+
+grant execute on function public.award_badge_to_student(uuid, uuid, text) to authenticated;
+
+-- RPC 2: check_and_award_automatic_badges
+create or replace function public.check_and_award_automatic_badges(
+  student_id_input uuid,
+  class_id_input uuid
+)
+returns table (
+  badge_id uuid,
+  badge_name text,
+  badge_icon text
+)
+language plpgsql
+security definer
+as $$
+declare
+  v_student_points integer;
+  v_individual_count integer;
+  v_group_count integer;
+  v_first_sub_count integer;
+  v_first_reviewed_count integer;
+  v_rec record;
+  v_award_id uuid;
+  v_student_name text;
+begin
+  select points, name into v_student_points, v_student_name
+  from public.students
+  where id = student_id_input and class_id = class_id_input;
+
+  if v_student_name is null then
+    return;
+  end if;
+
+  -- 1. Points Threshold Check
+  for v_rec in 
+    select id, name, icon, points_threshold 
+    from public.badge_definitions
+    where class_id = class_id_input
+      and is_active = true
+      and badge_type = 'automatic'
+      and trigger_key = 'points_threshold'
+      and points_threshold is not null
+      and v_student_points >= points_threshold
+      and not exists (
+        select 1 from public.student_badges
+        where student_id = student_id_input
+          and badge_id = badge_definitions.id
+      )
+  loop
+    insert into public.student_badges (
+      badge_id, class_id, student_id, source, awarded_reason
+    ) values (
+      v_rec.id, class_id_input, student_id_input, 'automatic', 
+      'Reached ' || v_rec.points_threshold || ' points milestone!'
+    )
+    on conflict (badge_id, student_id) do nothing
+    returning id into v_award_id;
+
+    if v_award_id is not null then
+      insert into public.activity_logs (
+        class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+      ) values (
+        class_id_input, 'badge_auto_awarded', student_id_input, 0, 0,
+        'Automatically awarded badge: ' || v_rec.name,
+        jsonb_build_object('badge_id', v_rec.id, 'badge_name', v_rec.name, 'trigger_key', 'points_threshold', 'student_name', v_student_name)
+      );
+
+      badge_id := v_rec.id;
+      badge_name := v_rec.name;
+      badge_icon := v_rec.icon;
+      return next;
+    end if;
+  end loop;
+
+  -- 2. First Submission Check
+  select count(*) into v_first_sub_count
+  from (
+    select 1 from public.submissions where student_id = student_id_input
+    union all
+    select 1 from public.group_submissions gs
+    join public.task_group_members tgm on gs.task_group_id = tgm.task_group_id
+    where tgm.student_id = student_id_input
+  ) as combined_subs;
+
+  if v_first_sub_count > 0 then
+    for v_rec in 
+      select id, name, icon 
+      from public.badge_definitions
+      where class_id = class_id_input
+        and is_active = true
+        and badge_type = 'automatic'
+        and trigger_key = 'first_submission'
+        and not exists (
+          select 1 from public.student_badges
+          where student_id = student_id_input
+            and badge_id = badge_definitions.id
+        )
+    loop
+      insert into public.student_badges (
+        badge_id, class_id, student_id, source, awarded_reason
+      ) values (
+        v_rec.id, class_id_input, student_id_input, 'automatic', 
+        'Completed your very first mission submission!'
+      )
+      on conflict (badge_id, student_id) do nothing
+      returning id into v_award_id;
+
+      if v_award_id is not null then
+        insert into public.activity_logs (
+          class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+        ) values (
+          class_id_input, 'badge_auto_awarded', student_id_input, 0, 0,
+          'Automatically awarded badge: ' || v_rec.name,
+          jsonb_build_object('badge_id', v_rec.id, 'badge_name', v_rec.name, 'trigger_key', 'first_submission', 'student_name', v_student_name)
+        );
+
+        badge_id := v_rec.id;
+        badge_name := v_rec.name;
+        badge_icon := v_rec.icon;
+        return next;
+      end if;
+    end loop;
+  end if;
+
+  -- 3. First Reviewed Task Check
+  select count(*) into v_first_reviewed_count
+  from (
+    select 1 from public.submissions where student_id = student_id_input and status = 'reviewed'
+    union all
+    select 1 from public.group_submissions gs
+    join public.task_group_members tgm on gs.task_group_id = tgm.task_group_id
+    where tgm.student_id = student_id_input and gs.status = 'reviewed'
+  ) as combined_reviewed;
+
+  if v_first_reviewed_count > 0 then
+    for v_rec in 
+      select id, name, icon 
+      from public.badge_definitions
+      where class_id = class_id_input
+        and is_active = true
+        and badge_type = 'automatic'
+        and trigger_key = 'first_reviewed_task'
+        and not exists (
+          select 1 from public.student_badges
+          where student_id = student_id_input
+            and badge_id = badge_definitions.id
+        )
+    loop
+      insert into public.student_badges (
+        badge_id, class_id, student_id, source, awarded_reason
+      ) values (
+        v_rec.id, class_id_input, student_id_input, 'automatic', 
+        'Had your first mission successfully reviewed!'
+      )
+      on conflict (badge_id, student_id) do nothing
+      returning id into v_award_id;
+
+      if v_award_id is not null then
+        insert into public.activity_logs (
+          class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+        ) values (
+          class_id_input, 'badge_auto_awarded', student_id_input, 0, 0,
+          'Automatically awarded badge: ' || v_rec.name,
+          jsonb_build_object('badge_id', v_rec.id, 'badge_name', v_rec.name, 'trigger_key', 'first_reviewed_task', 'student_name', v_student_name)
+        );
+
+        badge_id := v_rec.id;
+        badge_name := v_rec.name;
+        badge_icon := v_rec.icon;
+        return next;
+      end if;
+    end loop;
+  end if;
+
+  -- 4. Individual Tasks Completed Check
+  select count(*) into v_individual_count
+  from public.submissions
+  where student_id = student_id_input and status = 'reviewed';
+
+  for v_rec in 
+    select id, name, icon, task_count_threshold 
+    from public.badge_definitions
+    where class_id = class_id_input
+      and is_active = true
+      and badge_type = 'automatic'
+      and trigger_key = 'individual_tasks_completed'
+      and task_count_threshold is not null
+      and v_individual_count >= task_count_threshold
+      and not exists (
+        select 1 from public.student_badges
+        where student_id = student_id_input
+          and badge_id = badge_definitions.id
+      )
+  loop
+    insert into public.student_badges (
+      badge_id, class_id, student_id, source, awarded_reason
+    ) values (
+      v_rec.id, class_id_input, student_id_input, 'automatic', 
+      'Successfully completed ' || v_rec.task_count_threshold || ' individual missions!'
+    )
+    on conflict (badge_id, student_id) do nothing
+    returning id into v_award_id;
+
+    if v_award_id is not null then
+      insert into public.activity_logs (
+        class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+      ) values (
+        class_id_input, 'badge_auto_awarded', student_id_input, 0, 0,
+        'Automatically awarded badge: ' || v_rec.name,
+        jsonb_build_object('badge_id', v_rec.id, 'badge_name', v_rec.name, 'trigger_key', 'individual_tasks_completed', 'student_name', v_student_name)
+      );
+
+      badge_id := v_rec.id;
+      badge_name := v_rec.name;
+      badge_icon := v_rec.icon;
+      return next;
+    end if;
+  end loop;
+
+  -- 5. Group Tasks Completed Check
+  select count(*) into v_group_count
+  from public.group_submissions gs
+  join public.task_group_members tgm on gs.task_group_id = tgm.task_group_id
+  where tgm.student_id = student_id_input and gs.status = 'reviewed';
+
+  for v_rec in 
+    select id, name, icon, group_task_count_threshold 
+    from public.badge_definitions
+    where class_id = class_id_input
+      and is_active = true
+      and badge_type = 'automatic'
+      and trigger_key = 'group_tasks_completed'
+      and group_task_count_threshold is not null
+      and v_group_count >= group_task_count_threshold
+      and not exists (
+        select 1 from public.student_badges
+        where student_id = student_id_input
+          and badge_id = badge_definitions.id
+      )
+  loop
+    insert into public.student_badges (
+      badge_id, class_id, student_id, source, awarded_reason
+    ) values (
+      v_rec.id, class_id_input, student_id_input, 'automatic', 
+      'Successfully completed ' || v_rec.group_task_count_threshold || ' group missions as a team!'
+    )
+    on conflict (badge_id, student_id) do nothing
+    returning id into v_award_id;
+
+    if v_award_id is not null then
+      insert into public.activity_logs (
+        class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+      ) values (
+        class_id_input, 'badge_auto_awarded', student_id_input, 0, 0,
+        'Automatically awarded badge: ' || v_rec.name,
+        jsonb_build_object('badge_id', v_rec.id, 'badge_name', v_rec.name, 'trigger_key', 'group_tasks_completed', 'student_name', v_student_name)
+      );
+
+      badge_id := v_rec.id;
+      badge_name := v_rec.name;
+      badge_icon := v_rec.icon;
+      return next;
+    end if;
+  end loop;
+
+  -- 6. Comeback from Zero Lives Check
+  if exists (
+    select 1 from public.activity_logs 
+    where student_id = student_id_input 
+      and class_id = class_id_input 
+      and action_type = 'lives_subtraction' 
+      and (reason like '%0%' or reason like '%zero%')
+  ) then
+    for v_rec in 
+      select id, name, icon 
+      from public.badge_definitions
+      where class_id = class_id_input
+        and is_active = true
+        and badge_type = 'automatic'
+        and trigger_key = 'comeback_from_zero_lives'
+        and not exists (
+          select 1 from public.student_badges
+          where student_id = student_id_input
+            and badge_id = badge_definitions.id
+        )
+    loop
+      insert into public.student_badges (
+        badge_id, class_id, student_id, source, awarded_reason
+      ) values (
+        v_rec.id, class_id_input, student_id_input, 'automatic', 
+        'Successfully recovered and flew back into action after losing all lives!'
+      )
+      on conflict (badge_id, student_id) do nothing
+      returning id into v_award_id;
+
+      if v_award_id is not null then
+        insert into public.activity_logs (
+          class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+        ) values (
+          class_id_input, 'badge_auto_awarded', student_id_input, 0, 0,
+          'Automatically awarded badge: ' || v_rec.name,
+          jsonb_build_object('badge_id', v_rec.id, 'badge_name', v_rec.name, 'trigger_key', 'comeback_from_zero_lives', 'student_name', v_student_name)
+        );
+
+        badge_id := v_rec.id;
+        badge_name := v_rec.name;
+        badge_icon := v_rec.icon;
+        return next;
+      end if;
+    end loop;
+  end if;
+
+  -- 7. Perfect Meeting Check
+  if exists (
+    select 1 from public.meetings m
+    where m.class_id = class_id_input
+      and m.status = 'ended'
+      and not exists (
+        select 1 from public.activity_logs al
+        where al.meeting_id = m.id
+          and al.student_id = student_id_input
+          and al.action_type = 'lives_subtraction'
+      )
+      and exists (
+        select 1 from public.activity_logs al
+        where al.meeting_id = m.id
+      )
+  ) then
+    for v_rec in 
+      select id, name, icon 
+      from public.badge_definitions
+      where class_id = class_id_input
+        and is_active = true
+        and badge_type = 'automatic'
+        and trigger_key = 'no_lives_lost_meeting'
+        and not exists (
+          select 1 from public.student_badges
+          where student_id = student_id_input
+            and badge_id = badge_definitions.id
+        )
+    loop
+      insert into public.student_badges (
+        badge_id, class_id, student_id, source, awarded_reason
+      ) values (
+        v_rec.id, class_id_input, student_id_input, 'automatic', 
+        'Finished a full class meeting without losing a single life! Perfect flight!'
+      )
+      on conflict (badge_id, student_id) do nothing
+      returning id into v_award_id;
+
+      if v_award_id is not null then
+        insert into public.activity_logs (
+          class_id, action_type, student_id, points_delta, lives_delta, reason, metadata
+        ) values (
+          class_id_input, 'badge_auto_awarded', student_id_input, 0, 0,
+          'Automatically awarded badge: ' || v_rec.name,
+          jsonb_build_object('badge_id', v_rec.id, 'badge_name', v_rec.name, 'trigger_key', 'no_lives_lost_meeting', 'student_name', v_student_name)
+        );
+
+        badge_id := v_rec.id;
+        badge_name := v_rec.name;
+        badge_icon := v_rec.icon;
+        return next;
+      end if;
+    end loop;
+  end if;
+
+end;
+$$;
+
+grant execute on function public.check_and_award_automatic_badges(uuid, uuid) to authenticated, anon;
+
 notify pgrst, 'reload schema';
+
 
 
 

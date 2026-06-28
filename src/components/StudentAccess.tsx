@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ClassData, Student, ActivityLog, Task } from '../types';
-import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle } from 'lucide-react';
+import { ClassData, Student, ActivityLog, Task, StudentBadge } from '../types';
+import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle, Award } from 'lucide-react';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
+import * as badgeDb from '../services/badgeData';
 import { supabase } from '../lib/supabaseClient';
 
 interface StudentAccessProps {
@@ -24,6 +25,11 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [studentLogs, setStudentLogs] = useState<ActivityLog[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isTableMissing, setIsTableMissing] = useState(false);
+
+  // Badges state
+  const [earnedBadges, setEarnedBadges] = useState<StudentBadge[]>([]);
+  const [isBadgesLoading, setIsBadgesLoading] = useState(false);
+  const [isBadgesTableMissing, setIsBadgesTableMissing] = useState(false);
 
   // Task states for student preview
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -146,6 +152,14 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     const found = loggedInClass.students?.find((s: any) => s.id === sub.submitted_by_student_id);
     return found ? (found.nickname ? `${found.name} (${found.nickname})` : found.name) : 'A classmate';
   };
+
+  useEffect(() => {
+    if (loggedInClass && loggedInStudent) {
+      loadEarnedBadges(loggedInClass.id, loggedInStudent.id);
+    } else {
+      setEarnedBadges([]);
+    }
+  }, [loggedInClass?.id, loggedInStudent?.id]);
 
   useEffect(() => {
     if (!loggedInClass || !loggedInStudent) {
@@ -382,6 +396,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       setSubmissionSuccess(true);
       // Reload everything
       await loadStudentTasks(loggedInClass.id, loggedInStudent.id);
+      await loadEarnedBadges(loggedInClass.id, loggedInStudent.id);
       
       // Keep modal open briefly to show success, then auto-close or let user dismiss
       setTimeout(() => {
@@ -393,6 +408,27 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       setSubmissionError(err.message || 'Failed to submit task. Please check your storage bucket configuration or contact teacher.');
     } finally {
       setIsSubmittingTask(false);
+    }
+  };
+
+  const loadEarnedBadges = async (classId: string, studentId: string) => {
+    setIsBadgesLoading(true);
+    try {
+      // Background passive automatic badge evaluation
+      await badgeDb.checkAndAwardAutomaticBadges(studentId, classId);
+      // Retrieve earned badges list
+      const badges = await badgeDb.fetchStudentBadges(classId, studentId);
+      setEarnedBadges(badges);
+      setIsBadgesTableMissing(false);
+    } catch (err: any) {
+      if (err && (err.code === 'PGRST205' || (err.message && (err.message.includes('badge_definitions') || err.message.includes('student_badges')) && err.message.includes('schema cache')))) {
+        setIsBadgesTableMissing(true);
+        console.warn('Badges tables are missing in Supabase. Badges display is disabled until migration is run.');
+      } else {
+        console.error('Failed to load earned badges:', err);
+      }
+    } finally {
+      setIsBadgesLoading(false);
     }
   };
 
@@ -1048,6 +1084,76 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                   <span className="text-sm font-medium text-slate-300">{latestMeeting}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Achievements & Badges Panel */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <h3 className="text-lg font-display font-bold text-white flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Award size={18} className="text-purple-400" /> Achievements
+                </span>
+                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                  {earnedBadges.length} Earned
+                </span>
+              </h3>
+
+              {isBadgesTableMissing ? (
+                <div className="py-8 px-4 text-center bg-slate-950/40 rounded-xl border border-slate-850 text-slate-500 text-xs italic space-y-1">
+                  <p>Achievements Module Offline</p>
+                  <p className="text-[10px] text-slate-600 font-sans leading-relaxed">
+                    Ask your classroom Commander (teacher) to complete the database migration inside Class Settings to activate badges and achievements!
+                  </p>
+                </div>
+              ) : isBadgesLoading && earnedBadges.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-sm font-medium">Scanning cockpit...</div>
+              ) : earnedBadges.length === 0 ? (
+                <div className="py-8 px-4 text-center bg-slate-950/40 rounded-xl border border-slate-850 text-slate-500 text-xs italic space-y-1">
+                  <p>No badges earned yet.</p>
+                  <p className="text-[10px] text-slate-600 font-sans leading-relaxed">
+                    Complete tasks, maintain perfect flight status, or impress your teacher to unlock achievements!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                  {earnedBadges.map((sb) => {
+                    const badge = sb.badge;
+                    if (!badge) return null;
+                    return (
+                      <div
+                        key={sb.id}
+                        className="bg-slate-950 border border-slate-850/80 rounded-xl p-3.5 space-y-2 transition-all hover:border-purple-500/20 animate-fade-in"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl shrink-0" role="img" aria-label={badge.name}>
+                            {badge.icon || '🏅'}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-bold text-white truncate">{badge.name}</h4>
+                            <p className="text-[10px] text-slate-400 line-clamp-2 leading-normal mt-0.5">
+                              {badge.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {sb.awarded_reason && (
+                          <div className="bg-slate-900/60 p-2 rounded text-[10px] text-slate-300 italic border border-slate-850/40">
+                            💬 "{sb.awarded_reason}"
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono border-t border-slate-900/40 pt-2 font-sans">
+                          <span className="capitalize text-slate-400">
+                            {sb.source === 'automatic' ? '🤖 System Unlocked' : '⭐ Commander Handed'}
+                          </span>
+                          <span>
+                            {new Date(sb.awarded_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -136,5 +136,36 @@ export interface SubmissionAttachment {
   uploaded_at: string;
 }
 
+export interface BadgeDefinition {
+  id: string;
+  teacher_id: string | null;
+  class_id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  badge_type: 'manual' | 'automatic';
+  trigger_key: string | null;
+  points_threshold: number | null;
+  task_count_threshold: number | null;
+  group_task_count_threshold: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudentBadge {
+  id: string;
+  badge_id: string;
+  class_id: string;
+  student_id: string;
+  awarded_by: string | null;
+  awarded_reason: string | null;
+  source: 'manual' | 'automatic' | 'task_review' | 'group_review' | 'meeting';
+  metadata: any;
+  awarded_at: string;
+  badge?: BadgeDefinition;
+}
+
+
 
 
