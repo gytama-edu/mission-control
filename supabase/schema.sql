@@ -1005,6 +1005,648 @@ $$;
 
 grant execute on function public.review_individual_submission(uuid, integer, text) to authenticated;
 
+-- =========================================================================
+-- Phase 7C: Group Submissions & Group Review Support
+-- =========================================================================
+
+-- Ensure metadata columns exist
+alter table public.task_submissions
+add column if not exists review_metadata jsonb default '{}'::jsonb;
+
+-- Prevent duplicate submissions for the same group and task
+create unique index if not exists one_group_submission_per_task_group
+on public.task_submissions (task_id, task_group_id)
+where task_group_id is not null;
+
+-- RPC 1: submit_group_task
+create or replace function public.submit_group_task(
+  task_id_input uuid,
+  task_group_id_input uuid,
+  submitted_by_student_id_input uuid,
+  submission_text_input text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_task_type text;
+  v_status text;
+  v_due_at timestamptz;
+  v_class_id uuid;
+  v_group_class_id uuid;
+  v_group_task_id uuid;
+  v_student_class_id uuid;
+  v_is_member boolean;
+  v_submission_id uuid;
+  v_submission_status text;
+  v_existing_status text;
+  v_existing_id uuid;
+  v_meeting_id uuid;
+  v_is_resubmission boolean := false;
+begin
+  -- 1. Find the task details
+  select task_type, status, due_at, class_id
+  into v_task_type, v_status, v_due_at, v_class_id
+  from public.tasks
+  where id = task_id_input;
+
+  if not found then
+    raise exception 'Task not found.';
+  end if;
+
+  -- 2. Confirm task_type = 'group'
+  if v_task_type <> 'group' then
+    raise exception 'This task is not a group task.';
+  end if;
+
+  -- 3. Confirm status = 'published'
+  if v_status <> 'published' then
+    raise exception 'Submissions are only allowed for published tasks.';
+  end if;
+
+  -- 4. Confirm task group exists and belongs to the correct class and task
+  select class_id, task_id
+  into v_group_class_id, v_group_task_id
+  from public.task_groups
+  where id = task_group_id_input;
+
+  if not found then
+    raise exception 'Group not found.';
+  end if;
+
+  if v_group_class_id <> v_class_id then
+    raise exception 'Group class does not match task class.';
+  end if;
+
+  if v_group_task_id <> task_id_input then
+    raise exception 'Group is not assigned to this task.';
+  end if;
+
+  -- 5. Confirm student exists and belongs to the same class
+  select class_id
+  into v_student_class_id
+  from public.students
+  where id = submitted_by_student_id_input;
+
+  if not found then
+    raise exception 'Student not found.';
+  end if;
+
+  if v_student_class_id <> v_class_id then
+    raise exception 'Student class does not match task class.';
+  end if;
+
+  -- 6. Confirm student is a member of the group
+  select exists (
+    select 1
+    from public.task_group_members
+    where task_group_id = task_group_id_input
+      and student_id = submitted_by_student_id_input
+  ) into v_is_member;
+
+  if not v_is_member then
+    raise exception 'You are not assigned to this group.';
+  end if;
+
+  -- 7. Determine late status if due_at has passed
+  if v_due_at is not null and now() > v_due_at then
+    v_submission_status := 'late';
+  else
+    v_submission_status := 'submitted';
+  end if;
+
+  -- 8. Fetch active meeting id for log
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = v_class_id and status = 'active'
+  limit 1;
+
+  -- 9. Find existing submission
+  select id, status
+  into v_existing_id, v_existing_status
+  from public.task_submissions
+  where task_id = task_id_input
+    and task_group_id = task_group_id_input;
+
+  if v_existing_id is not null then
+    v_is_resubmission := true;
+    -- Update existing submission
+    update public.task_submissions
+    set 
+      submission_text = submission_text_input,
+      submitted_by_student_id = submitted_by_student_id_input,
+      status = case when v_existing_status = 'reviewed' then 'reviewed' else v_submission_status end,
+      updated_at = now()
+    where id = v_existing_id
+    returning id into v_submission_id;
+  else
+    -- Insert new submission
+    insert into public.task_submissions (
+      task_id,
+      class_id,
+      task_group_id,
+      submitted_by_student_id,
+      submission_text,
+      status
+    )
+    values (
+      task_id_input,
+      v_class_id,
+      task_group_id_input,
+      submitted_by_student_id_input,
+      submission_text_input,
+      v_submission_status
+    )
+    returning id into v_submission_id;
+  end if;
+
+  -- 10. Log the activity
+  insert into public.activity_logs (
+    class_id,
+    student_id,
+    meeting_id,
+    action_type,
+    points_delta,
+    reason,
+    metadata
+  )
+  values (
+    v_class_id,
+    submitted_by_student_id_input,
+    v_meeting_id,
+    case when v_is_resubmission then 'group_task_resubmitted' else 'group_task_submitted' end,
+    0,
+    case when v_is_resubmission then 'Group task resubmitted' else 'Group task submitted' end,
+    jsonb_build_object(
+      'task_id', task_id_input,
+      'submission_id', v_submission_id,
+      'task_group_id', task_group_id_input,
+      'submitted_by_student_id', submitted_by_student_id_input
+    )
+  );
+
+  return v_submission_id;
+end;
+$$;
+
+grant execute on function public.submit_group_task(uuid, uuid, uuid, text) to anon;
+grant execute on function public.submit_group_task(uuid, uuid, uuid, text) to authenticated;
+
+
+-- RPC 2: add_group_submission_attachment_metadata
+create or replace function public.add_group_submission_attachment_metadata(
+  submission_id_input uuid,
+  task_id_input uuid,
+  class_id_input uuid,
+  submitted_by_student_id_input uuid,
+  task_group_id_input uuid,
+  file_name_input text,
+  file_path_input text,
+  file_type_input text,
+  file_size_bytes_input bigint
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_sub_task_id uuid;
+  v_sub_class_id uuid;
+  v_sub_task_group_id uuid;
+  v_allow_attachments boolean;
+  v_max_attachments int;
+  v_max_attachment_size_mb int;
+  v_current_count int;
+  v_inserted_id uuid;
+  v_is_member boolean;
+  v_task_status text;
+  v_meeting_id uuid;
+begin
+  -- 1. Verify submission exists and matches task/class/group parameters
+  select task_id, class_id, task_group_id
+  into v_sub_task_id, v_sub_class_id, v_sub_task_group_id
+  from public.task_submissions
+  where id = submission_id_input;
+
+  if not found then
+    raise exception 'Submission not found.';
+  end if;
+
+  if v_sub_task_id <> task_id_input or v_sub_class_id <> class_id_input or v_sub_task_group_id <> task_group_id_input then
+    raise exception 'Submission metadata parameter mismatch.';
+  end if;
+
+  -- 2. Fetch task constraints and status
+  select allow_attachment_submission, max_attachments, max_attachment_size_mb, status
+  into v_allow_attachments, v_max_attachments, v_max_attachment_size_mb, v_task_status
+  from public.tasks
+  where id = task_id_input;
+
+  if not found then
+    raise exception 'Task not found.';
+  end if;
+
+  -- 3. Reject closed/archived
+  if v_task_status <> 'published' then
+    raise exception 'This task is not open for submission attachments.';
+  end if;
+
+  -- 4. Confirm task allows attachment submission
+  if not v_allow_attachments then
+    raise exception 'This task does not allow file attachments.';
+  end if;
+
+  -- 5. Confirm student belongs to the group
+  select exists (
+    select 1
+    from public.task_group_members
+    where task_group_id = task_group_id_input
+      and student_id = submitted_by_student_id_input
+  ) into v_is_member;
+
+  if not v_is_member then
+    raise exception 'You are not a member of this group.';
+  end if;
+
+  -- 6. Check file size
+  if v_max_attachment_size_mb is not null and file_size_bytes_input > (v_max_attachment_size_mb * 1024 * 1024) then
+    raise exception 'File exceeds the maximum size limit of %MB.', v_max_attachment_size_mb;
+  end if;
+
+  -- 7. Check file count
+  select count(*)
+  into v_current_count
+  from public.submission_attachments
+  where submission_id = submission_id_input;
+
+  if v_max_attachments is not null and v_current_count >= v_max_attachments then
+    raise exception 'Maximum attachment limit of % reached for this task.', v_max_attachments;
+  end if;
+
+  -- 8. Fetch active meeting id for log
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = class_id_input and status = 'active'
+  limit 1;
+
+  -- 9. Insert metadata
+  insert into public.submission_attachments (
+    submission_id,
+    task_id,
+    class_id,
+    student_id,
+    task_group_id,
+    file_name,
+    file_path,
+    file_type,
+    file_size_bytes,
+    storage_bucket
+  )
+  values (
+    submission_id_input,
+    task_id_input,
+    class_id_input,
+    submitted_by_student_id_input,
+    task_group_id_input,
+    file_name_input,
+    file_path_input,
+    file_type_input,
+    file_size_bytes_input,
+    'task-submissions'
+  )
+  returning id into v_inserted_id;
+
+  -- 10. Log the activity
+  insert into public.activity_logs (
+    class_id,
+    student_id,
+    meeting_id,
+    action_type,
+    points_delta,
+    reason,
+    metadata
+  )
+  values (
+    class_id_input,
+    submitted_by_student_id_input,
+    v_meeting_id,
+    'group_task_attachment_uploaded',
+    0,
+    'Group task attachment uploaded',
+    jsonb_build_object(
+      'task_id', task_id_input,
+      'submission_id', submission_id_input,
+      'task_group_id', task_group_id_input,
+      'file_name', file_name_input,
+      'attachment_id', v_inserted_id
+    )
+  );
+
+  return v_inserted_id;
+end;
+$$;
+
+grant execute on function public.add_group_submission_attachment_metadata(uuid, uuid, uuid, uuid, uuid, text, text, text, bigint) to anon;
+grant execute on function public.add_group_submission_attachment_metadata(uuid, uuid, uuid, uuid, uuid, text, text, text, bigint) to authenticated;
+
+
+-- RPC 3: fetch_group_task_submissions_for_teacher
+create or replace function public.fetch_group_task_submissions_for_teacher(
+  task_id_input uuid,
+  class_id_input uuid
+)
+returns table (
+  group_id uuid,
+  group_name text,
+  members jsonb,
+  submission_id uuid,
+  submitted_by_student_id uuid,
+  submitted_by_student_name text,
+  submission_text text,
+  status text,
+  awarded_points integer,
+  teacher_feedback text,
+  reviewed_at timestamptz,
+  reviewed_by uuid,
+  created_at timestamptz,
+  updated_at timestamptz,
+  attachments jsonb
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_teacher_id uuid;
+begin
+  -- 1. Check if class exists and current user is the owner
+  select teacher_id
+  into v_teacher_id
+  from public.classes
+  where id = class_id_input;
+
+  if not found then
+    raise exception 'Class not found.';
+  end if;
+
+  if v_teacher_id is not null and v_teacher_id <> auth.uid() then
+    raise exception 'You do not own this class.';
+  end if;
+
+  return query
+  with group_members_agg as (
+    select
+      tgm.task_group_id,
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', s.id,
+            'name', s.name,
+            'nickname', s.nickname,
+            'points', s.points,
+            'lives', s.lives
+          ) order by s.name
+        ),
+        '[]'::jsonb
+      ) as members_list
+    from public.task_group_members tgm
+    join public.students s on s.id = tgm.student_id
+    where tgm.task_id = task_id_input
+    group by tgm.task_group_id
+  ),
+  submission_attachments_agg as (
+    select
+      sa.submission_id,
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', sa.id,
+            'file_name', sa.file_name,
+            'file_path', sa.file_path,
+            'file_type', sa.file_type,
+            'file_size_bytes', sa.file_size_bytes,
+            'storage_bucket', sa.storage_bucket,
+            'uploaded_at', sa.uploaded_at
+          ) order by sa.uploaded_at
+        ),
+        '[]'::jsonb
+      ) as attachments_list
+    from public.submission_attachments sa
+    where sa.task_id = task_id_input
+    group by sa.submission_id
+  )
+  select
+    tg.id as group_id,
+    tg.name as group_name,
+    coalesce(gm.members_list, '[]'::jsonb) as members,
+    ts.id as submission_id,
+    ts.submitted_by_student_id,
+    sub_s.name as submitted_by_student_name,
+    ts.submission_text,
+    ts.status,
+    ts.awarded_points,
+    ts.teacher_feedback,
+    ts.reviewed_at,
+    ts.reviewed_by,
+    ts.created_at,
+    ts.updated_at,
+    coalesce(sa.attachments_list, '[]'::jsonb) as attachments
+  from public.task_groups tg
+  left join group_members_agg gm on gm.task_group_id = tg.id
+  left join public.task_submissions ts on ts.task_id = task_id_input and ts.task_group_id = tg.id
+  left join public.students sub_s on sub_s.id = ts.submitted_by_student_id
+  left join submission_attachments_agg sa on sa.submission_id = ts.id
+  where tg.task_id = task_id_input
+  order by tg.name;
+end;
+$$;
+
+grant execute on function public.fetch_group_task_submissions_for_teacher(uuid, uuid) to authenticated;
+
+
+-- RPC 4: review_group_submission
+create or replace function public.review_group_submission(
+  submission_id_input uuid,
+  awarded_points_input integer,
+  teacher_feedback_input text
+)
+returns table (
+  submission_id uuid,
+  task_group_id uuid,
+  task_id uuid,
+  class_id uuid,
+  previous_awarded_points integer,
+  new_awarded_points integer,
+  points_delta integer,
+  awarded_member_count integer,
+  submission_status text
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_submission_record public.task_submissions%rowtype;
+  v_task_record public.tasks%rowtype;
+  v_class_record public.classes%rowtype;
+  v_group_record public.task_groups%rowtype;
+  v_old_points integer := 0;
+  v_new_points integer := 0;
+  v_delta_points integer := 0;
+  v_member_ids uuid[];
+  v_member_count integer := 0;
+  v_meeting_id uuid;
+begin
+  if awarded_points_input is null then
+    v_new_points := 0;
+  else
+    v_new_points := greatest(0, awarded_points_input);
+  end if;
+
+  -- 1. Get submission
+  select *
+  into v_submission_record
+  from public.task_submissions
+  where id = submission_id_input;
+
+  if not found then
+    raise exception 'Submission not found.';
+  end if;
+
+  if v_submission_record.task_group_id is null then
+    raise exception 'This submission is not a group submission.';
+  end if;
+
+  -- 2. Get task
+  select *
+  into v_task_record
+  from public.tasks
+  where id = v_submission_record.task_id;
+
+  if not found then
+    raise exception 'Task not found.';
+  end if;
+
+  if v_task_record.task_type <> 'group' then
+    raise exception 'Task must be a group task.';
+  end if;
+
+  -- 3. Get class & ownership check
+  select *
+  into v_class_record
+  from public.classes
+  where id = v_submission_record.class_id;
+
+  if not found then
+    raise exception 'Class not found.';
+  end if;
+
+  if v_class_record.teacher_id is not null and v_class_record.teacher_id <> auth.uid() then
+    raise exception 'You do not own this class.';
+  end if;
+
+  -- 4. Get group record & active members
+  select *
+  into v_group_record
+  from public.task_groups
+  where id = v_submission_record.task_group_id;
+
+  if not found then
+    raise exception 'Group not found.';
+  end if;
+
+  -- Get list of current group members
+  select array_agg(student_id)
+  into v_member_ids
+  from public.task_group_members
+  where task_group_id = v_submission_record.task_group_id;
+
+  v_member_count := coalesce(cardinality(v_member_ids), 0);
+
+  -- 5. Calculate points delta
+  v_old_points := coalesce(v_submission_record.awarded_points, 0);
+  v_delta_points := v_new_points - v_old_points;
+
+  -- 6. Update submission
+  update public.task_submissions
+  set
+    awarded_points = v_new_points,
+    teacher_feedback = teacher_feedback_input,
+    reviewed_at = now(),
+    reviewed_by = auth.uid(),
+    status = 'reviewed',
+    updated_at = now(),
+    review_metadata = jsonb_build_object(
+      'awarded_member_ids', to_jsonb(v_member_ids),
+      'previous_awarded_points', v_old_points,
+      'group_member_count', v_member_count,
+      'review_type', 'group'
+    )
+  where id = submission_id_input;
+
+  -- 7. Add delta points to each current group member
+  if v_member_count > 0 then
+    update public.students
+    set points = coalesce(points, 0) + v_delta_points
+    where id = any(v_member_ids);
+  end if;
+
+  -- 8. Fetch active meeting id
+  select id into v_meeting_id
+  from public.meetings
+  where class_id = v_submission_record.class_id and status = 'active'
+  limit 1;
+
+  -- 9. Insert activity logs for each student
+  if v_member_count > 0 then
+    insert into public.activity_logs (
+      teacher_id,
+      class_id,
+      student_id,
+      meeting_id,
+      action_type,
+      points_delta,
+      reason,
+      metadata
+    )
+    select
+      auth.uid(),
+      v_submission_record.class_id,
+      s_id,
+      v_meeting_id,
+      'group_task_reviewed',
+      v_delta_points,
+      'Group task submission reviewed',
+      jsonb_build_object(
+        'task_id', v_submission_record.task_id,
+        'submission_id', submission_id_input,
+        'task_group_id', v_submission_record.task_group_id,
+        'group_name', v_group_record.name,
+        'previous_awarded_points', v_old_points,
+        'new_awarded_points', v_new_points
+      )
+    from unnest(v_member_ids) as s_id;
+  end if;
+
+  return query
+  select
+    submission_id_input,
+    v_submission_record.task_group_id,
+    v_submission_record.task_id,
+    v_submission_record.class_id,
+    v_old_points,
+    v_new_points,
+    v_delta_points,
+    v_member_count,
+    'reviewed'::text;
+end;
+$$;
+
+grant execute on function public.review_group_submission(uuid, integer, text) to authenticated;
+
 notify pgrst, 'reload schema';
 
 

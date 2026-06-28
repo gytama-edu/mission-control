@@ -633,3 +633,130 @@ export const reviewSubmission = async (
   return data;
 };
 
+// =========================================================================
+// Phase 7C: Group Task Submission & Review Services
+// =========================================================================
+
+export const submitGroupTask = async (
+  taskId: string,
+  classId: string,
+  taskGroupId: string,
+  submittedByStudentId: string,
+  submissionText: string | null
+): Promise<{ id: string }> => {
+  const { data: submissionId, error } = await supabase.rpc('submit_group_task', {
+    task_id_input: taskId,
+    task_group_id_input: taskGroupId,
+    submitted_by_student_id_input: submittedByStudentId,
+    submission_text_input: submissionText
+  });
+
+  if (error) throw error;
+  return { id: submissionId };
+};
+
+export const uploadGroupAttachmentToStorage = async (
+  classId: string,
+  taskId: string,
+  taskGroupId: string,
+  submissionId: string,
+  file: File
+): Promise<{ filePath: string; fileName: string }> => {
+  const timestamp = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `${classId}/${taskId}/${taskGroupId}/${submissionId}/${timestamp}-${safeName}`;
+
+  const { data, error } = await supabase.storage
+    .from('task-submissions')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) throw error;
+  return { filePath, fileName: file.name };
+};
+
+export const addGroupSubmissionAttachmentMetadata = async (metadataInput: {
+  submission_id: string;
+  task_id: string;
+  class_id: string;
+  submitted_by_student_id: string;
+  task_group_id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size_bytes: number;
+}): Promise<any> => {
+  const { data, error } = await supabase.rpc('add_group_submission_attachment_metadata', {
+    submission_id_input: metadataInput.submission_id,
+    task_id_input: metadataInput.task_id,
+    class_id_input: metadataInput.class_id,
+    submitted_by_student_id_input: metadataInput.submitted_by_student_id,
+    task_group_id_input: metadataInput.task_group_id,
+    file_name_input: metadataInput.file_name,
+    file_path_input: metadataInput.file_path,
+    file_type_input: metadataInput.file_type,
+    file_size_bytes_input: metadataInput.file_size_bytes
+  });
+
+  if (error) throw error;
+  return { id: data };
+};
+
+export const fetchGroupTaskSubmissionsForTeacher = async (
+  taskId: string,
+  classId: string
+): Promise<any[]> => {
+  const { data, error } = await supabase.rpc('fetch_group_task_submissions_for_teacher', {
+    task_id_input: taskId,
+    class_id_input: classId
+  });
+
+  if (error) throw error;
+
+  const submissions = data || [];
+  
+  const processedSubmissions = await Promise.all(
+    submissions.map(async (row: any) => {
+      const attachmentsWithUrls = await Promise.all(
+        (row.attachments || []).map(async (attachment: any) => {
+          try {
+            const { data: signedData, error: signedError } = await supabase.storage
+              .from(attachment.storage_bucket || 'task-submissions')
+              .createSignedUrl(attachment.file_path, 60 * 10);
+            return {
+              ...attachment,
+              signed_url: signedError ? null : signedData?.signedUrl || null,
+            };
+          } catch (e) {
+            return { ...attachment, signed_url: null };
+          }
+        })
+      );
+
+      return {
+        ...row,
+        attachments: attachmentsWithUrls
+      };
+    })
+  );
+
+  return processedSubmissions;
+};
+
+export const reviewGroupSubmission = async (
+  submissionId: string,
+  feedback: string,
+  awardedPoints: number
+): Promise<any> => {
+  const { data, error } = await supabase.rpc('review_group_submission', {
+    submission_id_input: submissionId,
+    awarded_points_input: awardedPoints,
+    teacher_feedback_input: feedback
+  });
+
+  if (error) throw error;
+  return data;
+};
+

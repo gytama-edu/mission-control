@@ -29,7 +29,8 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isTasksLoading, setIsTasksLoading] = useState(false);
   const [isTasksTableMissing, setIsTasksTableMissing] = useState(false);
-  const [studentGroups, setStudentGroups] = useState<Record<string, string>>({});
+  const [studentGroups, setStudentGroups] = useState<Record<string, { id: string; name: string }>>({});
+  const [groupMembers, setGroupMembers] = useState<Record<string, string[]>>({});
   const [studentSubmissions, setStudentSubmissions] = useState<Record<string, any>>({});
 
   const loadStudentTasks = async (classId: string, studentId: string) => {
@@ -40,41 +41,81 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       setTasks(visibleTasks);
       setIsTasksTableMissing(false);
 
+      // Fetch task groups assigned to this student
       const { data: memberRows, error: memberErr } = await supabase
         .from('task_group_members')
         .select(`
           task_id,
+          task_group_id,
           task_groups (
             name
           )
         `)
         .eq('student_id', studentId);
 
+      const groupMap: Record<string, { id: string; name: string }> = {};
+      const groupIds: string[] = [];
       if (!memberErr && memberRows) {
-        const groupMap: Record<string, string> = {};
         memberRows.forEach((row: any) => {
-          if (row.task_groups) {
-            groupMap[row.task_id] = Array.isArray(row.task_groups) 
+          if (row.task_groups && row.task_group_id) {
+            const gName = Array.isArray(row.task_groups) 
               ? row.task_groups[0]?.name 
               : row.task_groups?.name;
+            groupMap[row.task_id] = { id: row.task_group_id, name: gName };
+            groupIds.push(row.task_group_id);
           }
         });
         setStudentGroups(groupMap);
       }
 
-      // Fetch task submissions
-      const { data: subRows, error: subErr } = await supabase
-        .from('task_submissions')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('class_id', classId);
+      // Fetch members of these student groups
+      const membersMap: Record<string, string[]> = {};
+      if (groupIds.length > 0) {
+        const { data: allMembers, error: membersErr } = await supabase
+          .from('task_group_members')
+          .select(`
+            task_group_id,
+            students (
+              name,
+              nickname
+            )
+          `)
+          .in('task_group_id', groupIds);
 
-      // Fetch submission attachments
-      const { data: attachRows, error: attachErr } = await supabase
-        .from('submission_attachments')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('class_id', classId);
+        if (!membersErr && allMembers) {
+          allMembers.forEach((m: any) => {
+            const gId = m.task_group_id;
+            const sName = m.students 
+              ? (m.students.nickname ? `${m.students.name} (${m.students.nickname})` : m.students.name) 
+              : 'Unknown Student';
+            if (!membersMap[gId]) {
+              membersMap[gId] = [];
+            }
+            membersMap[gId].push(sName);
+          });
+          setGroupMembers(membersMap);
+        }
+      } else {
+        setGroupMembers({});
+      }
+
+      // Fetch task submissions (individual + group)
+      let subQuery = supabase.from('task_submissions').select('*');
+      if (groupIds.length > 0) {
+        subQuery = subQuery.or(`student_id.eq.${studentId},task_group_id.in.(${groupIds.join(',')})`);
+      } else {
+        subQuery = subQuery.eq('student_id', studentId);
+      }
+      const { data: subRows, error: subErr } = await subQuery.eq('class_id', classId);
+
+      // Fetch submission attachments (individual + group)
+      let attachQuery = supabase.from('submission_attachments').select('*');
+      if (groupIds.length > 0) {
+        attachQuery = attachQuery.or(`student_id.eq.${studentId},task_group_id.in.(${groupIds.join(',')})`);
+      } else {
+        attachQuery = attachQuery.eq('student_id', studentId);
+      }
+      const { data: attachRows, error: attachErr } = await attachQuery.eq('class_id', classId);
 
       if (!subErr && subRows) {
         const subMap: Record<string, any> = {};
@@ -97,6 +138,13 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     } finally {
       setIsTasksLoading(false);
     }
+  };
+
+  const getSubmitterName = (sub: any) => {
+    if (!sub || !sub.submitted_by_student_id || !loggedInClass || !loggedInStudent) return '';
+    if (sub.submitted_by_student_id === loggedInStudent.id) return 'You';
+    const found = loggedInClass.students?.find((s: any) => s.id === sub.submitted_by_student_id);
+    return found ? (found.nickname ? `${found.name} (${found.nickname})` : found.name) : 'A classmate';
   };
 
   useEffect(() => {
@@ -254,39 +302,80 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     setSubmissionSuccess(false);
 
     try {
-      // 1. Perform database submission row insert/update
-      const submission = await taskDb.submitIndividualTask(
-        selectedTaskForSubmission.id,
-        loggedInClass.id,
-        loggedInStudent.id,
-        selectedTaskForSubmission.title,
-        submissionText || null,
-        isLate
-      );
+      let submission: { id: string };
 
-      // 2. Upload any attachments
-      if (selectedTaskForSubmission.allow_attachment_submission && submissionFiles.length > 0) {
-        // Upload each file
-        for (const file of submissionFiles) {
-          const { filePath, fileName } = await taskDb.uploadAttachmentToStorage(
-            loggedInClass.id,
-            selectedTaskForSubmission.id,
-            loggedInStudent.id,
-            submission.id,
-            file
-          );
+      if (selectedTaskForSubmission.task_type === 'group') {
+        const assignedGroup = studentGroups[selectedTaskForSubmission.id];
+        if (!assignedGroup) {
+          throw new Error('You are not assigned to a group for this task.');
+        }
 
-          // Add attachment record to DB
-          await taskDb.addSubmissionAttachmentMetadata({
-            submission_id: submission.id,
-            task_id: selectedTaskForSubmission.id,
-            class_id: loggedInClass.id,
-            student_id: loggedInStudent.id,
-            file_name: fileName,
-            file_path: filePath,
-            file_type: file.type || file.name.split('.').pop() || 'unknown',
-            file_size_bytes: file.size
-          });
+        // 1. Submit group task
+        submission = await taskDb.submitGroupTask(
+          selectedTaskForSubmission.id,
+          loggedInClass.id,
+          assignedGroup.id,
+          loggedInStudent.id,
+          submissionText || null
+        );
+
+        // 2. Upload group attachments
+        if (selectedTaskForSubmission.allow_attachment_submission && submissionFiles.length > 0) {
+          for (const file of submissionFiles) {
+            const { filePath, fileName } = await taskDb.uploadGroupAttachmentToStorage(
+              loggedInClass.id,
+              selectedTaskForSubmission.id,
+              assignedGroup.id,
+              submission.id,
+              file
+            );
+
+            await taskDb.addGroupSubmissionAttachmentMetadata({
+              submission_id: submission.id,
+              task_id: selectedTaskForSubmission.id,
+              class_id: loggedInClass.id,
+              submitted_by_student_id: loggedInStudent.id,
+              task_group_id: assignedGroup.id,
+              file_name: fileName,
+              file_path: filePath,
+              file_type: file.type || file.name.split('.').pop() || 'unknown',
+              file_size_bytes: file.size
+            });
+          }
+        }
+      } else {
+        // 1. Submit individual task
+        submission = await taskDb.submitIndividualTask(
+          selectedTaskForSubmission.id,
+          loggedInClass.id,
+          loggedInStudent.id,
+          selectedTaskForSubmission.title,
+          submissionText || null,
+          isLate
+        );
+
+        // 2. Upload individual attachments
+        if (selectedTaskForSubmission.allow_attachment_submission && submissionFiles.length > 0) {
+          for (const file of submissionFiles) {
+            const { filePath, fileName } = await taskDb.uploadAttachmentToStorage(
+              loggedInClass.id,
+              selectedTaskForSubmission.id,
+              loggedInStudent.id,
+              submission.id,
+              file
+            );
+
+            await taskDb.addSubmissionAttachmentMetadata({
+              submission_id: submission.id,
+              task_id: selectedTaskForSubmission.id,
+              class_id: loggedInClass.id,
+              student_id: loggedInStudent.id,
+              file_name: fileName,
+              file_path: filePath,
+              file_type: file.type || file.name.split('.').pop() || 'unknown',
+              file_size_bytes: file.size
+            });
+          }
         }
       }
 
@@ -704,6 +793,9 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                     const isClosed = task.status === 'closed';
 
                     const submission = studentSubmissions[task.id];
+                    const submitterName = getSubmitterName(submission);
+                    const formattedSubTime = submission ? new Date(submission.created_at).toLocaleString() : '';
+
                     let submissionStatus = 'Not submitted';
                     let statusBadgeColor = 'bg-slate-900 text-slate-500 border-slate-800';
 
@@ -768,6 +860,13 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                           {task.description && (
                             <p className="text-xs text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">{task.description}</p>
                           )}
+                          {submission && task.task_type === 'group' && (
+                            <div className="text-[10px] text-slate-500 font-mono mt-1.5 flex items-center gap-1">
+                              <span>📢 Submitted by</span>
+                              <span className="text-slate-300 font-semibold">{submitterName}</span>
+                              <span>on {formattedSubTime}</span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 bg-slate-900/40 p-2 rounded-lg border border-slate-850">
@@ -791,16 +890,23 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                         )}
 
                         {task.task_type === 'group' && (
-                          <div className="bg-slate-900/65 border border-slate-850 rounded-lg p-2.5 flex items-center gap-2 text-xs">
-                            <Users className="text-purple-400" size={14} />
-                            {assignedGroup ? (
-                              <span className="text-slate-300 font-medium">
-                                Assigned Team: <span className="text-purple-400 font-bold">{assignedGroup}</span>
-                              </span>
-                            ) : (
-                              <span className="text-amber-500 font-medium italic">
-                                Assigned Team: Unassigned (Awaiting team selection)
-                              </span>
+                          <div className="bg-slate-900/65 border border-slate-850 rounded-lg p-2.5 space-y-1.5 text-xs animate-fade-in">
+                            <div className="flex items-center gap-2">
+                              <Users className="text-purple-400" size={14} />
+                              {assignedGroup ? (
+                                <span className="text-slate-300 font-medium">
+                                  Assigned Team: <span className="text-purple-400 font-bold">{assignedGroup.name}</span>
+                                </span>
+                              ) : (
+                                <span className="text-amber-500 font-medium italic">
+                                  You are not assigned to a group for this task yet. Please contact your teacher.
+                                </span>
+                              )}
+                            </div>
+                            {assignedGroup && groupMembers[assignedGroup.id] && (
+                              <div className="text-[11px] text-slate-500 pl-5">
+                                <span className="text-slate-400 font-medium font-sans">Members:</span> {groupMembers[assignedGroup.id].join(', ')}
+                              </div>
                             )}
                           </div>
                         )}
@@ -810,25 +916,31 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                             📅 Due: {task.due_at ? new Date(task.due_at).toLocaleString() : 'No due date set'}
                           </span>
                           
-                          {task.task_type === 'group' ? (
-                            <span className="text-amber-500/80 font-bold uppercase tracking-wider font-mono bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/10">
-                              Group submission coming in Phase 7C
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => openSubmissionModal(task)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                isClosed
-                                  ? 'bg-slate-900 text-slate-500 border border-slate-850 cursor-not-allowed'
-                                  : submission
-                                  ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-md'
-                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse hover:animate-none'
-                              }`}
-                            >
-                              {isClosed ? 'View Submission' : submission ? 'Update Submission' : 'Open Mission Form'}
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (task.task_type === 'group' && !assignedGroup) return;
+                              openSubmissionModal(task);
+                            }}
+                            disabled={isClosed || (task.task_type === 'group' && !assignedGroup)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              isClosed
+                                ? 'bg-slate-900 text-slate-500 border border-slate-850 cursor-not-allowed'
+                                : (task.task_type === 'group' && !assignedGroup)
+                                ? 'bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed'
+                                : submission
+                                ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-md'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse hover:animate-none'
+                            }`}
+                          >
+                            {(task.task_type === 'group' && !assignedGroup)
+                              ? 'Unassigned'
+                              : isClosed
+                              ? 'View Submission'
+                              : submission
+                              ? 'Update Submission'
+                              : 'Open Mission Form'}
+                          </button>
                         </div>
                       </div>
                     );

@@ -349,7 +349,21 @@ export function ClassDetail({
       currentClassId: classData.id
     });
     try {
-      const subs = await taskDb.fetchTaskSubmissions(task.id, classData.id);
+      let subs;
+      if (task.task_type === 'group') {
+        const rawSubs = await taskDb.fetchGroupTaskSubmissionsForTeacher(task.id, classData.id);
+        subs = rawSubs.map((s: any) => ({
+          ...s,
+          id: s.submission_id || s.group_id, // Stable ID for select/selection mapping
+          studentName: s.group_name, // Renders group name instead of a student name
+          isGroup: true,
+          status: s.status || 'not submitted',
+          created_at: s.created_at || null
+        }));
+      } else {
+        subs = await taskDb.fetchTaskSubmissions(task.id, classData.id);
+      }
+
       console.log('[DEBUG] handleOpenSubmissionsModal successfully loaded submissions:', {
         count: subs.length,
         submissions: subs
@@ -374,15 +388,39 @@ export function ClassDetail({
     setIsSavingReview(true);
     setSubmissionsError(null);
     try {
-      await taskDb.reviewSubmission(
-        selectedSubmissionForReview.id,
-        reviewFeedback,
-        status,
-        reviewScore
-      );
+      if (selectedTaskForSubmissions.task_type === 'group') {
+        if (!selectedSubmissionForReview.submission_id) {
+          throw new Error('This group has not submitted a directive yet.');
+        }
+        await taskDb.reviewGroupSubmission(
+          selectedSubmissionForReview.submission_id,
+          reviewFeedback,
+          reviewScore
+        );
+      } else {
+        await taskDb.reviewSubmission(
+          selectedSubmissionForReview.id,
+          reviewFeedback,
+          status,
+          reviewScore
+        );
+      }
       
       // Refresh list
-      const subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+      let subs;
+      if (selectedTaskForSubmissions.task_type === 'group') {
+        const rawSubs = await taskDb.fetchGroupTaskSubmissionsForTeacher(selectedTaskForSubmissions.id, classData.id);
+        subs = rawSubs.map((s: any) => ({
+          ...s,
+          id: s.submission_id || s.group_id,
+          studentName: s.group_name,
+          isGroup: true,
+          status: s.status || 'not submitted',
+          created_at: s.created_at || null
+        }));
+      } else {
+        subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+      }
       setTaskSubmissions(subs);
       
       // Update local selected submission
@@ -2497,7 +2535,20 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       currentClassId: classData.id
                     });
                     try {
-                      const subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+                      let subs;
+                      if (selectedTaskForSubmissions.task_type === 'group') {
+                        const rawSubs = await taskDb.fetchGroupTaskSubmissionsForTeacher(selectedTaskForSubmissions.id, classData.id);
+                        subs = rawSubs.map((s: any) => ({
+                          ...s,
+                          id: s.submission_id || s.group_id,
+                          studentName: s.group_name,
+                          isGroup: true,
+                          status: s.status || 'not submitted',
+                          created_at: s.created_at || null
+                        }));
+                      } else {
+                        subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+                      }
                       console.log('[DEBUG] Refresh successfully loaded submissions:', {
                         count: subs.length,
                         submissions: subs
@@ -2566,19 +2617,31 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
 
                   <div className="space-y-4">
                     {taskSubmissions.map((sub) => {
-                      const statusColors: Record<string, string> = {
-                        reviewed: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-                        returned: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-                        late: 'text-red-400 bg-red-500/10 border-red-500/20',
-                        submitted: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
-                      };
-                      const statusStyle = statusColors[sub.status] || statusColors.submitted;
+                      const isUnsubmittedGroup = sub.isGroup && !sub.submission_id;
+
+                      let statusBadgeText = sub.status;
+                      let statusStyle = '';
+                      if (isUnsubmittedGroup) {
+                        statusBadgeText = 'Not Submitted';
+                        statusStyle = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                      } else {
+                        const statusColors: Record<string, string> = {
+                          reviewed: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+                          returned: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                          late: 'text-red-400 bg-red-500/10 border-red-500/20',
+                          submitted: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                        };
+                        statusStyle = statusColors[sub.status] || statusColors.submitted;
+                      }
+
                       const isReviewingThis = selectedSubmissionForReview?.id === sub.id;
 
                       return (
                         <div
                           key={sub.id}
-                          className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col transition-all hover:border-slate-700 submission-card"
+                          className={`bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col transition-all hover:border-slate-700 submission-card ${
+                            isUnsubmittedGroup ? 'border-dashed border-slate-800 bg-slate-900/40 opacity-75' : ''
+                          }`}
                         >
                           {/* Card Header */}
                           <div className="flex items-start justify-between gap-3">
@@ -2586,12 +2649,27 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                               <h5 className="text-sm font-bold text-white flex items-center gap-2">
                                 {sub.studentName}
                               </h5>
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                Submitted: {new Date(sub.created_at).toLocaleString()}
+                              {sub.isGroup && sub.members && (
+                                <div className="text-[11px] text-slate-400 font-sans mt-1">
+                                  <span className="text-slate-500">Members:</span> {sub.members.join(', ')}
+                                </div>
+                              )}
+                              {sub.isGroup && sub.submitted_by_student_name && (
+                                <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-md border border-slate-850">
+                                  <span>📢 Submitted by</span>
+                                  <span className="text-slate-300 font-semibold">{sub.submitted_by_student_name}</span>
+                                </div>
+                              )}
+                              <p className="text-[10px] text-slate-500 mt-1.5">
+                                {sub.created_at ? (
+                                  `Submitted: ${new Date(sub.created_at).toLocaleString()}`
+                                ) : (
+                                  <span className="text-amber-500/90 font-semibold font-mono bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10">Awaiting transmission...</span>
+                                )}
                               </p>
                             </div>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border capitalize ${statusStyle}`}>
-                              {sub.status}
+                              {statusBadgeText}
                             </span>
                           </div>
 
@@ -2653,7 +2731,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
 
                           {/* Review/Grade Section */}
                           <div className="border-t border-slate-800/60 pt-4 mt-2">
-                            {isReviewingThis ? (
+                            {isUnsubmittedGroup ? (
+                              <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800 text-xs text-slate-500 italic text-center">
+                                🛸 Awaiting group transmission. Cannot review until submitted.
+                              </div>
+                            ) : isReviewingThis ? (
                               /* Active Review Form */
                               <div className="space-y-4 bg-slate-950/40 p-4 rounded-xl border border-slate-800 animate-fade-in">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -2693,15 +2775,17 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                   >
                                     Cancel
                                   </button>
-                                  <button
-                                    type="button"
-                                    disabled={isSavingReview}
-                                    onClick={() => handleSaveReview('returned')}
-                                    className="bg-slate-900 hover:bg-slate-800 border border-slate-850 text-amber-400 hover:text-amber-300 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-                                  >
-                                    {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
-                                    Return for Resubmission
-                                  </button>
+                                  {!selectedTaskForSubmissions.task_type || selectedTaskForSubmissions.task_type !== 'group' ? (
+                                    <button
+                                      type="button"
+                                      disabled={isSavingReview}
+                                      onClick={() => handleSaveReview('returned')}
+                                      className="bg-slate-900 hover:bg-slate-800 border border-slate-850 text-amber-400 hover:text-amber-300 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      {isSavingReview ? <Loader2 size={12} className="animate-spin" /> : null}
+                                      Return for Resubmission
+                                    </button>
+                                  ) : null}
                                   <button
                                     type="button"
                                     disabled={isSavingReview}
