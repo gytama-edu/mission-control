@@ -344,6 +344,12 @@ export function ClassDetail({
     setIsFetchingSubmissions(true);
     setSubmissionsError(null);
     setSelectedSubmissionForReview(null);
+    
+    const normalizedTaskType = String(task.task_type).toLowerCase();
+    console.log('[DEBUG] selected task id:', task.id);
+    console.log('[DEBUG] selected task type:', task.task_type);
+    console.log('[DEBUG] class id:', classData.id);
+    
     console.log('[DEBUG] handleOpenSubmissionsModal details:', {
       selectedTaskId: task.id,
       selectedTaskType: task.task_type,
@@ -351,7 +357,8 @@ export function ClassDetail({
     });
     try {
       let subs;
-      if (task.task_type === 'group') {
+      if (normalizedTaskType === 'group') {
+        console.log('[DEBUG] which fetch function is being called: fetchGroupTaskSubmissions');
         console.log('[DEBUG] Fetching group task submissions:', {
           selectedTaskId: task.id,
           selectedTaskType: task.task_type,
@@ -369,6 +376,7 @@ export function ClassDetail({
           members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name)
         }));
       } else {
+        console.log('[DEBUG] which fetch function is being called: fetchTaskSubmissions');
         console.log('[DEBUG] Fetching individual task submissions:', {
           selectedTaskId: task.id,
           selectedTaskType: task.task_type,
@@ -388,7 +396,7 @@ export function ClassDetail({
         selectedTaskType: task.task_type,
         currentClassId: classData.id
       });
-      if (task.task_type === 'group') {
+      if (normalizedTaskType === 'group') {
         setSubmissionsError('Failed to load group submissions.');
       } else {
         setSubmissionsError('Failed to load submissions: ' + err.message);
@@ -397,6 +405,8 @@ export function ClassDetail({
       setIsFetchingSubmissions(false);
     }
   };
+
+  const openSubmissionsViewer = handleOpenSubmissionsModal;
 
   const handleSelectSubmissionForReview = (sub: any) => {
     setSelectedSubmissionForReview(sub);
@@ -1726,20 +1736,38 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
 
                       {/* Management Buttons */}
                       <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-start font-sans">
-                        {task.task_type === 'individual' && (task.status === 'published' || task.status === 'closed' || task.status === 'archived') && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-400 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-medium">
-                              <span className={`w-1.5 h-1.5 rounded-full ${(submissionCounts[task.id] || 0) === classData.students.length && classData.students.length > 0 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : (submissionCounts[task.id] || 0) > 0 ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-slate-500'}`} />
-                              Submissions: <span className="text-white font-bold font-mono">{submissionCounts[task.id] || 0}/{classData.students.length}</span>
-                            </span>
-                            <button
-                              onClick={() => handleOpenSubmissionsModal(task)}
-                              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                            >
-                              <FileText size={14} /> View Submissions
-                            </button>
-                          </div>
-                        )}
+                        {(() => {
+                          const normalizedTaskType = String(task.task_type || 'individual').toLowerCase();
+                          return (
+                            <div className="flex items-center gap-2">
+                              {normalizedTaskType === 'individual' ? (
+                                <span className="text-xs text-slate-400 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-medium">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${(submissionCounts[task.id] || 0) === classData.students.length && classData.students.length > 0 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : (submissionCounts[task.id] || 0) > 0 ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-slate-500'}`} />
+                                  Submissions: <span className="text-white font-bold font-mono">{submissionCounts[task.id] || 0}/{classData.students.length}</span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-medium">
+                                  <Users className="text-purple-400" size={12} />
+                                  <span className="text-slate-300 font-bold">Group Task</span>
+                                </span>
+                              )}
+                              <button
+                                onClick={() => {
+                                  console.log('[DEBUG] clicked task id:', task.id);
+                                  console.log('[DEBUG] clicked task title:', task.title);
+                                  console.log('[DEBUG] clicked task type:', task.task_type);
+                                  console.log('[DEBUG] current class id:', classData.id);
+                                  openSubmissionsViewer(task);
+                                }}
+                                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md font-sans"
+                              >
+                                <FileText size={14} /> 
+                                {normalizedTaskType === 'group' ? 'View Group Submissions' : 'View Submissions'}
+                                {isDraft && <span className="text-[10px] font-extrabold uppercase bg-purple-850 text-purple-200 px-1 py-0.5 rounded ml-1 border border-purple-700/30">Draft</span>}
+                              </button>
+                            </div>
+                          );
+                        })()}
                         {isDraft && (
                           <>
                             <button
