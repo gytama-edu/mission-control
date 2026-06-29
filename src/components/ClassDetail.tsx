@@ -6,6 +6,7 @@ import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
 import { downloadCsv, sanitizeFilename } from '../utils/exportUtils';
+import { ConfirmActionModal } from './ConfirmActionModal';
 
 interface ClassDetailProps {
   classData: ClassData;
@@ -62,6 +63,23 @@ export function ClassDetail({
   const [copiedBadgesSql, setCopiedBadgesSql] = useState(false);
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [editingBadge, setEditingBadge] = useState<any | null>(null);
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    helperNote?: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'warning' | 'danger';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const closeConfirmModal = () => setConfirmModalConfig(prev => ({ ...prev, isOpen: false }));
   
   // Badge Form States
   const [badgeFormName, setBadgeFormName] = useState('');
@@ -482,6 +500,23 @@ export function ClassDetail({
     setTaskFormMaxSizeMb(task.max_attachment_size_mb);
     setTaskFormAllowResubmission(task.allow_resubmission !== false);
     setIsTaskModalOpen(true);
+  };
+
+  const handleQuickDueDate = (preset: 'none' | 'today' | 'tomorrow' | 'nextWeek') => {
+    if (preset === 'none') {
+      setTaskFormDueAt('');
+      return;
+    }
+    const d = new Date();
+    if (preset === 'tomorrow') d.setDate(d.getDate() + 1);
+    if (preset === 'nextWeek') d.setDate(d.getDate() + 7);
+    d.setHours(23, 59, 0, 0);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const date = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    setTaskFormDueAt(`${year}-${month}-${date}T${hours}:${minutes}`);
   };
 
   const handleSaveTask = async (e: React.FormEvent) => {
@@ -2618,7 +2653,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     <input
                       type="text"
                       required
-                      placeholder="e.g., Code Review: Refactor the Propulsion Engine"
+                      placeholder="e.g., Speaking Practice: Daily Routines"
                       value={taskFormTitle}
                       onChange={(e) => setTaskFormTitle(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
@@ -2629,7 +2664,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Description</label>
                     <textarea
                       rows={3}
-                      placeholder="Detail the instructions, helpful tips, and expected deliverables..."
+                      placeholder="Write the instructions, examples, and what students need to submit..."
                       value={taskFormDescription}
                       onChange={(e) => setTaskFormDescription(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600 resize-none"
@@ -2661,14 +2696,62 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Due Date & Time</label>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Due Date <span className="text-[10px] font-normal normal-case text-slate-500 ml-1">(Choose a date or use a quick option)</span>
+                    </label>
                     <input
                       type="datetime-local"
                       value={taskFormDueAt}
                       onChange={(e) => setTaskFormDueAt(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-4 pr-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:bg-slate-800 [&::-webkit-calendar-picker-indicator]:hover:bg-slate-700 [&::-webkit-calendar-picker-indicator]:p-2 [&::-webkit-calendar-picker-indicator]:rounded-md [&::-webkit-calendar-picker-indicator]:transition-colors [&::-webkit-calendar-picker-indicator]:border [&::-webkit-calendar-picker-indicator]:border-slate-700"
                     />
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDueDate('none')}
+                        className="text-xs px-2.5 py-1 rounded-md bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-300 transition-colors cursor-pointer"
+                      >
+                        No Due Date
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDueDate('today')}
+                        className="text-xs px-2.5 py-1 rounded-md bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-300 transition-colors cursor-pointer"
+                      >
+                        End of Today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDueDate('tomorrow')}
+                        className="text-xs px-2.5 py-1 rounded-md bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-300 transition-colors cursor-pointer"
+                      >
+                        Tomorrow
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDueDate('nextWeek')}
+                        className="text-xs px-2.5 py-1 rounded-md bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-300 transition-colors cursor-pointer"
+                      >
+                        Next Week
+                      </button>
+                      {taskFormDueAt && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickDueDate('none')}
+                          className="text-xs px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 transition-colors cursor-pointer ml-auto"
+                        >
+                          Clear Due Date
+                        </button>
+                      )}
+                    </div>
+                    <div className="pt-1 px-1 text-xs text-slate-300">
+                      {taskFormDueAt ? (
+                        <>Due: <span className="font-semibold text-purple-400">{new Date(taskFormDueAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span></>
+                      ) : (
+                        <span className="text-slate-500 italic">No due date set.</span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="border-t border-slate-850 pt-4 space-y-3">
@@ -3590,9 +3673,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm('Archive this class?\nThis will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.')) {
-                    onArchiveClass();
-                  }
+                  setConfirmModalConfig({
+                    isOpen: true,
+                    title: 'Archive this class?',
+                    message: 'This will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.',
+                    helperNote: 'You can restore archived classes later.',
+                    confirmLabel: 'Archive Class',
+                    variant: 'warning',
+                    onConfirm: () => onArchiveClass()
+                  });
                 }}
                 className="text-amber-500 hover:text-amber-400 font-bold text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-amber-500/10 transition-all cursor-pointer"
               >
@@ -3660,23 +3749,25 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={async () => {
-                const confirmMsg = "Clear Activity History?\n\nThis will permanently delete activity log entries for this class. Student points, lives, badges, tasks, and submissions will not be reset. Reports that depend on activity history may no longer show previous activity.\n\nType 'CLEAR' to confirm:";
-                const userText = prompt(confirmMsg);
-                if (userText === 'CLEAR') {
-                  try {
-                    await db.clearClassActivityLogs(classData.id);
-                    alert('Activity history cleared for this class.');
-                    // Refresh data if needed. The useClasses hook might handle some of it, but we can call loadReportData or similar if we exposed it, or just let the activity tab reload when clicked.
-                    if (activityLogs) {
-                      setActivityLogs([]);
+              onClick={() => {
+                setConfirmModalConfig({
+                  isOpen: true,
+                  title: 'Clear Activity History?',
+                  message: 'This will permanently delete activity log entries for this class. Student points, lives, badges, tasks, and submissions will not be reset. Reports that depend on activity history may no longer show previous activity.',
+                  requireTypedConfirmation: 'CLEAR',
+                  confirmLabel: 'Clear History',
+                  variant: 'danger',
+                  onConfirm: async () => {
+                    try {
+                      await db.clearClassActivityLogs(classData.id);
+                      if (activityLogs) {
+                        setActivityLogs([]);
+                      }
+                    } catch (err: any) {
+                      alert('Failed to clear activity history: ' + err.message);
                     }
-                  } catch (err: any) {
-                    alert('Failed to clear activity history: ' + err.message);
                   }
-                } else if (userText !== null) {
-                  alert('Confirmation text did not match. History was not cleared.');
-                }
+                });
               }}
               className="bg-red-900/40 hover:bg-red-900/60 text-red-400 border border-red-800/50 px-4 py-2 rounded-xl font-bold transition-all shadow-lg cursor-pointer text-xs uppercase tracking-wider"
             >
@@ -4977,7 +5068,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Flight Captain"
+                  placeholder="e.g. Star Speaker"
                   value={badgeFormName}
                   onChange={(e) => setBadgeFormName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-500"
@@ -4988,7 +5079,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
                 <textarea
                   rows={2}
-                  placeholder="e.g. Awarded to pilots demonstrating outstanding cockpit management."
+                  placeholder="e.g. Awarded to students demonstrating outstanding spoken English."
                   value={badgeFormDescription}
                   onChange={(e) => setBadgeFormDescription(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-500 resize-none"
@@ -5197,7 +5288,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                 <textarea
                   rows={2}
                   maxLength={150}
-                  placeholder="Reason for award, e.g. Showed extreme persistence debugging the booster engine!"
+                  placeholder="Reason for award, e.g. Showed extreme persistence completing the reading assignment!"
                   value={awardReason}
                   onChange={(e) => setAwardReason(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-slate-500 resize-none"
@@ -5225,6 +5316,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
           </div>
         </div>
       )}
+
+      <ConfirmActionModal {...confirmModalConfig} onClose={closeConfirmModal} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ClassData } from '../types';
 import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download, Activity, Radio, LayoutGrid, KeyRound, Heart, Archive, ArchiveRestore } from 'lucide-react';
+import { ConfirmActionModal } from './ConfirmActionModal';
 
 interface DashboardProps {
   classes: ClassData[];
@@ -36,6 +37,48 @@ export function Dashboard({
   const [newClassLevel, setNewClassLevel] = useState('');
   const [newClassMaxLives, setNewClassMaxLives] = useState(5);
   const [showArchived, setShowArchived] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    helperNote?: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'warning' | 'danger';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const closeConfirmModal = () => setConfirmModalConfig(prev => ({ ...prev, isOpen: false }));
+
+  const handleArchiveClick = (e: React.MouseEvent, c: ClassData) => {
+    e.stopPropagation();
+    setConfirmModalConfig({
+      isOpen: true,
+      title: 'Archive this class?',
+      message: 'This will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.',
+      helperNote: 'You can restore archived classes later.',
+      confirmLabel: 'Archive Class',
+      variant: 'warning',
+      onConfirm: () => onArchiveClass(c.id)
+    });
+  };
+
+  const handleRestoreClick = (e: React.MouseEvent, c: ClassData) => {
+    e.stopPropagation();
+    setConfirmModalConfig({
+      isOpen: true,
+      title: 'Restore this class?',
+      message: 'This will move the class back to your active dashboard.',
+      helperNote: 'Students will be able to access the class again after it is restored.',
+      confirmLabel: 'Restore Class',
+      variant: 'default',
+      onConfirm: () => onRestoreClass(c.id)
+    });
+  };
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,7 +232,7 @@ export function Dashboard({
                 required
                 value={newClassName}
                 onChange={(e) => setNewClassName(e.target.value)}
-                placeholder="e.g. Science 101"
+                placeholder="e.g. English 7A"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
               />
             </div>
@@ -199,7 +242,7 @@ export function Dashboard({
                 type="text"
                 value={newClassLevel}
                 onChange={(e) => setNewClassLevel(e.target.value)}
-                placeholder="e.g. Grade 5"
+                placeholder="e.g. Beginner or Grade 5"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
               />
             </div>
@@ -385,12 +428,7 @@ export function Dashboard({
                           {!hasActiveSession && (
                             showArchived ? (
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm('Restore this class?\nThis will move the class back to your active dashboard.')) {
-                                    onRestoreClass(c.id);
-                                  }
-                                }}
+                                onClick={(e) => handleRestoreClick(e, c)}
                                 className="bg-slate-950 hover:bg-emerald-600/10 border border-slate-800 hover:border-emerald-500/30 text-slate-400 hover:text-emerald-400 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg transition-all font-bold cursor-pointer flex items-center gap-1"
                                 title="Restore Class"
                               >
@@ -399,12 +437,7 @@ export function Dashboard({
                               </button>
                             ) : (
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm('Archive this class?\nThis will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.')) {
-                                    onArchiveClass(c.id);
-                                  }
-                                }}
+                                onClick={(e) => handleArchiveClick(e, c)}
                                 className="text-slate-500 hover:text-amber-500 p-1.5 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer"
                                 title="Archive Class"
                               >
@@ -470,12 +503,7 @@ export function Dashboard({
                         )}
                         showArchived ? (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm('Restore this class?\nThis will move the class back to your active dashboard.')) {
-                                onRestoreClass(c.id);
-                              }
-                            }}
+                            onClick={(e) => handleRestoreClick(e, c)}
                             className="bg-slate-950 hover:bg-emerald-600/10 border border-slate-800 hover:border-emerald-500/30 text-slate-400 hover:text-emerald-400 text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md transition-all font-bold cursor-pointer"
                             title="Restore Class"
                           >
@@ -483,12 +511,7 @@ export function Dashboard({
                           </button>
                         ) : (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm('Archive this class?\nThis will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.')) {
-                                onArchiveClass(c.id);
-                              }
-                            }}
+                            onClick={(e) => handleArchiveClick(e, c)}
                             className="text-slate-500 hover:text-amber-500 p-1.5 rounded-md hover:bg-amber-500/10 transition-colors cursor-pointer"
                             title="Archive Class"
                           >
@@ -538,6 +561,8 @@ export function Dashboard({
           <span className="text-slate-600">&copy; {new Date().getFullYear()}</span>
         </p>
       </footer>
+
+      <ConfirmActionModal {...confirmModalConfig} onClose={closeConfirmModal} />
     </div>
   );
 }
