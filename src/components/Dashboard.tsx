@@ -263,9 +263,9 @@ export function Dashboard({
                 <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 select-none bg-slate-950/20">
                   <th className="py-2.5 px-4 font-semibold">Cohort Name</th>
                   <th className="py-2.5 px-4 font-semibold">Level / Grade</th>
-                  <th className="py-2.5 px-4 font-semibold text-center">Cadets</th>
+                  <th className="py-2.5 px-4 font-semibold text-center">Students</th>
                   <th className="py-2.5 px-4 font-semibold text-center">Max Lives</th>
-                  <th className="py-2.5 px-4 font-semibold">Access Key</th>
+                  <th className="py-2.5 px-4 font-semibold">Class Code</th>
                   <th className="py-2.5 px-4 font-semibold">Status</th>
                   <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
                 </tr>
@@ -437,7 +437,7 @@ export function Dashboard({
 
                   <div className="mt-3 flex items-center gap-1.5 select-none">
                     <KeyRound size={11} className="text-slate-500" />
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-slate-500">Access Key:</span>
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-slate-500">Class Code:</span>
                     <code className="text-xs font-mono font-bold bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-rose-400 tracking-wider">
                       {c.joinCode}
                     </code>
