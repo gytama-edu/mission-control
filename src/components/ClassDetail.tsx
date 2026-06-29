@@ -20,8 +20,8 @@ interface ClassDetailProps {
   onEditStudent: (studentId: string, name: string, nickname?: string) => void;
   onDeleteStudent: (studentId: string) => void;
   onRegenerateStudentPin: (studentId: string) => void;
-  onUpdateLives: (studentId: string, change: number, reason?: string | null) => void;
-  onUpdatePoints: (studentId: string, change: number, reason?: string | null) => void;
+  onUpdateLives: (studentId: string, change: number, reason?: string | null) => Promise<void> | void;
+  onUpdatePoints: (studentId: string, change: number, reason?: string | null) => Promise<void> | void;
   onStartMeeting: () => void;
   onEndMeeting: (meetingId: string) => void;
 }
@@ -44,6 +44,14 @@ export function ClassDetail({
 }: ClassDetailProps) {
   const [newStudentName, setNewStudentName] = useState('');
   const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings' | 'badges' | 'reports'>('roster');
+  
+  const handleUpdatePoints = (studentId: string, change: number, reason?: string | null) => {
+    onUpdatePoints(studentId, change, reason);
+  };
+
+  const handleUpdateLives = (studentId: string, change: number, reason?: string | null) => {
+    onUpdateLives(studentId, change, reason);
+  };
 
   // Reports & Analytics States
   const [reportsSubTab, setReportsSubTab] = useState<'overview' | 'students' | 'tasks' | 'meetings' | 'badges' | 'activity'>('overview');
@@ -932,6 +940,26 @@ export function ClassDetail({
 
   const sortedStudents = [...classData.students].sort((a, b) => b.points - a.points);
 
+  const studentNameCollator = React.useMemo(() => new Intl.Collator(undefined, {
+    sensitivity: "base",
+    numeric: true,
+  }), []);
+
+  const rosterStudents = React.useMemo(() => {
+    return [...(classData.students || [])].sort((a, b) => {
+      const nameCompare = studentNameCollator.compare(
+        (a.name || "").trim(),
+        (b.name || "").trim()
+      );
+
+      if (nameCompare !== 0) return nameCompare;
+
+      return String(a.joinedAt || a.id || "").localeCompare(
+        String(b.joinedAt || b.id || "")
+      );
+    });
+  }, [classData.students, studentNameCollator]);
+
   const getStudentStatus = (lives: number, maxLives: number) => {
     if (lives === 0) return { label: 'Out', color: 'text-red-500 bg-red-500/10 border-red-500/20' };
     if (lives <= maxLives / 2) return { label: 'Warning', color: 'text-amber-500 bg-amber-500/10 border-amber-500/20' };
@@ -1232,7 +1260,7 @@ export function ClassDetail({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/40">
-                    {classData.students.map((student) => {
+                    {rosterStudents.map((student) => {
                       const status = getStudentStatus(student.lives, classData.maxLives);
                       return (
                         <tr key={student.id} className="hover:bg-slate-900/40 transition-colors">
@@ -1257,7 +1285,7 @@ export function ClassDetail({
                           <td className="py-2 px-4">
                             <div className="flex items-center justify-center gap-2 select-none">
                               <button
-                                onClick={() => onUpdateLives(student.id, -1, getActiveReason())}
+                                onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
                                 disabled={student.lives <= 0}
                                 className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                               >
@@ -1267,7 +1295,7 @@ export function ClassDetail({
                                 {student.lives}
                               </span>
                               <button
-                                onClick={() => onUpdateLives(student.id, 1, getActiveReason())}
+                                onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
                                 disabled={student.lives >= classData.maxLives}
                                 className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                               >
@@ -1282,33 +1310,33 @@ export function ClassDetail({
                               </span>
                               <div className="flex items-center gap-1">
                                 <button 
-                                  onClick={() => onUpdatePoints(student.id, -5, getActiveReason())} 
+                                  onClick={() => handleUpdatePoints(student.id, -5, getActiveReason())} 
                                   disabled={student.points < 5} 
                                   className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                                 >
                                   -5
                                 </button>
                                 <button 
-                                  onClick={() => onUpdatePoints(student.id, -1, getActiveReason())} 
+                                  onClick={() => handleUpdatePoints(student.id, -1, getActiveReason())} 
                                   disabled={student.points < 1} 
                                   className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                                 >
                                   -1
                                 </button>
                                 <button 
-                                  onClick={() => onUpdatePoints(student.id, 1, getActiveReason())} 
+                                  onClick={() => handleUpdatePoints(student.id, 1, getActiveReason())} 
                                   className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
                                 >
                                   +1
                                 </button>
                                 <button 
-                                  onClick={() => onUpdatePoints(student.id, 5, getActiveReason())} 
+                                  onClick={() => handleUpdatePoints(student.id, 5, getActiveReason())} 
                                   className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-semibold cursor-pointer"
                                 >
                                   +5
                                 </button>
                                 <button 
-                                  onClick={() => onUpdatePoints(student.id, 10, getActiveReason())} 
+                                  onClick={() => handleUpdatePoints(student.id, 10, getActiveReason())} 
                                   className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-600/20 border border-rose-500/30 hover:bg-rose-600/30 text-white font-bold cursor-pointer"
                                 >
                                   +10
@@ -1347,7 +1375,7 @@ export function ClassDetail({
 
               {/* Mobile Grid Card View */}
               <div className="grid grid-cols-1 gap-3 sm:hidden">
-                {classData.students.map((student) => {
+                {rosterStudents.map((student) => {
                   const status = getStudentStatus(student.lives, classData.maxLives);
                   return (
                     <div key={student.id} className="bg-slate-900/50 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3 relative group hover:border-slate-700/60 transition-all duration-200 shadow-md">
@@ -1398,7 +1426,7 @@ export function ClassDetail({
                           </div>
                           <div className="flex items-center justify-between mt-2">
                             <button
-                              onClick={() => onUpdateLives(student.id, -1, getActiveReason())}
+                              onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
                               disabled={student.lives <= 0}
                               className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                             >
@@ -1408,7 +1436,7 @@ export function ClassDetail({
                               {student.lives}
                             </span>
                             <button
-                              onClick={() => onUpdateLives(student.id, 1, getActiveReason())}
+                              onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
                               disabled={student.lives >= classData.maxLives}
                               className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                             >
@@ -1425,13 +1453,13 @@ export function ClassDetail({
                           </div>
                           <div className="flex flex-col gap-2 mt-2">
                             <div className="flex items-center justify-between gap-2">
-                              <button onClick={() => onUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
-                              <button onClick={() => onUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
+                              <button onClick={() => handleUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
+                              <button onClick={() => handleUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
                             </div>
                             <div className="flex items-center justify-between gap-2">
-                              <button onClick={() => onUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+1</button>
-                              <button onClick={() => onUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-bold">+5</button>
-                              <button onClick={() => onUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/40 text-white font-bold cursor-pointer">+10</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+1</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-bold">+5</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/40 text-white font-bold cursor-pointer">+10</button>
                             </div>
                           </div>
                         </div>
@@ -1734,7 +1762,10 @@ alter publication supabase_realtime add table public.activity_logs;`}
 
               {/* Activity Logs Timeline */}
               {isLogsLoading && activityLogs.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 font-medium">Loading classroom timeline...</div>
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500 space-y-3">
+                  <Loader2 className="animate-spin text-slate-600" size={24} />
+                  <span className="font-medium text-sm">Loading classroom timeline...</span>
+                </div>
               ) : (
                 (() => {
                   const filtered = activityLogs.filter((log) => {
@@ -1925,7 +1956,7 @@ alter publication supabase_realtime add table public.activity_logs;`}
 
           {classData.meetings.length === 0 ? (
             <div className="p-12 text-center bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl text-slate-500">
-              No meetings recorded for this class yet.
+              Start a class session to automatically generate meeting logs and summaries.
             </div>
           ) : (
             <div className="space-y-3 max-w-4xl animate-fade-in">
@@ -2209,15 +2240,16 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               </div>
 
               {isTasksLoading ? (
-                <div className="text-center py-12 text-slate-500 font-mono text-xs">
-                  Loading classroom tasks...
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500 space-y-3">
+                  <Loader2 className="animate-spin text-slate-600" size={24} />
+                  <span className="font-mono text-xs">Loading classroom tasks...</span>
                 </div>
               ) : tasks.length === 0 ? (
-                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500 space-y-3">
-                  <p className="text-sm">No tasks created for this class yet.</p>
+                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500 space-y-3 shadow-lg">
+                  <p className="text-sm">Create your first task to start assigning work and grading.</p>
                   <button
                     onClick={openCreateTaskModal}
-                    className="bg-slate-850 hover:bg-slate-800 border border-slate-750 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    className="bg-slate-850 hover:bg-slate-800 border border-slate-750 hover:border-slate-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md mt-2 inline-block"
                   >
                     Create Your First Task
                   </button>
@@ -2449,8 +2481,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         </div>
 
                         {isGroupsLoading ? (
-                          <div className="text-center py-4 text-xs text-slate-500 font-mono">
-                            Loading task groups...
+                          <div className="flex flex-col items-center justify-center py-6 text-slate-500 space-y-2">
+                            <Loader2 className="animate-spin text-slate-600" size={20} />
+                            <span className="text-xs font-mono">Loading task groups...</span>
                           </div>
                         ) : taskGroups.length === 0 ? (
                           <div className="text-center py-6 text-xs text-slate-500 italic bg-slate-900/30 rounded-lg border border-slate-900">
@@ -3108,7 +3141,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
                           <h4 className="text-lg font-display font-bold text-white mb-4">Task Submission Log</h4>
                           {studentSubs.length === 0 ? (
-                            <p className="text-sm text-slate-500 italic py-4">No task submissions recorded yet for this student.</p>
+                            <p className="text-sm text-slate-500 italic py-4">This student hasn't submitted any tasks yet.</p>
                           ) : (
                             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                               {studentSubs.map((sub) => {
@@ -3185,7 +3218,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
                         <h4 className="text-lg font-display font-bold text-white mb-4">Earned Achievements & Badges</h4>
                         {studentBadges.filter(sb => sb.student_id === student.id).length === 0 ? (
-                          <p className="text-sm text-slate-500 italic py-4">No badges awarded yet to this student.</p>
+                          <p className="text-sm text-slate-500 italic py-4">This student hasn't earned any badges yet.</p>
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {studentBadges.filter(sb => sb.student_id === student.id).map((sb) => {
@@ -3281,7 +3314,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       <p className="text-xs text-slate-400 mt-0.5">Summary of academic completions, submission counts, and evaluation percentages.</p>
                     </div>
                     {allTasks.length === 0 ? (
-                      <div className="p-10 text-center text-slate-500 italic">No tasks created yet in this class.</div>
+                      <div className="p-10 text-center text-slate-500 italic">Create your first task to start assigning work and grading.</div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
@@ -3364,7 +3397,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                 if (!classData.meetings || classData.meetings.length === 0) {
                   return (
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center text-slate-500 italic">
-                      No meetings recorded yet in this class.
+                      Start a class session to automatically generate meeting logs and summaries.
                     </div>
                   );
                 }
@@ -4115,7 +4148,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                   </h3>
 
                   {isBadgesLoading && badgeDefinitions.length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 text-sm">Scanning database definitions...</div>
+                    <div className="flex flex-col items-center justify-center py-8 text-slate-500 space-y-2">
+                      <Loader2 className="animate-spin text-slate-600" size={24} />
+                      <span className="text-sm">Scanning database definitions...</span>
+                    </div>
                   ) : badgeDefinitions.length === 0 ? (
                     <div className="py-12 px-4 text-center bg-slate-950/40 rounded-xl border border-slate-850 space-y-3">
                       <div className="text-slate-400 font-mono text-sm">No Badges Configured</div>
@@ -4206,10 +4242,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                   </h3>
 
                   {isBadgesLoading && studentBadges.length === 0 ? (
-                    <div className="py-6 text-center text-slate-500 text-sm">Reading history records...</div>
+                    <div className="flex flex-col items-center justify-center py-6 text-slate-500 space-y-2">
+                      <Loader2 className="animate-spin text-slate-600" size={24} />
+                      <span className="text-sm">Reading history records...</span>
+                    </div>
                   ) : studentBadges.length === 0 ? (
                     <div className="py-8 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-850">
-                      No badges have been awarded to student profiles yet.
+                      No badges have been awarded yet.
                     </div>
                   ) : (
                     <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">

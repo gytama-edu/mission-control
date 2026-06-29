@@ -5,6 +5,9 @@ import { supabase } from '../lib/supabaseClient';
 
 const STORAGE_KEY = 'mission_control_classes';
 
+const updateQueue: Record<string, Promise<void>> = {};
+const pendingCount: Record<string, number> = {};
+
 export function useClasses(teacherId: string | null) {
   const generateJoinCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
   const generatePin = () => Math.floor(1000 + Math.random() * 9000).toString();
@@ -13,17 +16,37 @@ export function useClasses(teacherId: string | null) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    if (!silent) setError(null);
     try {
       const data = await db.fetchClasses(teacherId);
-      setClasses(data);
+      
+      setClasses(currentClasses => {
+        if (!currentClasses.length) return data;
+        
+        return data.map(newClass => {
+          const currentClass = currentClasses.find(c => c.id === newClass.id);
+          if (!currentClass) return newClass;
+
+          return {
+            ...newClass,
+            students: newClass.students?.map(newStudent => {
+              if (pendingCount[newStudent.id] > 0) {
+                const currentStudent = currentClass.students?.find(s => s.id === newStudent.id);
+                return currentStudent || newStudent;
+              }
+              return newStudent;
+            })
+          };
+        });
+      });
+      
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to load data');
+      if (!silent) setError(err.message || 'Failed to load data');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -38,22 +61,22 @@ export function useClasses(teacherId: string | null) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'classes' },
-        () => { loadData(); }
+        () => { loadData(true); }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'students' },
-        () => { loadData(); }
+        () => { loadData(true); }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meetings' },
-        () => { loadData(); }
+        () => { loadData(true); }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'activity_logs' },
-        () => { loadData(); }
+        () => { loadData(true); }
       )
       .subscribe();
 
@@ -174,19 +197,69 @@ export function useClasses(teacherId: string | null) {
   };
 
   const updateStudentLives = async (classId: string, studentId: string, change: number, reason?: string | null) => {
-    try {
-      const c = classes.find(cl => cl.id === classId);
-      if (!c) return;
-      await db.updateStudentLives(studentId, change, c.maxLives, reason);
-      await loadData();
-    } catch (err: any) { alert(err.message); }
+    // We cannot reliably use classes from closure because of rapid updates, so we depend on setClasses callback
+    let maxLives = 5;
+    
+    // Optimistic UI
+    setClasses(prev => prev.map(cl => {
+      if (cl.id !== classId) return cl;
+      maxLives = cl.maxLives;
+      return {
+        ...cl,
+        students: cl.students?.map(s => {
+          if (s.id !== studentId) return s;
+          const newLives = Math.max(0, Math.min(cl.maxLives, (s.lives ?? 5) + change));
+          return { ...s, lives: newLives };
+        })
+      };
+    }));
+
+    pendingCount[studentId] = (pendingCount[studentId] || 0) + 1;
+    const prevPromise = updateQueue[studentId] || Promise.resolve();
+
+    updateQueue[studentId] = prevPromise.then(async () => {
+      try {
+        await db.updateStudentLives(studentId, change, maxLives, reason);
+      } catch (err: any) { 
+        alert('Could not update lives. Please try again.'); 
+      } finally {
+        pendingCount[studentId]--;
+        if (pendingCount[studentId] === 0) {
+          await loadData(true);
+        }
+      }
+    });
   };
 
   const updateStudentPoints = async (classId: string, studentId: string, change: number, reason?: string | null) => {
-    try {
-      await db.updateStudentPoints(studentId, change, reason);
-      await loadData();
-    } catch (err: any) { alert(err.message); }
+    // Optimistic UI
+    setClasses(prev => prev.map(cl => {
+      if (cl.id !== classId) return cl;
+      return {
+        ...cl,
+        students: cl.students?.map(s => {
+          if (s.id !== studentId) return s;
+          const newPoints = Math.max(0, (s.points ?? 0) + change);
+          return { ...s, points: newPoints };
+        })
+      };
+    }));
+
+    pendingCount[studentId] = (pendingCount[studentId] || 0) + 1;
+    const prevPromise = updateQueue[studentId] || Promise.resolve();
+
+    updateQueue[studentId] = prevPromise.then(async () => {
+      try {
+        await db.updateStudentPoints(studentId, change, reason);
+      } catch (err: any) { 
+        alert('Could not update points. Please try again.'); 
+      } finally {
+        pendingCount[studentId]--;
+        if (pendingCount[studentId] === 0) {
+          await loadData(true);
+        }
+      }
+    });
   };
 
   const startMeeting = async (classId: string) => {

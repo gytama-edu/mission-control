@@ -51,6 +51,7 @@ export function AiWritingCheck({ submissionId, taskId, studentName, submissionTe
       case 'low': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
       case 'moderate': return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
       case 'high': return 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+      case 'insufficient_text': return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
       default: return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
     }
   };
@@ -62,6 +63,40 @@ export function AiWritingCheck({ submissionId, taskId, studentName, submissionTe
       case 'high': return <AlertCircle size={14} />;
       default: return <Info size={14} />;
     }
+  };
+
+  const getConcernLabel = (level: string) => {
+    switch (level) {
+      case 'low': return 'Low Review Signal';
+      case 'moderate': return 'Some Review Signals';
+      case 'high': return 'Strong Review Signals';
+      case 'insufficient_text': return 'Insufficient Text';
+      default: return 'Review Signal Not Applicable';
+    }
+  };
+
+  const getFriendlyErrorMessage = (errorStr: string) => {
+    if (!errorStr) return '';
+    const err = errorStr.toLowerCase();
+    if (err.includes('insufficient_text') || err.includes('too short')) {
+      return 'Not enough writing to review reliably. Ask for a longer response before using AI Writing Check.';
+    }
+    if (err.includes('submission_not_found') || err.includes('not found')) {
+      return 'This submission could not be found or is no longer available.';
+    }
+    if (err.includes('submission_not_owned_by_teacher') || err.includes('not owned by teacher') || err.includes('forbidden') || err.includes('unauthorized: you do not own')) {
+      return 'This submission is not available for your teacher account.';
+    }
+    if (err.includes('unauthorized') || err.includes('log in first')) {
+      return 'Please log in first to run this check.';
+    }
+    if (err.includes('gemini_api_error') || err.includes('ai provider') || err.includes('failed to generate')) {
+      return 'AI Writing Check could not complete right now. Please try again later.';
+    }
+    if (err.includes('invalid_ai_response') || err.includes('unexpected response') || err.includes('json.parse')) {
+      return 'AI Writing Check returned an unexpected response. Please retry.';
+    }
+    return errorStr;
   };
 
   // Do not show if no text
@@ -102,12 +137,15 @@ export function AiWritingCheck({ submissionId, taskId, studentName, submissionTe
       )}
 
       {error && (
-        <div className="p-4 m-4 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-400 text-xs flex items-start gap-2">
-          <AlertCircle size={14} className="shrink-0 mt-0.5" />
-          <span>{error}</span>
+        <div className="p-4 m-4 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-400 text-xs flex items-start gap-3">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1">
+            <span className="font-bold text-rose-300 block">Review Notification</span>
+            <span className="text-slate-300 leading-relaxed block">{getFriendlyErrorMessage(error)}</span>
+          </div>
           <button 
             onClick={runCheck}
-            className="ml-auto underline hover:text-rose-300 font-medium"
+            className="shrink-0 ml-auto bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 px-3 py-1.5 rounded text-[11px] font-bold transition-all text-rose-400 flex items-center gap-1"
           >
             Retry
           </button>
@@ -120,7 +158,7 @@ export function AiWritingCheck({ submissionId, taskId, studentName, submissionTe
           <div className="flex flex-col md:flex-row gap-4 items-start">
             <div className={`shrink-0 px-3 py-2 rounded-lg border flex items-center gap-2 font-bold text-xs uppercase tracking-wider ${getConcernColor(result.overall_review?.concern_level)}`}>
               {getConcernIcon(result.overall_review?.concern_level)}
-              {result.overall_review?.concern_level?.replace('_', ' ')} Concern
+              {getConcernLabel(result.overall_review?.concern_level)}
             </div>
             <div className="bg-slate-950 border border-slate-800 p-3 rounded-lg text-xs text-slate-300 flex-1 leading-relaxed">
               <span className="font-bold text-slate-500 uppercase text-[10px] block mb-1">Summary</span>

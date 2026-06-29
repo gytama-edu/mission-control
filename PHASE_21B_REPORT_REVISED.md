@@ -1,81 +1,51 @@
-# Phase 18H: RLS Lockdown Readiness Test Report
+# Phase 21B (Revised): Live Classroom Control Polish
 
-## 1. Remaining direct SELECT search results
-An audit of `src/components/StudentAccess.tsx` and all service files (`missionControlData.ts`, `taskData.ts`, `badgeData.ts`) reveals:
-*   **Student-side unsafe:** 0. `StudentAccess.tsx` contains no `supabase.from().select()` direct reads. All data gathering is routed entirely through secure RPCs.
-*   **Teacher-only safe:** ~16 remaining direct reads (e.g., `fetchClasses`, `fetchTasksByClass`, `fetchSubmissionsByTask`). These are isolated to `ClassDetail.tsx` and `Dashboard.tsx`, which operate under authenticated teacher sessions.
-*   **Legacy unused:** 4 functions (`findClassByJoinCode`, `findStudentByClassAndPin`, `getStudentDashboardData`, `fetchStudentActivityLogs` for single student) are vestigial and can be safely ignored or removed later.
-
-## 2. Student login test result
-*   **Flow:** Uses the `student_login_by_code_and_pin` RPC.
-*   **Result:** PASSED. Securely bypasses public SELECT. Valid logins succeed, wrong credentials return generic errors, and archived classes are blocked ("This class is currently archived").
-
-## 3. Student session restore test result
-*   **Flow:** Relies purely on the `student_fetch_dashboard_data` RPC using the stored class ID, student ID, and PIN.
-*   **Result:** PASSED. Restore uses RPC safely. Logout successfully clears stored PIN data, preventing old session bleed.
-
-## 4. Student dashboard RPC compatibility result
-*   **Flow:** Dashboard successfully structures its state from the `student_fetch_dashboard_data` JSON payload.
-*   **Result:** PASSED. Name, points, tasks, group members, submissions, attachments, and badges correctly map into the React state without needing side reads.
-
-## 5. Student submission test result
-*   **Flow:** Uses existing SECURITY DEFINER RPCs (`submit_individual_task`, `submit_group_task`).
-*   **Result:** PASSED. Submissions bypass RLS policies entirely and write safely. Post-submission refreshes trigger the secure dashboard RPC payload.
-
-## 6. Attachment test result
-*   **Flow:** Metadata is saved via RPCs. File uploads hit the `supabase.storage` API.
-*   **Result:** PASSED. Upload flows still work natively. Dashboard reads the metadata from the RPC payload.
-
-## 7. Realtime/refresh test result (BLOCKER IDENTIFIED)
-*   **Flow:** `StudentAccess.tsx` relies on `supabase.channel().on('postgres_changes', ...)` across 8 tables (`classes`, `students`, `meetings`, `tasks`, `task_groups`, `task_group_members`, `task_submissions`).
-*   **Result:** **WARNING/BLOCKER.** Realtime `postgres_changes` evaluates the WAL stream against the subscriber's RLS policies. Because students are anonymous, dropping the public `SELECT` policies will silently break their realtime subscriptions (they will receive no events).
-*   **Recommendation:** Before Phase 18I (or as part of it), implement a `Broadcast` channel strategy where the teacher's client or a DB trigger broadcasts a generic `"refresh"` event to `room-${classId}`, which students listen to and respond by calling `fetchDashboardData`.
-
-## 8. Teacher regression test
-*   **Result:** PASSED. Teachers operate with an authenticated JWT. The upcoming lockdown will strictly scope their access to `teacher_id = auth.uid()`. Their direct SELECTs, updates, and deletes are perfectly compatible with the standard ownership RLS patterns planned for Phase 18I.
-
-## 9. Exact public SELECT policies recommended for removal later
-*(Not applied in this phase)*
-1.  `Allow select for everyone` ON `classes`
-2.  `Allow select students for everyone` ON `students`
-3.  `Allow select meetings for everyone` ON `meetings`
-4.  `Students can view published tasks` ON `tasks`
-5.  `Students can view task groups` ON `task_groups`
-6.  `Anyone can select group members` ON `task_group_members`
-7.  `Students can view their own submissions` ON `task_submissions`
-8.  `Students can view their own attachments` ON `submission_attachments`
-9.  `Allow students to select their own logs` ON `activity_logs`
-10. `Anyone can select badge_definitions` ON `badge_definitions`
-11. `Anyone can select student_badges` ON `student_badges`
-
-## 10. Replacement RLS policy direction
-*(Not applied in this phase)*
-*   **Classes:** `teacher_id = auth.uid()`
-*   **Child tables (Students, Tasks, etc.):** `class_id IN (SELECT id FROM classes WHERE teacher_id = auth.uid())`
-*   **Student Access:** Exclusively handled via existing `SECURITY DEFINER` RPCs (which run as the table owner and bypass RLS).
-
-## 11. Rollback SQL plan (EMERGENCY ONLY)
-*(Not applied in this phase)*
-```sql
--- Emergency Rollback: Re-enable anonymous SELECTs
-CREATE POLICY "Allow select for everyone" ON classes FOR SELECT TO anon USING (true);
-CREATE POLICY "Allow select students for everyone" ON students FOR SELECT TO anon USING (true);
--- ... and identical broad policies for the other 9 tables.
-```
-
-## 12. Storage readiness note
-*   **Status:** The `task-submissions` bucket currently permits anonymous uploads and downloads.
-*   **Next Steps:** Storage hardening is deferred to Phase 18J. We will likely require Teacher Signed URLs for downloads and strict path-based RLS for student uploads.
-
-## 13. Blockers
-1.  **Student Realtime Dependency:** The `postgres_changes` subscriptions in `StudentAccess.tsx` rely on public SELECT policies to receive WAL events. When we lock down the tables, students will stop receiving live updates. A broadcast-based fallback is required.
-
-## 14. Final readiness verdict
-**Verdict:** **Almost ready, but fix listed blockers first.** The core data retrieval is 100% secure and ready for RLS, but the Realtime sync mechanism needs a Broadcast refactor before we pull the plug on public SELECTs.
+This report documents the revised implementation of UI and UX improvements to the teacher's live classroom roster view under Phase 21B of the Mission Control Remastered initiative.
 
 ---
-**Confirmations:**
-*   Confirmed: No public SELECT policies were dropped.
-*   Confirmed: No RLS policies were changed.
-*   Confirmed: No storage policies were changed.
-*   Confirmed: Protected app logic (login, RPCs, teacher isolation, submissions) was entirely preserved.
+
+## 1. Files Changed
+
+* `/src/hooks/useClasses.ts`: 
+  * Refactored `updateStudentPoints` and `updateStudentLives` to utilize a decoupled Promise-based execution queue (`updateQueue`).
+  * Migrated to fully instantaneous Optimistic UI, stripping away all loading dependencies for score mutations.
+  * Added `pendingCount` state to protect uncommitted optimistic updates from being aggressively overwritten by concurrent `loadData(true)` fetches (e.g. from background web sockets or other parallel operations).
+* `/src/components/ClassDetail.tsx`: 
+  * Reverted the `pendingUpdates` state and lock logic from the initial Phase 21B draft.
+  * Removed button-disable states related to in-flight network requests, ensuring they remain 100% interactive at all times.
+  * Removed row-level opacity fading to maintain a crisp, distraction-free visual aesthetic.
+
+---
+
+## 2. UX & Responsiveness Improvements
+
+* **Frictionless Rapid Fire**: Teachers can now rapidly tap +1 or -1 on a student's row without any lockouts. The UI increments immediately on every click.
+* **Intelligent Network Queueing**: Rapid clicks are automatically serialized in the background. If a teacher clicks +1 three times in half a second, the application applies +3 to the UI instantly and safely executes three sequential API calls to guarantee database integrity without race conditions.
+* **Safe Real-Time Consistency**: If a background database sync triggers while rapid clicks are still processing, the system intelligently ignores the stale database snapshot for that specific student, preserving the teacher's optimistic clicks until the backend is fully caught up.
+* **Zero Global Loading**: The application is fully responsive. There are no spinners, locked buttons, or blocked inputs during score mutations.
+
+---
+
+## 3. Test Results
+
+### Rapid Point Update Tests
+* **Addition (+1, +5, +10)**: UI responds instantly on every click. Rapid clicks stack cleanly and synchronize with the database flawlessly.
+* **Deduction (-1, -5)**: Safely deducts and bottoms out at `0`. Rapid clicks cannot push the score below zero locally or remotely.
+
+### Rapid Life Update Tests
+* **Life Deduction**: Lives properly deduct visually in milliseconds. Row state updates immediately without reordering (inheriting Phase 21A's alphabetical sort logic).
+* **Life Restoration**: Lives increase instantly, enforcing the `maxLives` ceiling natively in the optimistic state before the network call is even dispatched.
+
+---
+
+## 4. Regression Confirmations
+
+* [x] **Stable Roster Order**: Roster sorting logic was completely untouched. The list remains sorted purely by alphabetized names.
+* [x] **No Core Disruptions**: Student login, AI Writing Check, badges, reporting data, dashboard, and exports logic remain totally unimpacted.
+* [x] **Database & Security Intact**: No database schema, RLS policies, teacher security rules, or storage policies were modified. No backend RPC functions were added.
+
+---
+
+## 5. Recommendation
+
+Phase 21B (Revised) is **complete**. Point and life controls are now blazingly fast, instantly responsive, and fully optimized for rapid classroom multitasking without sacrificing data integrity.

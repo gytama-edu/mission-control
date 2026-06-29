@@ -106,18 +106,6 @@ export function Dashboard({
   const activeSessions = activeClasses.reduce((sum, c) => sum + (c.meetings?.filter(m => m.status === 'active')?.length || 0), 0);
   const totalMissions = activeClasses.reduce((sum, c) => sum + (c.meetings?.length || 0), 0);
 
-  if (isLoading) {
-    return (
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex items-center justify-center min-h-[60vh]">
-        <div className="text-center p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80 backdrop-blur-md max-w-md w-full">
-          <Loader2 className="mx-auto h-12 w-12 text-rose-500 animate-spin mb-4" />
-          <h3 className="font-display font-semibold text-lg text-white mb-1">Accessing Dashboard</h3>
-          <p className="text-slate-400 text-sm">Loading classroom data...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col min-h-[calc(100vh-2rem)] justify-between">
       <div>
@@ -147,7 +135,7 @@ export function Dashboard({
                 Log Out
               </button>
             )}
-            {hasLocalData() && classes.length === 0 && (
+            {!isLoading && hasLocalData() && classes.length === 0 && (
               <button
                 onClick={() => {
                   if (confirm('Import local data to Supabase? This may take a moment.')) {
@@ -162,7 +150,8 @@ export function Dashboard({
             )}
             <button
               onClick={() => setIsAdding(!isAdding)}
-              className="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl font-bold font-mono uppercase tracking-wider text-[10px] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/10 active:scale-[0.98] border border-rose-500/30"
+              disabled={isLoading}
+              className="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl font-bold font-mono uppercase tracking-wider text-[10px] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/10 active:scale-[0.98] border border-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus size={14} />
               Create Class
@@ -170,8 +159,21 @@ export function Dashboard({
           </div>
         </header>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 flex items-start gap-3">
+        {isLoading ? (
+          <div className="w-full flex items-center justify-center min-h-[50vh] animate-fade-in">
+            <div className="text-center p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80 backdrop-blur-md max-w-md w-full shadow-lg">
+              <div className="relative inline-block mb-4">
+                <Loader2 className="mx-auto h-12 w-12 text-rose-500 animate-spin" />
+                <div className="absolute inset-0 border-4 border-rose-500/20 rounded-full animate-pulse"></div>
+              </div>
+              <h3 className="font-display font-semibold text-lg text-white mb-2">Accessing Dashboard</h3>
+              <p className="text-slate-400 text-sm">Loading classroom data and metrics...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 flex items-start gap-3">
             <Shield size={20} className="shrink-0 mt-0.5 text-red-500" />
             <div>
               <h3 className="font-bold mb-1">Connection Error</h3>
@@ -284,7 +286,7 @@ export function Dashboard({
           </div>
           <h3 className="text-xl font-display font-bold text-white mb-2">No Classes Found</h3>
           <p className="text-slate-400 text-sm max-w-md mx-auto mb-8 leading-relaxed">
-            Ready to set up your classroom dashboard? Create a new class to begin tracking student performance, managing meetings, and awarding points.
+            Create your first class to start managing students, points, lives, tasks, and badges.
           </p>
           {!isAdding && (
             <button
@@ -501,7 +503,7 @@ export function Dashboard({
                             Claim
                           </button>
                         )}
-                        showArchived ? (
+                        {showArchived ? (
                           <button
                             onClick={(e) => handleRestoreClick(e, c)}
                             className="bg-slate-950 hover:bg-emerald-600/10 border border-slate-800 hover:border-emerald-500/30 text-slate-400 hover:text-emerald-400 text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md transition-all font-bold cursor-pointer"
@@ -517,7 +519,7 @@ export function Dashboard({
                           >
                             <Archive size={14} />
                           </button>
-                        )
+                        )}
                       </div>
                     )}
                   </div>
@@ -549,6 +551,8 @@ export function Dashboard({
             })}
           </div>
         </div>
+      )}
+      </>
       )}
       </div>
 
