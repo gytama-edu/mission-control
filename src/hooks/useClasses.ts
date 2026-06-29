@@ -50,6 +50,10 @@ export function useClasses(teacherId: string | null) {
     }
   };
 
+  const refreshData = async () => {
+    await loadData(true);
+  };
+
   useEffect(() => {
     loadData();
 
@@ -282,6 +286,7 @@ export function useClasses(teacherId: string | null) {
     classes,
     isLoading,
     error,
+    refreshData,
     importLocalData,
     addClass,
     claimClass,
