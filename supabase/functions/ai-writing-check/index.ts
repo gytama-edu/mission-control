@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
     if (subError || !submissionData) {
       console.error('Submission fetch error:', subError);
-      return new Response(JSON.stringify({ error: 'Submission not found or unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'submission_not_found' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
     if (classError || !classData) {
       console.error('Class fetch error:', classError);
-      return new Response(JSON.stringify({ error: 'Class not found or unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'submission_not_found' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
 
     // Explicitly verify the teacher owns the class
     if (classData.teacher_id !== user.id) {
-       return new Response(JSON.stringify({ error: 'Forbidden: You do not own this submission' }), {
+       return new Response(JSON.stringify({ error: 'submission_not_owned_by_teacher' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
