@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { ClassData } from '../types';
-import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download, Activity, Radio, LayoutGrid, KeyRound, Heart } from 'lucide-react';
+import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download, Activity, Radio, LayoutGrid, KeyRound, Heart, Archive, ArchiveRestore } from 'lucide-react';
 
 interface DashboardProps {
   classes: ClassData[];
   isLoading: boolean;
   error: string | null;
   onAddClass: (name: string, level: string, maxLives: number) => void;
+  onArchiveClass: (id: string) => void;
+  onRestoreClass: (id: string) => void;
   onDeleteClass: (id: string) => void;
   onSelectClass: (id: string) => void;
   onImportLocalData: () => void;
@@ -20,6 +22,8 @@ export function Dashboard({
   isLoading,
   error,
   onAddClass,
+  onArchiveClass,
+  onRestoreClass,
   onDeleteClass,
   onSelectClass,
   onImportLocalData,
@@ -31,6 +35,7 @@ export function Dashboard({
   const [newClassName, setNewClassName] = useState('');
   const [newClassLevel, setNewClassLevel] = useState('');
   const [newClassMaxLives, setNewClassMaxLives] = useState(5);
+  const [showArchived, setShowArchived] = useState(false);
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,10 +55,13 @@ export function Dashboard({
     }
   };
 
-  const totalClasses = classes.length;
-  const totalStudents = classes.reduce((sum, c) => sum + (c.students?.length || 0), 0);
-  const activeSessions = classes.reduce((sum, c) => sum + (c.meetings?.filter(m => m.status === 'active')?.length || 0), 0);
-  const totalMissions = classes.reduce((sum, c) => sum + (c.meetings?.length || 0), 0);
+  const activeClasses = classes.filter(c => !c.isArchived);
+  const archivedClasses = classes.filter(c => c.isArchived);
+
+  const totalClasses = activeClasses.length;
+  const totalStudents = activeClasses.reduce((sum, c) => sum + (c.students?.length || 0), 0);
+  const activeSessions = activeClasses.reduce((sum, c) => sum + (c.meetings?.filter(m => m.status === 'active')?.length || 0), 0);
+  const totalMissions = activeClasses.reduce((sum, c) => sum + (c.meetings?.length || 0), 0);
 
   if (isLoading) {
     return (
@@ -226,7 +234,7 @@ export function Dashboard({
         </div>
       )}
 
-      {classes.length === 0 ? (
+      {activeClasses.length === 0 && !showArchived ? (
         <div className="text-center py-20 bg-slate-900/35 border border-dashed border-slate-800/80 rounded-2xl backdrop-blur-sm px-6 max-w-xl mx-auto my-12">
           <div className="relative inline-block mb-4">
             <Rocket className="h-12 w-12 text-slate-600 drop-shadow-[0_0_10px_rgba(244,63,94,0.1)]" />
@@ -246,15 +254,40 @@ export function Dashboard({
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between mb-2 select-none">
-            <h2 className="text-xs font-mono uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-              <LayoutGrid size={14} className="text-rose-500" />
-              Active Classes
-            </h2>
-            <span className="text-[10px] font-mono text-slate-500 uppercase">
-              {totalClasses} {totalClasses === 1 ? 'Class' : 'Classes'} Registered
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2 select-none border-b border-slate-900/60 pb-3">
+            <div>
+              <h2 className="text-xs font-mono uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                <LayoutGrid size={14} className={showArchived ? "text-slate-500" : "text-rose-500"} />
+                {showArchived ? 'Archived Classes' : 'Active Classes'}
+              </h2>
+              <span className="text-[10px] font-mono text-slate-500 uppercase">
+                {showArchived ? archivedClasses.length : totalClasses} {showArchived ? (archivedClasses.length === 1 ? 'Class' : 'Classes') : (totalClasses === 1 ? 'Class' : 'Classes')} {showArchived ? 'Archived' : 'Active'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  showArchived 
+                    ? 'bg-rose-600/10 border-rose-500/30 text-rose-400' 
+                    : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {showArchived ? <LayoutGrid size={12} /> : <Archive size={12} />}
+                {showArchived ? 'View Active' : 'View Archived'}
+              </button>
+            </div>
           </div>
+          
+          {showArchived && (
+            <div className="bg-slate-900/40 border border-slate-800/80 text-slate-400 px-4 py-3 rounded-xl mb-4 text-xs flex gap-2.5 items-start backdrop-blur-sm select-none">
+              <Archive size={16} className="shrink-0 mt-0.5 text-slate-500" />
+              <div>
+                Archived classes are hidden from the main dashboard but can be restored later. Student records, tasks, submissions, badges, reports, and uploaded files are preserved.
+              </div>
+            </div>
+          )}
 
           {/* Desktop Table View */}
           <div className="hidden md:block overflow-hidden bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl shadow-xl">
@@ -271,7 +304,7 @@ export function Dashboard({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/40">
-                {classes.map((c) => {
+                {(showArchived ? archivedClasses : activeClasses).map((c) => {
                   const hasActiveSession = c.meetings?.some((m) => m.status === 'active');
                   return (
                     <tr 
@@ -350,18 +383,34 @@ export function Dashboard({
                             Reports
                           </button>
                           {!hasActiveSession && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm('Are you sure you want to delete this class?\nStudents, points, and history will be removed. This cannot be undone.')) {
-                                  onDeleteClass(c.id);
-                                }
-                              }}
-                              className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-400/10 transition-colors cursor-pointer"
-                              title="Delete Class"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            showArchived ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Restore this class?\nThis will move the class back to your active dashboard.')) {
+                                    onRestoreClass(c.id);
+                                  }
+                                }}
+                                className="bg-slate-950 hover:bg-emerald-600/10 border border-slate-800 hover:border-emerald-500/30 text-slate-400 hover:text-emerald-400 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg transition-all font-bold cursor-pointer flex items-center gap-1"
+                                title="Restore Class"
+                              >
+                                <ArchiveRestore size={12} />
+                                Restore
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Archive this class?\nThis will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.')) {
+                                    onArchiveClass(c.id);
+                                  }
+                                }}
+                                className="text-slate-500 hover:text-amber-500 p-1.5 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer"
+                                title="Archive Class"
+                              >
+                                <Archive size={13} />
+                              </button>
+                            )
                           )}
                         </div>
                       </td>
@@ -374,7 +423,7 @@ export function Dashboard({
 
           {/* Mobile Grid Card View (md:hidden) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:hidden">
-            {classes.map((c) => {
+            {(showArchived ? archivedClasses : activeClasses).map((c) => {
               const hasActiveSession = c.meetings?.some((m) => m.status === 'active');
               return (
                 <div
@@ -419,18 +468,33 @@ export function Dashboard({
                             Claim
                           </button>
                         )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('Are you sure you want to delete this class?\nStudents, points, and history will be removed. This cannot be undone.')) {
-                              onDeleteClass(c.id);
-                            }
-                          }}
-                          className="text-slate-500 hover:text-red-400 p-1 rounded-md hover:bg-red-400/10 transition-colors cursor-pointer"
-                          title="Delete Class"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        showArchived ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('Restore this class?\nThis will move the class back to your active dashboard.')) {
+                                onRestoreClass(c.id);
+                              }
+                            }}
+                            className="bg-slate-950 hover:bg-emerald-600/10 border border-slate-800 hover:border-emerald-500/30 text-slate-400 hover:text-emerald-400 text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md transition-all font-bold cursor-pointer"
+                            title="Restore Class"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('Archive this class?\nThis will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.')) {
+                                onArchiveClass(c.id);
+                              }
+                            }}
+                            className="text-slate-500 hover:text-amber-500 p-1.5 rounded-md hover:bg-amber-500/10 transition-colors cursor-pointer"
+                            title="Archive Class"
+                          >
+                            <Archive size={14} />
+                          </button>
+                        )
                       </div>
                     )}
                   </div>

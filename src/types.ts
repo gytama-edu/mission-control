@@ -41,6 +41,7 @@ export interface ClassData {
   createdAt: string;
   joinCode: string;
   teacherId?: string | null;
+  isArchived?: boolean;
 }
 
 export interface ActivityLog {

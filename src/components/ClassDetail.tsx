@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
+import { downloadCsv, sanitizeFilename } from '../utils/exportUtils';
 
 interface ClassDetailProps {
   classData: ClassData;
   onBack: () => void;
   onEditClass: (name: string, level: string, maxLives: number) => void;
+  onArchiveClass: () => void;
   onDeleteClass: () => void;
   onRegenerateJoinCode: () => void;
   onAddStudent: (name: string) => void;
@@ -26,6 +28,7 @@ export function ClassDetail({
   classData,
   onBack,
   onEditClass,
+  onArchiveClass,
   onDeleteClass,
   onRegenerateJoinCode,
   onAddStudent,
@@ -786,6 +789,104 @@ export function ClassDetail({
     }
   };
 
+  const handleExportRoster = () => {
+    const rows = (classData.students || []).map(s => ({
+      'Student Name': s.name,
+      'Nickname': s.nickname || '',
+      'Student PIN': s.pin,
+      'Current Points': s.points,
+      'Current Lives': s.lives,
+      'Joined Date': new Date(s.joinedAt).toLocaleString()
+    }));
+    const filename = sanitizeFilename(`mission-control-roster-${classData.name}-${new Date().toISOString().split('T')[0]}`) + '.csv';
+    downloadCsv(filename, rows);
+  };
+
+  const handleExportActivityLogs = () => {
+    const rows = activityLogs.map(log => {
+      const studentName = classData.students?.find(s => s.id === log.student_id)?.name || '';
+      return {
+        'Date/Time': new Date(log.created_at || Date.now()).toLocaleString(),
+        'Student Name': studentName,
+        'Action Type': log.action_type,
+        'Points Change': log.points_delta || 0,
+        'Lives Change': log.lives_delta || 0,
+        'Reason / Metadata': log.reason || JSON.stringify(log.metadata || {})
+      };
+    });
+    const filename = sanitizeFilename(`mission-control-activity-logs-${classData.name}-${new Date().toISOString().split('T')[0]}`) + '.csv';
+    downloadCsv(filename, rows);
+  };
+
+  const handleExportTasksSubmissions = async () => {
+    try {
+      let subs = reportSubmissions;
+      let tasks = allTasks;
+      let groups = reportGroups;
+      
+      if (!tasks.length || !subs.length) {
+        const reportsData = await taskDb.fetchClassReportsData(classData.id);
+        subs = reportsData.submissions;
+        groups = reportsData.groups;
+        tasks = await taskDb.fetchTasksByClass(classData.id);
+      }
+      
+      const rows = subs.map(sub => {
+        const task = tasks.find(t => t.id === sub.task_id);
+        const isGroup = task?.task_type === 'group';
+        let submitterName = '';
+        if (isGroup) {
+          submitterName = groups.find(g => g.id === sub.task_group_id)?.name || 'Unknown Group';
+        } else {
+          submitterName = classData.students?.find(s => s.id === sub.student_id)?.name || 'Unknown Student';
+        }
+        
+        return {
+          'Task Title': task?.title || 'Unknown Task',
+          'Task Type': isGroup ? 'Group' : 'Individual',
+          'Student or Group Name': submitterName,
+          'Submission Status': sub.status,
+          'Submitted Date': sub.created_at ? new Date(sub.created_at).toLocaleString() : '',
+          'Awarded Points': sub.awarded_points ?? '',
+          'Max Points': task?.reward_points || 0,
+          'Teacher Feedback': sub.teacher_feedback || ''
+        };
+      });
+      const filename = sanitizeFilename(`mission-control-tasks-submissions-${classData.name}-${new Date().toISOString().split('T')[0]}`) + '.csv';
+      downloadCsv(filename, rows);
+    } catch (err: any) {
+      alert('Failed to generate export: ' + err.message);
+    }
+  };
+
+  const handleExportBadges = async () => {
+    try {
+      let badgesToExport = studentBadges;
+      let defs = badgeDefinitions;
+      if (!badgesToExport.length && !isBadgesTableMissing) {
+         badgesToExport = await badgeDb.fetchStudentBadges(classData.id);
+      }
+      if (!defs.length && !isBadgesTableMissing) {
+         defs = await badgeDb.fetchBadgeDefinitions(classData.id);
+      }
+      const rows = badgesToExport.map(sb => {
+        const studentName = classData.students?.find(s => s.id === sb.student_id)?.name || 'Unknown Student';
+        const badgeName = defs.find(bd => bd.id === sb.badge_id)?.title || 'Unknown Badge';
+        return {
+          'Student Name': studentName,
+          'Badge Name': badgeName,
+          'Source': sb.source,
+          'Awarded Reason': sb.awarded_reason || '',
+          'Awarded Date': new Date(sb.awarded_at).toLocaleString()
+        };
+      });
+      const filename = sanitizeFilename(`mission-control-badges-${classData.name}-${new Date().toISOString().split('T')[0]}`) + '.csv';
+      downloadCsv(filename, rows);
+    } catch (err: any) {
+      alert('Failed to generate export: ' + err.message);
+    }
+  };
+
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudentName.trim()) return;
@@ -987,30 +1088,35 @@ export function ClassDetail({
       {activeTab === 'roster' && (
         <div className="space-y-6">
           {/* Roster Command Bar (Integrated Form & Reason modifier) */}
-          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800/80 p-4 rounded-2xl shadow-xl flex flex-col xl:flex-row gap-4 xl:items-center justify-between select-none">
+          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800/80 p-4 rounded-2xl shadow-xl flex flex-col xl:flex-row gap-6 xl:items-end justify-between select-none">
             {/* Left: Add Student form */}
-            <form onSubmit={handleAddStudent} className="flex flex-col sm:flex-row items-stretch gap-2.5 flex-1 max-w-2xl">
-              <input
-                type="text"
-                required
-                value={newStudentName}
-                onChange={(e) => setNewStudentName(e.target.value)}
-                placeholder="Enter new student name..."
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-sm font-sans"
-              />
-              <button
-                type="submit"
-                className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg shadow-rose-600/15"
-              >
-                <Plus size={15} /> Add Student
-              </button>
-            </form>
+            <div className="flex-1 max-w-2xl">
+              <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2">
+                Add Student
+              </span>
+              <form onSubmit={handleAddStudent} className="flex flex-col sm:flex-row items-stretch gap-2.5">
+                <input
+                  type="text"
+                  required
+                  value={newStudentName}
+                  onChange={(e) => setNewStudentName(e.target.value)}
+                  placeholder="Enter new student name..."
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-sm font-sans"
+                />
+                <button
+                  type="submit"
+                  className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg shadow-rose-600/15"
+                >
+                  <Plus size={15} /> Add
+                </button>
+              </form>
+            </div>
 
             {/* Right: Attach Reason (Quick Change modifier) */}
             {classData.students.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2.5 border-t xl:border-t-0 border-slate-800/80 pt-3 xl:pt-0 shrink-0">
-                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
-                  Attach Reason:
+              <div className="shrink-0 border-t xl:border-t-0 xl:border-l border-slate-800/80 pt-4 xl:pt-0 xl:pl-6">
+                <span className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2">
+                  Reason for Point/Life Changes
                 </span>
                 <div className="flex items-center gap-2">
                   <select
@@ -1019,7 +1125,7 @@ export function ClassDetail({
                       setSelectedReason(e.target.value);
                       if (e.target.value !== 'custom') setCustomReason('');
                     }}
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-rose-500/40 transition-all max-w-[180px] font-sans"
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-rose-500/40 transition-all min-w-[180px] max-w-[220px] font-sans"
                   >
                     <option value="">-- No Reason (Quick Change) --</option>
                     <optgroup label="Points Options">
@@ -1030,7 +1136,7 @@ export function ClassDetail({
                       <option value="Excellent participation">Excellent participation</option>
                     </optgroup>
                     <optgroup label="Lives Options">
-                      <option value="Speaking L1 in class">Speaking L1 in class</option>
+                      <option value="Using native language">Using native language</option>
                       <option value="Off-task behavior">Off-task behavior</option>
                       <option value="Arriving late">Arriving late</option>
                       <option value="Disruptive behavior">Disruptive behavior</option>
@@ -1045,7 +1151,7 @@ export function ClassDetail({
                       placeholder="Enter custom reason..."
                       value={customReason}
                       onChange={(e) => setCustomReason(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 transition-all w-40 font-sans"
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/40 transition-all w-40 font-sans"
                     />
                   )}
 
@@ -1056,7 +1162,7 @@ export function ClassDetail({
                         setSelectedReason('');
                         setCustomReason('');
                       }}
-                      className="text-slate-400 hover:text-rose-400 text-xs font-mono uppercase tracking-wider underline cursor-pointer px-1.5 transition-colors"
+                      className="text-slate-400 hover:text-rose-400 text-xs font-mono uppercase tracking-wider underline cursor-pointer px-2 transition-colors"
                     >
                       Clear
                     </button>
@@ -1250,46 +1356,46 @@ export function ClassDetail({
 
                       <div className="grid grid-cols-2 gap-2.5">
                         {/* Lives Control */}
-                        <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/80 flex flex-col justify-between select-none">
-                          <div className="text-[9px] text-slate-500 font-mono uppercase tracking-widest flex items-center gap-1">
-                            <Shield size={10} className="text-red-400" /> Lives
+                        <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex flex-col justify-between select-none">
+                          <div className="text-[10px] text-slate-500 font-mono uppercase tracking-widest flex items-center gap-1.5">
+                            <Shield size={12} className="text-red-400" /> Lives
                           </div>
-                          <div className="flex items-center justify-between mt-1">
+                          <div className="flex items-center justify-between mt-2">
                             <button
                               onClick={() => onUpdateLives(student.id, -1, getActiveReason())}
                               disabled={student.lives <= 0}
-                              className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                             >
-                              <Minus size={12} />
+                              <Minus size={16} />
                             </button>
-                            <span className={`font-mono text-base font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
+                            <span className={`font-mono text-xl font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
                               {student.lives}
                             </span>
                             <button
                               onClick={() => onUpdateLives(student.id, 1, getActiveReason())}
                               disabled={student.lives >= classData.maxLives}
-                              className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                             >
-                              <Plus size={12} />
+                              <Plus size={16} />
                             </button>
                           </div>
                         </div>
 
                         {/* Points Control */}
-                        <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/80 flex flex-col justify-between select-none">
-                          <div className="text-[9px] text-slate-500 font-mono uppercase tracking-widest flex items-center justify-between">
-                            <span className="flex items-center gap-1"><Star size={10} className="text-amber-400" /> Points</span>
-                            <span className="font-mono font-bold text-white text-xs">{student.points}</span>
+                        <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex flex-col justify-between select-none">
+                          <div className="text-[10px] text-slate-500 font-mono uppercase tracking-widest flex items-center justify-between">
+                            <span className="flex items-center gap-1.5"><Star size={12} className="text-amber-400" /> Points</span>
+                            <span className="font-mono font-bold text-white text-sm">{student.points}</span>
                           </div>
-                          <div className="flex flex-col gap-1.5 mt-1.5">
-                            <div className="flex items-center justify-between gap-1">
-                              <button onClick={() => onUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
-                              <button onClick={() => onUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
+                          <div className="flex flex-col gap-2 mt-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <button onClick={() => onUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
+                              <button onClick={() => onUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
                             </div>
-                            <div className="flex items-center justify-between gap-1">
-                              <button onClick={() => onUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer">+1</button>
-                              <button onClick={() => onUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer font-semibold">+5</button>
-                              <button onClick={() => onUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-[9px] py-0.5 font-mono rounded bg-rose-600/25 border border-rose-500/30 hover:bg-rose-600/35 text-white font-bold cursor-pointer">+10</button>
+                            <div className="flex items-center justify-between gap-2">
+                              <button onClick={() => onUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+1</button>
+                              <button onClick={() => onUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-bold">+5</button>
+                              <button onClick={() => onUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/40 text-white font-bold cursor-pointer">+10</button>
                             </div>
                           </div>
                         </div>
@@ -3484,13 +3590,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm('Are you sure you want to delete this class?\nStudents, points, and history will be removed. This cannot be undone.')) {
-                    onDeleteClass();
+                  if (confirm('Archive this class?\nThis will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.')) {
+                    onArchiveClass();
                   }
                 }}
-                className="text-red-500 hover:text-red-400 font-bold text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer"
+                className="text-amber-500 hover:text-amber-400 font-bold text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-amber-500/10 transition-all cursor-pointer"
               >
-                <Trash2 size={14} /> Delete Class
+                <Archive size={14} /> Archive Class
               </button>
               <button
                 type="submit"
@@ -3502,6 +3608,50 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
           </form>
         </div>
         
+        <div className="max-w-lg mt-6 bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 shadow-xl animate-fade-in">
+          <div className="border-b border-slate-800/60 pb-3 mb-4">
+            <h2 className="text-base font-display font-bold text-white flex items-center gap-2">
+              <Folder size={16} className="text-blue-400" />
+              Data Export & Backup
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">Download class records as CSV files before clearing history or closing a semester.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={handleExportRoster}
+              type="button"
+              className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all border border-slate-700/50 cursor-pointer"
+            >
+              <Users size={14} className="text-emerald-400" />
+              Download Roster CSV
+            </button>
+            <button
+              onClick={handleExportActivityLogs}
+              type="button"
+              className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all border border-slate-700/50 cursor-pointer"
+            >
+              <Clock size={14} className="text-indigo-400" />
+              Download Activity Logs CSV
+            </button>
+            <button
+              onClick={handleExportTasksSubmissions}
+              type="button"
+              className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all border border-slate-700/50 cursor-pointer"
+            >
+              <CheckSquare size={14} className="text-purple-400" />
+              Download Tasks & Submissions CSV
+            </button>
+            <button
+              onClick={handleExportBadges}
+              type="button"
+              className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all border border-slate-700/50 cursor-pointer"
+            >
+              <Award size={14} className="text-amber-400" />
+              Download Badges CSV
+            </button>
+          </div>
+        </div>
+
         <div className="max-w-lg mt-6 bg-slate-900/30 backdrop-blur-sm border border-red-900/30 rounded-2xl p-5 shadow-xl animate-fade-in">
           <div className="border-b border-red-900/30 pb-3 mb-4">
             <h2 className="text-base font-display font-bold text-red-400">Activity History</h2>

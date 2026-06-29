@@ -7,6 +7,7 @@ CREATE TABLE classes (
   max_lives integer NOT NULL CHECK (max_lives >= 1 AND max_lives <= 20),
   join_code text UNIQUE NOT NULL,
   teacher_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  is_archived boolean NOT NULL DEFAULT false,
   created_at timestamptz DEFAULT now()
 );
 

@@ -691,6 +691,12 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
         return;
       }
 
+      if (targetClass.is_archived) {
+        setError('This class is currently archived. Please contact your teacher.');
+        setIsLoading(false);
+        return;
+      }
+
       const student = await db.findStudentByClassAndPin(targetClass.id, normalizedEnteredPin);
       if (!student) {
         setError('PIN not found in this class.');

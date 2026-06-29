@@ -115,6 +115,20 @@ export function useClasses(teacherId: string | null) {
     } catch (err: any) { alert(err.message); }
   };
 
+  const archiveClass = async (id: string) => {
+    try {
+      await db.archiveClass(id);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const restoreClass = async (id: string) => {
+    try {
+      await db.restoreClass(id);
+      await loadData();
+    } catch (err: any) { alert(err.message); }
+  };
+
   const deleteClass = async (id: string) => {
     try {
       await db.deleteClass(id);
@@ -199,6 +213,8 @@ export function useClasses(teacherId: string | null) {
     addClass,
     claimClass,
     editClass,
+    archiveClass,
+    restoreClass,
     deleteClass,
     addStudent,
     editStudent,

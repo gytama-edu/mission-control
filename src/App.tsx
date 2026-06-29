@@ -104,6 +104,8 @@ export default function App() {
     addClass,
     claimClass,
     editClass,
+    archiveClass,
+    restoreClass,
     deleteClass,
     regenerateJoinCode,
     addStudent,
@@ -159,6 +161,10 @@ export default function App() {
           classData={activeClass}
           onBack={() => setActiveClassId(null)}
           onEditClass={(name, level, maxLives) => editClass(activeClass.id, name, level, maxLives)}
+          onArchiveClass={() => {
+            archiveClass(activeClass.id);
+            setActiveClassId(null);
+          }}
           onDeleteClass={() => {
             deleteClass(activeClass.id);
             setActiveClassId(null);
@@ -189,6 +195,8 @@ export default function App() {
             isLoading={isLoading}
             error={error}
             onAddClass={addClass}
+            onArchiveClass={archiveClass}
+            onRestoreClass={restoreClass}
             onDeleteClass={deleteClass}
             onSelectClass={setActiveClassId}
             onImportLocalData={importLocalData}

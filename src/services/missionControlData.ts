@@ -232,6 +232,7 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
     joinCode: c.join_code,
     teacherId: c.teacher_id,
     createdAt: c.created_at,
+    isArchived: c.is_archived || false,
     students: (students || [])
       .filter(s => s.class_id === c.id)
       .map(s => ({
@@ -320,6 +321,30 @@ export const updateClass = async (id: string, name: string, level: string, maxLi
   // Log class updated
   await logActivity(id, 'class_updated', null, 0, 0, null, { name, level, max_lives: maxLives });
 
+  return data;
+};
+
+export const archiveClass = async (id: string): Promise<any> => {
+  const { data, error } = await supabase
+    .from('classes')
+    .update({ is_archived: true })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const restoreClass = async (id: string): Promise<any> => {
+  const { data, error } = await supabase
+    .from('classes')
+    .update({ is_archived: false })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
   return data;
 };
 
