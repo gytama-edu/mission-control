@@ -11,7 +11,7 @@ import { Landing } from './components/Landing';
 import { StudentAccess } from './components/StudentAccess';
 import { TeacherAuth } from './components/TeacherAuth';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
-import { AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, Loader2, ArrowLeft, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [teacherUser, setTeacherUser] = useState<any>(null);
@@ -101,6 +101,7 @@ export default function App() {
     classes,
     isLoading,
     error,
+    refreshData,
     importLocalData,
     addClass,
     claimClass,
@@ -120,8 +121,18 @@ export default function App() {
   } = useClasses(teacherUser?.id || null);
 
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
+  const [isSyncingClass, setIsSyncingClass] = useState(false);
 
   const activeClass = classes.find(c => c.id === activeClassId);
+
+  const handleSyncCurrentClass = async () => {
+    setIsSyncingClass(true);
+    try {
+      await refreshData();
+    } finally {
+      setIsSyncingClass(false);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -158,28 +169,42 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       {activeClass ? (
-        <ClassDetail
-          classData={activeClass}
-          onBack={() => setActiveClassId(null)}
-          onEditClass={(name, level, maxLives) => editClass(activeClass.id, name, level, maxLives)}
-          onArchiveClass={() => {
-            archiveClass(activeClass.id);
-            setActiveClassId(null);
-          }}
-          onDeleteClass={() => {
-            deleteClass(activeClass.id);
-            setActiveClassId(null);
-          }}
-          onRegenerateJoinCode={() => regenerateJoinCode(activeClass.id)}
-          onAddStudent={(name) => addStudent(activeClass.id, name)}
-          onEditStudent={(studentId, name, nickname) => editStudent(activeClass.id, studentId, name, nickname)}
-          onDeleteStudent={(studentId) => deleteStudent(activeClass.id, studentId)}
-          onRegenerateStudentPin={(studentId) => regenerateStudentPin(activeClass.id, studentId)}
-          onUpdateLives={(studentId, change, reason) => updateStudentLives(activeClass.id, studentId, change, reason)}
-          onUpdatePoints={(studentId, change, reason) => updateStudentPoints(activeClass.id, studentId, change, reason)}
-          onStartMeeting={() => startMeeting(activeClass.id)}
-          onEndMeeting={(meetingId) => endMeeting(activeClass.id, meetingId)}
-        />
+        <>
+          <div className="fixed bottom-4 right-4 sm:top-4 sm:bottom-auto z-50 select-none">
+            <button
+              type="button"
+              onClick={handleSyncCurrentClass}
+              disabled={isSyncingClass}
+              title="Refresh current class data without leaving this page"
+              className="bg-slate-900/95 hover:bg-slate-800 border border-slate-700/80 hover:border-rose-500/40 text-slate-200 hover:text-white px-3.5 py-2 rounded-xl text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-950/40 backdrop-blur-md disabled:opacity-70 disabled:cursor-wait cursor-pointer"
+            >
+              <RefreshCw size={14} className={isSyncingClass ? 'animate-spin' : ''} />
+              {isSyncingClass ? 'Syncing...' : 'Sync Data'}
+            </button>
+          </div>
+          <ClassDetail
+            classData={activeClass}
+            onBack={() => setActiveClassId(null)}
+            onEditClass={(name, level, maxLives) => editClass(activeClass.id, name, level, maxLives)}
+            onArchiveClass={() => {
+              archiveClass(activeClass.id);
+              setActiveClassId(null);
+            }}
+            onDeleteClass={() => {
+              deleteClass(activeClass.id);
+              setActiveClassId(null);
+            }}
+            onRegenerateJoinCode={() => regenerateJoinCode(activeClass.id)}
+            onAddStudent={(name) => addStudent(activeClass.id, name)}
+            onEditStudent={(studentId, name, nickname) => editStudent(activeClass.id, studentId, name, nickname)}
+            onDeleteStudent={(studentId) => deleteStudent(activeClass.id, studentId)}
+            onRegenerateStudentPin={(studentId) => regenerateStudentPin(activeClass.id, studentId)}
+            onUpdateLives={(studentId, change, reason) => updateStudentLives(activeClass.id, studentId, change, reason)}
+            onUpdatePoints={(studentId, change, reason) => updateStudentPoints(activeClass.id, studentId, change, reason)}
+            onStartMeeting={() => startMeeting(activeClass.id)}
+            onEndMeeting={(meetingId) => endMeeting(activeClass.id, meetingId)}
+          />
+        </>
       ) : (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-4">
           <div className="w-full max-w-7xl mx-auto mb-4 select-none">
