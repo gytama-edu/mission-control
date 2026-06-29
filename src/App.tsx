@@ -66,6 +66,7 @@ export default function App() {
     try {
       await supabase.auth.signOut();
       setTeacherUser(null);
+      setActiveClassId(null);
       handleSetViewMode('landing');
     } catch (err) {
       console.error('Logout error:', err);

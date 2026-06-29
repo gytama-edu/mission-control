@@ -887,7 +887,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 <div className="py-8 px-4 text-center bg-slate-950/40 rounded-xl border border-slate-850 text-slate-500 text-xs italic space-y-1">
                   <p className="font-semibold text-slate-400">Class Tasks Module Offline</p>
                   <p className="text-[10px] text-slate-650 max-w-sm mx-auto leading-relaxed mt-1">
-                    Your commander (teacher) is configuring the sub-database tables. Stay tuned!
+                    Your teacher is setting this up. Please check again later.
                   </p>
                 </div>
               ) : isTasksLoading ? (
@@ -1079,31 +1079,38 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                             📅 Due: {task.due_at ? new Date(task.due_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No deadline'}
                           </span>
                           
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (task.task_type === 'group' && !assignedGroup) return;
-                              openSubmissionModal(task);
-                            }}
-                            disabled={isClosed || (task.task_type === 'group' && !assignedGroup)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                              isClosed
-                                ? 'bg-slate-900 text-slate-500 border border-slate-850 cursor-not-allowed'
-                                : (task.task_type === 'group' && !assignedGroup)
-                                ? 'bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed'
+                          <div className="flex items-center gap-2 ml-auto">
+                            {task.task_type === 'group' && !assignedGroup && (
+                              <span className="text-[10px] text-amber-500/80 italic text-right hidden sm:block">
+                                You are not assigned to a group for this task yet. Please ask your teacher.
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (task.task_type === 'group' && !assignedGroup) return;
+                                openSubmissionModal(task);
+                              }}
+                              disabled={isClosed || (task.task_type === 'group' && !assignedGroup)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                isClosed
+                                  ? 'bg-slate-900 text-slate-500 border border-slate-850 cursor-not-allowed'
+                                  : (task.task_type === 'group' && !assignedGroup)
+                                  ? 'bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed'
+                                  : submission
+                                  ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-md cursor-pointer'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse hover:animate-none cursor-pointer'
+                              }`}
+                            >
+                              {(task.task_type === 'group' && !assignedGroup)
+                                ? 'Not Assigned Yet'
+                                : isClosed
+                                ? 'View Submission'
                                 : submission
-                                ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-md cursor-pointer'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse hover:animate-none cursor-pointer'
-                            }`}
-                          >
-                            {(task.task_type === 'group' && !assignedGroup)
-                              ? 'Unassigned'
-                              : isClosed
-                              ? 'View Submission'
-                              : submission
-                              ? 'Update Submission'
-                              : 'Open Task Form'}
-                          </button>
+                                ? 'Update Submission'
+                                : 'Open Task Form'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1213,7 +1220,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                   </p>
                 </div>
               ) : isBadgesLoading && earnedBadges.length === 0 ? (
-                <div className="py-6 text-center text-slate-500 text-xs font-medium font-mono animate-pulse">Scanning cockpit...</div>
+                <div className="py-6 text-center text-slate-500 text-xs font-medium font-mono animate-pulse">Loading your dashboard...</div>
               ) : earnedBadges.length === 0 ? (
                 <div className="py-8 px-4 text-center bg-slate-950/40 rounded-xl border border-slate-850 text-slate-500 text-xs italic space-y-1">
                   <p className="font-semibold text-slate-400">No Badges Yet</p>
@@ -1295,7 +1302,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 {/* Task Details */}
                 {selectedTaskForSubmission.description && (
                   <div className="bg-slate-950 border border-slate-850 p-4 rounded-xl">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Mission Directive</h4>
+                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Task Instructions</h4>
                     <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedTaskForSubmission.description}</p>
                   </div>
                 )}
@@ -1394,7 +1401,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 ) : submissionSuccess ? (
                   <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3.5 rounded-xl flex items-center gap-2.5 text-xs font-medium">
                     <CheckCircle size={16} />
-                    <span>Directive logged! Transmitting to commander...</span>
+                    <span>Submission sent! Your teacher can now review it.</span>
                   </div>
                 ) : (
                   <form onSubmit={handleTaskSubmit} className="space-y-4">
@@ -1408,7 +1415,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                           rows={4}
                           value={submissionText}
                           onChange={(e) => setSubmissionText(e.target.value)}
-                          placeholder="Type your response or directive log here..."
+                          placeholder="Type your response here..."
                           required={!selectedTaskForSubmission.allow_attachment_submission}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
                         />
@@ -1463,6 +1470,12 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                       </div>
                     )}
 
+                    {!selectedTaskForSubmission.allow_text_submission && !selectedTaskForSubmission.allow_attachment_submission && (
+                      <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center text-xs text-slate-400">
+                        This task does not require an upload or written answer. Please follow your teacher's classroom instructions.
+                      </div>
+                    )}
+
                     {submissionError && (
                       <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl flex items-center gap-2 text-xs">
                         <AlertTriangle size={14} className="shrink-0" />
@@ -1490,7 +1503,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                         ) : studentSubmissions[selectedTaskForSubmission.id] ? (
                           'Update Submission'
                         ) : (
-                          'Submit Directive'
+                          'Submit Task'
                         )}
                       </button>
                     </div>

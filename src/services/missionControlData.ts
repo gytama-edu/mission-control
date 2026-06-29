@@ -202,25 +202,35 @@ export const undoActivityLog = async (logId: string): Promise<any> => {
 
 
 export const fetchClasses = async (teacherId?: string | null): Promise<ClassData[]> => {
+  if (teacherId === null) return [];
+  
   let query = supabase.from('classes').select('*');
   if (teacherId) {
-    query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null`);
+    query = query.eq('teacher_id', teacherId);
   }
   const { data: classes, error: classError } = await query.order('created_at', { ascending: true });
 
   if (classError) throw classError;
 
-  const { data: students, error: studentError } = await supabase
-    .from('students')
-    .select('*')
-    .order('points', { ascending: false });
+  const classIds = classes ? classes.map(c => c.id) : [];
+
+  const { data: students, error: studentError } = classIds.length > 0 
+    ? await supabase
+        .from('students')
+        .select('*')
+        .in('class_id', classIds)
+        .order('points', { ascending: false })
+    : { data: [], error: null };
 
   if (studentError) throw studentError;
 
-  const { data: meetings, error: meetingError } = await supabase
-    .from('meetings')
-    .select('*')
-    .order('started_at', { ascending: false });
+  const { data: meetings, error: meetingError } = classIds.length > 0
+    ? await supabase
+        .from('meetings')
+        .select('*')
+        .in('class_id', classIds)
+        .order('started_at', { ascending: false })
+    : { data: [], error: null };
 
   if (meetingError) throw meetingError;
 
@@ -709,9 +719,60 @@ export const findStudentByClassAndPin = async (classId: string, pin: string): Pr
 };
 
 export const getStudentDashboardData = async (classId: string, studentId: string): Promise<{ classData: ClassData | null, studentData: Student | null }> => {
-  const classes = await fetchClasses();
-  const c = classes.find(cl => cl.id === classId);
-  if (!c) return { classData: null, studentData: null };
-  const s = c.students.find(st => st.id === studentId);
-  return { classData: c, studentData: s || null };
+  const { data: c, error: classError } = await supabase
+    .from('classes')
+    .select('*')
+    .eq('id', classId)
+    .single();
+
+  if (classError || !c) return { classData: null, studentData: null };
+
+  const { data: students, error: studentError } = await supabase
+    .from('students')
+    .select('*')
+    .eq('class_id', classId)
+    .order('points', { ascending: false });
+
+  if (studentError) throw studentError;
+
+  const { data: meetings, error: meetingError } = await supabase
+    .from('meetings')
+    .select('*')
+    .eq('class_id', classId)
+    .order('started_at', { ascending: false });
+
+  if (meetingError) throw meetingError;
+
+  const classData: ClassData = {
+    id: c.id,
+    name: c.name,
+    level: c.level,
+    maxLives: c.max_lives,
+    joinCode: c.join_code,
+    teacherId: c.teacher_id,
+    createdAt: c.created_at,
+    isArchived: c.is_archived || false,
+    students: students.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      nickname: s.nickname,
+      lives: s.lives,
+      points: s.points,
+      pin: s.pin,
+      joinedAt: s.created_at
+    })),
+    meetings: meetings.map((m: any) => ({
+      id: m.id,
+      class_id: m.class_id,
+      startedAt: m.started_at,
+      endedAt: m.ended_at,
+      status: m.status || 'ended',
+      resetLivesTo: m.reset_lives_to,
+      summary: m.summary || null,
+      teacherId: m.teacher_id
+    }))
+  };
+
+  const studentData = classData.students.find(st => st.id === studentId);
+  return { classData, studentData: studentData || null };
 };

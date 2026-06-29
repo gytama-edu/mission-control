@@ -663,7 +663,7 @@ export function ClassDetail({
     try {
       if (selectedTaskForSubmissions.task_type === 'group') {
         if (!selectedSubmissionForReview.submission_id) {
-          throw new Error('This group has not submitted a directive yet.');
+          throw new Error('This group has not submitted a response yet.');
         }
         await taskDb.reviewGroupSubmission(
           selectedSubmissionForReview.submission_id,
@@ -2340,12 +2340,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                 <button
                                   onClick={() => handleCloseTask(task)}
                                   className="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                  title="Students can still see this task, but they cannot submit while it is closed."
                                 >
                                   Close
                                 </button>
                                 <button
                                   onClick={() => handleArchiveTask(task)}
                                   className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-750 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                  title="Hides this task from active task lists while preserving submissions and feedback."
                                 >
                                   Archive
                                 </button>
@@ -2363,6 +2365,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                 <button
                                   onClick={() => handleArchiveTask(task)}
                                   className="bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-750 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                  title="Hides this task from active task lists while preserving submissions and feedback."
                                 >
                                   Archive
                                 </button>
@@ -3677,7 +3680,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     isOpen: true,
                     title: 'Archive this class?',
                     message: 'This will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.',
-                    helperNote: 'You can restore archived classes later.',
+                    helperNote: 'Students will not be able to log in while this class is archived. Recommendation: export your class CSV records before archiving.',
                     confirmLabel: 'Archive Class',
                     variant: 'warning',
                     onConfirm: () => onArchiveClass()
@@ -3695,6 +3698,33 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               </button>
             </div>
           </form>
+        </div>
+
+        <div className="max-w-lg mt-6 bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 shadow-xl animate-fade-in">
+          <div className="border-b border-slate-800/60 pb-3 mb-4">
+            <h2 className="text-base font-display font-bold text-white flex items-center gap-2">
+              <Archive size={16} className="text-purple-400" />
+              End of Semester Guide
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">When a class cycle is finished, follow this safe order:</p>
+          </div>
+          <div className="space-y-3 text-sm text-slate-300">
+            <div className="flex items-start gap-2.5">
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-xs font-bold shrink-0 mt-0.5">1</span>
+              <p>Review reports and finish teacher feedback.</p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-xs font-bold shrink-0 mt-0.5">2</span>
+              <p>Export CSV records for your class.</p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-xs font-bold shrink-0 mt-0.5">3</span>
+              <p>Archive the class when students no longer need access.</p>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 text-xs text-slate-400 italic">
+            Archiving preserves class data and uploaded files. Students cannot log in to archived classes, but you can restore the class later.
+          </div>
         </div>
         
         <div className="max-w-lg mt-6 bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 shadow-xl animate-fade-in">
@@ -3754,6 +3784,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                   isOpen: true,
                   title: 'Clear Activity History?',
                   message: 'This will permanently delete activity log entries for this class. Student points, lives, badges, tasks, and submissions will not be reset. Reports that depend on activity history may no longer show previous activity.',
+                  helperNote: 'Recommendation: export your Activity Logs CSV before clearing history. This only clears activity log records for this class; points, lives, tasks, submissions, badges, reports, and files are preserved.',
                   requireTypedConfirmation: 'CLEAR',
                   confirmLabel: 'Clear History',
                   variant: 'danger',

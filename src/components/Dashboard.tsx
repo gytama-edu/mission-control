@@ -60,7 +60,7 @@ export function Dashboard({
       isOpen: true,
       title: 'Archive this class?',
       message: 'This will hide the class from your active dashboard. Student records, tasks, submissions, badges, reports, and uploaded files will be preserved.',
-      helperNote: 'You can restore archived classes later.',
+      helperNote: 'Students will not be able to log in while this class is archived. Recommendation: export your class CSV records before archiving.',
       confirmLabel: 'Archive Class',
       variant: 'warning',
       onConfirm: () => onArchiveClass(c.id)
@@ -73,7 +73,7 @@ export function Dashboard({
       isOpen: true,
       title: 'Restore this class?',
       message: 'This will move the class back to your active dashboard.',
-      helperNote: 'Students will be able to access the class again after it is restored.',
+      helperNote: 'Students will be able to log in again after this class is restored.',
       confirmLabel: 'Restore Class',
       variant: 'default',
       onConfirm: () => onRestoreClass(c.id)
