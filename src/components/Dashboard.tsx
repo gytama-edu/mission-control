@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ClassData } from '../types';
-import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download, Activity, Radio, LayoutGrid, KeyRound, Heart, Archive, ArchiveRestore } from 'lucide-react';
+import { Users, Plus, Star, Shield, Trash2, Rocket, Loader2, Download, Activity, Radio, LayoutGrid, KeyRound, Heart, Archive, ArchiveRestore, RefreshCw } from 'lucide-react';
 import { ConfirmActionModal } from './ConfirmActionModal';
 
 interface DashboardProps {
@@ -16,6 +16,7 @@ interface DashboardProps {
   onClaimClass: (id: string) => void;
   teacherEmail?: string | null;
   onLogout: () => void;
+  onSync: () => void;
 }
 
 export function Dashboard({
@@ -30,13 +31,16 @@ export function Dashboard({
   onImportLocalData,
   onClaimClass,
   teacherEmail,
-  onLogout
+  onLogout,
+  onSync
 }: DashboardProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newClassName, setNewClassName] = useState('');
   const [newClassLevel, setNewClassLevel] = useState('');
   const [newClassMaxLives, setNewClassMaxLives] = useState(5);
   const [showArchived, setShowArchived] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -98,6 +102,16 @@ export function Dashboard({
     }
   };
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await onSync();
+      setLastSynced(new Date());
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const activeClasses = classes.filter(c => !c.isArchived);
   const archivedClasses = classes.filter(c => c.isArchived);
 
@@ -135,6 +149,19 @@ export function Dashboard({
                 Log Out
               </button>
             )}
+            <button
+              onClick={handleSync}
+              disabled={isLoading || isSyncing}
+              className="bg-slate-950 hover:bg-slate-900 text-blue-400 hover:text-blue-300 px-3.5 py-1.5 rounded-xl font-mono uppercase tracking-wider text-[10px] font-bold border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group relative"
+            >
+              <RefreshCw size={13} className={isSyncing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"} />
+              {isSyncing ? 'Syncing...' : 'Sync'}
+              {lastSynced && !isSyncing && (
+                <span className="absolute -bottom-5 right-0 text-[8px] text-slate-500 whitespace-nowrap hidden md:block">
+                  Last: {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </button>
             {!isLoading && hasLocalData() && classes.length === 0 && (
               <button
                 onClick={() => {

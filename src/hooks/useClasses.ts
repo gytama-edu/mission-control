@@ -50,10 +50,6 @@ export function useClasses(teacherId: string | null) {
     }
   };
 
-  const refreshData = async () => {
-    await loadData(true);
-  };
-
   useEffect(() => {
     loadData();
 
@@ -286,7 +282,6 @@ export function useClasses(teacherId: string | null) {
     classes,
     isLoading,
     error,
-    refreshData,
     importLocalData,
     addClass,
     claimClass,
@@ -302,6 +297,7 @@ export function useClasses(teacherId: string | null) {
     startMeeting,
     endMeeting,
     regenerateJoinCode,
-    regenerateStudentPin
+    regenerateStudentPin,
+    syncData: () => loadData(true)
   };
 }

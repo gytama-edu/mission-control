@@ -24,6 +24,7 @@ interface ClassDetailProps {
   onUpdatePoints: (studentId: string, change: number, reason?: string | null) => Promise<void> | void;
   onStartMeeting: () => void;
   onEndMeeting: (meetingId: string) => void;
+  onSync: () => void;
 }
 
 export function ClassDetail({
@@ -40,7 +41,8 @@ export function ClassDetail({
   onUpdateLives,
   onUpdatePoints,
   onStartMeeting,
-  onEndMeeting
+  onEndMeeting,
+  onSync
 }: ClassDetailProps) {
   const [newStudentName, setNewStudentName] = useState('');
   const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings' | 'badges' | 'reports'>('roster');
@@ -63,6 +65,9 @@ export function ClassDetail({
   const [reportsError, setReportsError] = useState('');
   const [selectedReportStudentId, setSelectedReportStudentId] = useState<string | null>(null);
   const [reportsActivityFilter, setReportsActivityFilter] = useState<'all' | 'points' | 'lives' | 'tasks' | 'badges' | 'meetings'>('all');
+
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
 
   // Badge States
   const [badgeDefinitions, setBadgeDefinitions] = useState<any[]>([]);
@@ -972,6 +977,48 @@ export function ClassDetail({
     alert('Class settings updated!');
   };
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await onSync();
+      // Since ClassDetail also handles badges, tasks, reports independently via local fetch,
+      // it might be nice to refresh them too if they are visible.
+      // But they are refreshed via `useEffect` based on `classData.id` mostly.
+      // `useClasses` syncData will update `classData`, triggering those.
+      // But let's add `fetchX` if needed, wait, we don't need to overcomplicate.
+      // The prompt says: "refresh relevant data for the current page ... refresh badges if already displayed, etc."
+      // Actually `onSync` triggers `loadData` in `useClasses`, which updates `classes`, which passes new `classData`,
+      // which will re-trigger the local effects if `classData` properties change. But they might not re-trigger if only child rows changed.
+      // Let's manually re-trigger local fetches just to be safe.
+      if (activeTab === 'reports') {
+        const reportsData = await taskDb.fetchClassReportsData(classData.id);
+        setReportTasks(reportsData.tasks);
+        setReportSubmissions(reportsData.submissions);
+        setReportGroups(reportsData.groups);
+        setReportGroupMembers(reportsData.groupMembers);
+      } else if (activeTab === 'activity') {
+        const logs = await db.fetchActivityLogs(classData.id);
+        setActivityLogs(logs);
+      } else if (activeTab === 'badges') {
+        const [defs, sBadges] = await Promise.all([
+          badgeDb.fetchBadgeDefinitions(classData.id),
+          badgeDb.fetchStudentBadges(classData.id)
+        ]);
+        setBadgeDefinitions(defs);
+        setStudentBadges(sBadges);
+      } else if (activeTab === 'tasks') {
+        const fetchedTasks = await taskDb.fetchTasksByClass(classData.id);
+        setAllTasks(fetchedTasks);
+      }
+      setLastSynced(new Date());
+    } catch (err) {
+      console.error(err);
+      alert('Could not sync data. Please try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
       {/* Header */}
@@ -986,9 +1033,9 @@ export function ClassDetail({
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden select-none">
           <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-rose-500/20 to-transparent" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-3 mb-2">
-              <h1 className="text-xl sm:text-2xl font-display font-black text-white tracking-tight truncate">
+              <h1 className="text-xl sm:text-2xl font-display font-black text-white tracking-tight truncate flex items-center gap-2">
                 {classData.name}
               </h1>
               <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 shadow-inner">
@@ -1030,7 +1077,20 @@ export function ClassDetail({
             </div>
           </div>
 
-          <div className="shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:ml-auto shrink-0">
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="bg-slate-950 hover:bg-slate-900 text-blue-400 hover:text-blue-300 px-4 py-2.5 rounded-xl font-mono uppercase tracking-wider text-xs font-bold border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group shadow-sm h-full relative min-h-[42px]"
+            >
+              <RefreshCw size={14} className={isSyncing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"} />
+              <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync'}</span>
+              {lastSynced && !isSyncing && (
+                <span className="absolute -bottom-5 right-0 text-[8px] text-slate-500 whitespace-nowrap hidden lg:block">
+                  Last: {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </button>
             {activeMeeting ? (
               <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-950/80 p-3 rounded-xl border border-emerald-500/20">
                 <div className="flex items-center gap-2">
