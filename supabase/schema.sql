@@ -2834,10 +2834,13 @@ BEGIN
   -- Logs
   SELECT coalesce(jsonb_agg(to_jsonb(log)), '[]'::jsonb)
   INTO v_logs_json
-  FROM activity_logs log
-  WHERE log.class_id = v_class.id
-    AND log.student_id = v_student.id
-  ORDER BY log.created_at DESC;
+  FROM (
+    SELECT *
+    FROM activity_logs
+    WHERE class_id = v_class.id
+      AND student_id = v_student.id
+    ORDER BY created_at DESC
+  ) log;
 
   RETURN jsonb_build_object(
     'ok', true,
