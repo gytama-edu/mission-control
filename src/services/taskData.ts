@@ -518,7 +518,6 @@ export const fetchTaskSubmissions = async (
   taskId: string,
   classId: string
 ): Promise<any[]> => {
-  console.log('[DEBUG] fetchTaskSubmissions parameters:', { taskId, classId });
   const { data, error } = await supabase.rpc(
     'fetch_task_submissions_for_teacher',
     {
@@ -528,12 +527,10 @@ export const fetchTaskSubmissions = async (
   );
 
   if (error) {
-    console.error('[DEBUG] fetchTaskSubmissions RPC error:', error);
     throw error;
   }
 
   const submissions = data || [];
-  console.log('[DEBUG] fetchTaskSubmissions raw data count:', submissions.length);
 
   const submissionsWithSignedUrls = await Promise.all(
     submissions.map(async (submission: any) => {
@@ -565,7 +562,6 @@ export const fetchTaskSubmissions = async (
     })
   );
 
-  console.log('[DEBUG] fetchTaskSubmissions final processed result:', submissionsWithSignedUrls);
   return submissionsWithSignedUrls;
 };
 
@@ -647,12 +643,6 @@ export const reviewSubmission = async (
     return { status: 'returned' };
   }
 
-  console.log('[DEBUG] Calling review_individual_submission RPC:', {
-    submission_id_input: submissionId,
-    awarded_points_input: awardedPoints,
-    teacher_feedback_input: feedback
-  });
-
   const { data, error } = await supabase.rpc('review_individual_submission', {
     submission_id_input: submissionId,
     awarded_points_input: awardedPoints !== undefined && awardedPoints !== null ? awardedPoints : 0,
@@ -660,11 +650,9 @@ export const reviewSubmission = async (
   });
 
   if (error) {
-    console.error('[DEBUG] review_individual_submission RPC error:', error);
     throw error;
   }
 
-  console.log('[DEBUG] review_individual_submission RPC success:', data);
   return data;
 };
 

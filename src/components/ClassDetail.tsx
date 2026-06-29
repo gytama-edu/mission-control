@@ -574,26 +574,11 @@ export function ClassDetail({
     setSelectedSubmissionForReview(null);
     
     const normalizedTaskType = String(task.task_type).toLowerCase();
-    console.log('[DEBUG] selected task id:', task.id);
-    console.log('[DEBUG] selected task type:', task.task_type);
-    console.log('[DEBUG] class id:', classData.id);
     
-    console.log('[DEBUG] handleOpenSubmissionsModal details:', {
-      selectedTaskId: task.id,
-      selectedTaskType: task.task_type,
-      currentClassId: classData.id
-    });
     try {
       let subs;
       if (normalizedTaskType === 'group') {
-        console.log('[DEBUG] which fetch function is being called: fetchGroupTaskSubmissions');
-        console.log('[DEBUG] Fetching group task submissions:', {
-          selectedTaskId: task.id,
-          selectedTaskType: task.task_type,
-          currentClassId: classData.id
-        });
         const rawSubs = await taskDb.fetchGroupTaskSubmissions(task.id, classData.id);
-        console.log('[DEBUG] Group rows returned:', rawSubs.length, rawSubs);
         subs = rawSubs.map((s: any) => ({
           ...s,
           id: s.submission_id || s.group_id, // Stable ID for select/selection mapping
@@ -605,19 +590,9 @@ export function ClassDetail({
           group_members_raw: s.group_members || []
         }));
       } else {
-        console.log('[DEBUG] which fetch function is being called: fetchTaskSubmissions');
-        console.log('[DEBUG] Fetching individual task submissions:', {
-          selectedTaskId: task.id,
-          selectedTaskType: task.task_type,
-          currentClassId: classData.id
-        });
         subs = await taskDb.fetchTaskSubmissions(task.id, classData.id);
       }
 
-      console.log('[DEBUG] handleOpenSubmissionsModal successfully loaded submissions:', {
-        count: subs.length,
-        submissions: subs
-      });
       setTaskSubmissions(subs);
     } catch (err: any) {
       console.error('[DEBUG] handleOpenSubmissionsModal fetch error:', err, {
@@ -669,13 +644,7 @@ export function ClassDetail({
       // Refresh list
       let subs;
       if (selectedTaskForSubmissions.task_type === 'group') {
-        console.log('[DEBUG] SaveReview Refresh group submissions:', {
-          selectedTaskId: selectedTaskForSubmissions.id,
-          selectedTaskType: selectedTaskForSubmissions.task_type,
-          currentClassId: classData.id
-        });
         const rawSubs = await taskDb.fetchGroupTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
-        console.log('[DEBUG] Group rows returned:', rawSubs.length, rawSubs);
         subs = rawSubs.map((s: any) => ({
           ...s,
           id: s.submission_id || s.group_id,
@@ -687,11 +656,6 @@ export function ClassDetail({
           group_members_raw: s.group_members || []
         }));
       } else {
-        console.log('[DEBUG] SaveReview Refresh individual submissions:', {
-          selectedTaskId: selectedTaskForSubmissions.id,
-          selectedTaskType: selectedTaskForSubmissions.task_type,
-          currentClassId: classData.id
-        });
         subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
       }
       setTaskSubmissions(subs);
@@ -1108,7 +1072,7 @@ export function ClassDetail({
               <Users className="mx-auto h-12 w-12 text-slate-600 mb-4" />
               <h3 className="text-xl font-display font-bold text-white mb-2">Roster Empty</h3>
               <p className="text-slate-400 text-sm max-w-md mx-auto mb-6 leading-relaxed">
-                Add your first student to this class roster using the form above to begin monitoring stats, tracking lives, and issuing merits.
+                Add your first student to this class roster using the form above to begin monitoring stats, tracking lives, and awarding points.
               </p>
             </div>
           ) : (
@@ -2197,7 +2161,6 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <button
                               onClick={() => {
-                                console.log('[DEBUG] clicked task id:', task.id);
                                 openSubmissionsViewer(task);
                               }}
                               className="bg-purple-650 hover:bg-purple-750 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 font-sans"
@@ -3474,6 +3437,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
       )}
 
       {activeTab === 'settings' && (
+        <>
         <div className="max-w-lg bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-5 shadow-xl animate-fade-in">
           <div className="border-b border-slate-800/60 pb-3 mb-4">
             <h2 className="text-base font-display font-bold text-white">Class Settings</h2>
@@ -3537,6 +3501,40 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
             </div>
           </form>
         </div>
+        
+        <div className="max-w-lg mt-6 bg-slate-900/30 backdrop-blur-sm border border-red-900/30 rounded-2xl p-5 shadow-xl animate-fade-in">
+          <div className="border-b border-red-900/30 pb-3 mb-4">
+            <h2 className="text-base font-display font-bold text-red-400">Activity History</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Clear recorded activity logs for this class. This does not reset student points, lives, badges, tasks, or submissions.</p>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={async () => {
+                const confirmMsg = "Clear Activity History?\n\nThis will permanently delete activity log entries for this class. Student points, lives, badges, tasks, and submissions will not be reset. Reports that depend on activity history may no longer show previous activity.\n\nType 'CLEAR' to confirm:";
+                const userText = prompt(confirmMsg);
+                if (userText === 'CLEAR') {
+                  try {
+                    await db.clearClassActivityLogs(classData.id);
+                    alert('Activity history cleared for this class.');
+                    // Refresh data if needed. The useClasses hook might handle some of it, but we can call loadReportData or similar if we exposed it, or just let the activity tab reload when clicked.
+                    if (activityLogs) {
+                      setActivityLogs([]);
+                    }
+                  } catch (err: any) {
+                    alert('Failed to clear activity history: ' + err.message);
+                  }
+                } else if (userText !== null) {
+                  alert('Confirmation text did not match. History was not cleared.');
+                }
+              }}
+              className="bg-red-900/40 hover:bg-red-900/60 text-red-400 border border-red-800/50 px-4 py-2 rounded-xl font-bold transition-all shadow-lg cursor-pointer text-xs uppercase tracking-wider"
+            >
+              Clear Activity History
+            </button>
+          </div>
+        </div>
+        </>
       )}
 
       {activeTab === 'badges' && (
@@ -4300,21 +4298,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                   onClick={async () => {
                     setIsFetchingSubmissions(true);
                     setSubmissionsError(null);
-                    console.log('[DEBUG] Refresh button details:', {
-                      selectedTaskId: selectedTaskForSubmissions.id,
-                      selectedTaskType: selectedTaskForSubmissions.task_type,
-                      currentClassId: classData.id
-                    });
                     try {
                       let subs;
                       if (selectedTaskForSubmissions.task_type === 'group') {
-                        console.log('[DEBUG] Refresh click group submissions:', {
-                          selectedTaskId: selectedTaskForSubmissions.id,
-                          selectedTaskType: selectedTaskForSubmissions.task_type,
-                          currentClassId: classData.id
-                        });
                         const rawSubs = await taskDb.fetchGroupTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
-                        console.log('[DEBUG] Group rows returned:', rawSubs.length, rawSubs);
                         subs = rawSubs.map((s: any) => ({
                           ...s,
                           id: s.submission_id || s.group_id,
@@ -4326,17 +4313,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                           group_members_raw: s.group_members || []
                         }));
                       } else {
-                        console.log('[DEBUG] Refresh click individual submissions:', {
-                          selectedTaskId: selectedTaskForSubmissions.id,
-                          selectedTaskType: selectedTaskForSubmissions.task_type,
-                          currentClassId: classData.id
-                        });
                         subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
                       }
-                      console.log('[DEBUG] Refresh successfully loaded submissions:', {
-                        count: subs.length,
-                        submissions: subs
-                      });
                       setTaskSubmissions(subs);
                       if (selectedSubmissionForReview) {
                         const updated = subs.find(s => s.id === selectedSubmissionForReview.id);
@@ -4923,7 +4901,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                       <option value="points_threshold">Points Threshold Reached</option>
                       <option value="individual_tasks_completed">Individual Task Count Completed</option>
                       <option value="group_tasks_completed">Group Task Count Completed</option>
-                      <option value="first_submission">First Mission Task Submitted</option>
+                      <option value="first_submission">First Task Submitted</option>
                       <option value="first_reviewed_task">First Task Reviewed/Graded by Teacher</option>
                       <option value="no_lives_lost_meeting">Completed a Meeting with Perfect Lives</option>
                       <option value="comeback_from_zero_lives">Zero Lives Comeback</option>

@@ -44,6 +44,18 @@ export const logActivity = async (
   }
 };
 
+export const clearClassActivityLogs = async (classId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('activity_logs')
+    .delete()
+    .eq('class_id', classId);
+
+  if (error) {
+    console.error("Error clearing activity logs:", error);
+    throw error;
+  }
+};
+
 export const fetchActivityLogs = async (classId: string): Promise<ActivityLog[]> => {
   const { data, error } = await supabase
     .from('activity_logs')

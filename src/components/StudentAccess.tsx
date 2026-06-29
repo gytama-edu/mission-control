@@ -1529,7 +1529,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Student Access</h1>
             <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-              Enter your Class Code and secure student PIN to enter your command post.
+              Enter your Class Code and secure student PIN to enter your dashboard.
             </p>
           </div>
 

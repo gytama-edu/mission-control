@@ -60,8 +60,8 @@ export function Dashboard({
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex items-center justify-center min-h-[60vh]">
         <div className="text-center p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80 backdrop-blur-md max-w-md w-full">
           <Loader2 className="mx-auto h-12 w-12 text-rose-500 animate-spin mb-4" />
-          <h3 className="font-display font-semibold text-lg text-white mb-1">Accessing Command Post</h3>
-          <p className="text-slate-400 text-sm">Synchronizing systems and loading classroom cohorts...</p>
+          <h3 className="font-display font-semibold text-lg text-white mb-1">Accessing Dashboard</h3>
+          <p className="text-slate-400 text-sm">Loading classroom data...</p>
         </div>
       </div>
     );
@@ -161,7 +161,7 @@ export function Dashboard({
 
           <div className="bg-slate-900/40 border border-slate-800/80 backdrop-blur-md rounded-xl px-3 py-1.5 flex items-center gap-2 transition-all hover:border-slate-700/60 shadow-md">
             <Star size={13} className="text-amber-400/80" />
-            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Missions Run:</span>
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Meetings Run:</span>
             <strong className="text-white font-mono font-bold text-xs">{totalMissions}</strong>
           </div>
         </div>
@@ -171,7 +171,7 @@ export function Dashboard({
           <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-600" />
           <h2 className="text-sm font-display font-bold mb-4 text-white flex items-center gap-2 select-none">
             <LayoutGrid size={16} className="text-rose-500" />
-            Initialize Classroom Cohort
+            Create New Class
           </h2>
           <form onSubmit={handleAddSubmit} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
             <div>
@@ -231,16 +231,16 @@ export function Dashboard({
           <div className="relative inline-block mb-4">
             <Rocket className="h-12 w-12 text-slate-600 drop-shadow-[0_0_10px_rgba(244,63,94,0.1)]" />
           </div>
-          <h3 className="text-xl font-display font-bold text-white mb-2">No Cohorts Initialized</h3>
+          <h3 className="text-xl font-display font-bold text-white mb-2">No Classes Found</h3>
           <p className="text-slate-400 text-sm max-w-md mx-auto mb-8 leading-relaxed">
-            Ready to establish your gamified command center? Initialize a new classroom cohort to begin tracking student performance, managing meetings, and dispensing custom merits.
+            Ready to set up your classroom dashboard? Create a new class to begin tracking student performance, managing meetings, and awarding points.
           </p>
           {!isAdding && (
             <button
               onClick={() => setIsAdding(true)}
               className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-rose-600/15 inline-flex items-center gap-2 cursor-pointer text-sm"
             >
-              <Plus size={18} /> Initialize First Cohort
+              <Plus size={18} /> Create First Class
             </button>
           )}
         </div>
@@ -249,10 +249,10 @@ export function Dashboard({
           <div className="flex items-center justify-between mb-2 select-none">
             <h2 className="text-xs font-mono uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
               <LayoutGrid size={14} className="text-rose-500" />
-              Classroom Cohorts
+              Active Classes
             </h2>
             <span className="text-[10px] font-mono text-slate-500 uppercase">
-              {totalClasses} {totalClasses === 1 ? 'Cohort' : 'Cohorts'} Registered
+              {totalClasses} {totalClasses === 1 ? 'Class' : 'Classes'} Registered
             </span>
           </div>
 
@@ -261,7 +261,7 @@ export function Dashboard({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 select-none bg-slate-950/20">
-                  <th className="py-2.5 px-4 font-semibold">Cohort Name</th>
+                  <th className="py-2.5 px-4 font-semibold">Class Name</th>
                   <th className="py-2.5 px-4 font-semibold">Level / Grade</th>
                   <th className="py-2.5 px-4 font-semibold text-center">Students</th>
                   <th className="py-2.5 px-4 font-semibold text-center">Max Lives</th>

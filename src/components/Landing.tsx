@@ -24,7 +24,7 @@ export function Landing({ onSelectTeacher, onSelectStudent }: LandingProps) {
             Mission Control
           </h1>
           <p className="text-slate-400 text-sm md:text-base max-w-md mx-auto leading-relaxed">
-            A premium gamified classroom command center for teachers and students.
+            A premium classroom dashboard for teachers and students.
           </p>
         </div>
 
@@ -43,10 +43,10 @@ export function Landing({ onSelectTeacher, onSelectStudent }: LandingProps) {
               <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider hidden group-hover:inline-block">Enter</span>
             </h2>
             <p className="text-xs leading-relaxed text-slate-400 font-normal">
-              Join your class command post, complete tasks, view teacher feedback, and earn merit badges.
+              Join your class dashboard, complete tasks, view teacher feedback, and earn badges.
             </p>
             <div className="mt-4 text-[11px] font-semibold text-emerald-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              Go to Command Post &rarr;
+              Go to Dashboard &rarr;
             </div>
           </button>
 
@@ -63,7 +63,7 @@ export function Landing({ onSelectTeacher, onSelectStudent }: LandingProps) {
               <span className="text-[10px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider hidden group-hover:inline-block">Admin</span>
             </h2>
             <p className="text-xs leading-relaxed text-slate-400 font-normal">
-              Manage classroom cohorts, host live meetings, assign tasks, evaluate submissions, and track badges.
+              Manage classes, host live meetings, assign tasks, evaluate submissions, and track badges.
             </p>
             <div className="mt-4 text-[11px] font-semibold text-purple-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               Go to Teacher Console &rarr;
