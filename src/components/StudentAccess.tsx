@@ -40,110 +40,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [studentSubmissions, setStudentSubmissions] = useState<Record<string, any>>({});
 
   const loadStudentTasks = async (classId: string, studentId: string) => {
-    setIsTasksLoading(true);
-    try {
-      const allTasks = await taskDb.fetchTasksByClass(classId);
-      const visibleTasks = allTasks.filter(t => t.status === 'published' || t.status === 'closed');
-      setTasks(visibleTasks);
-      setIsTasksTableMissing(false);
-
-      // Fetch task groups assigned to this student
-      const { data: memberRows, error: memberErr } = await supabase
-        .from('task_group_members')
-        .select(`
-          task_id,
-          task_group_id,
-          task_groups (
-            name
-          )
-        `)
-        .eq('student_id', studentId);
-
-      const groupMap: Record<string, { id: string; name: string }> = {};
-      const groupIds: string[] = [];
-      if (!memberErr && memberRows) {
-        memberRows.forEach((row: any) => {
-          if (row.task_groups && row.task_group_id) {
-            const gName = Array.isArray(row.task_groups) 
-              ? row.task_groups[0]?.name 
-              : row.task_groups?.name;
-            groupMap[row.task_id] = { id: row.task_group_id, name: gName };
-            groupIds.push(row.task_group_id);
-          }
-        });
-        setStudentGroups(groupMap);
-      }
-
-      // Fetch members of these student groups
-      const membersMap: Record<string, string[]> = {};
-      if (groupIds.length > 0) {
-        const { data: allMembers, error: membersErr } = await supabase
-          .from('task_group_members')
-          .select(`
-            task_group_id,
-            students (
-              name,
-              nickname
-            )
-          `)
-          .in('task_group_id', groupIds);
-
-        if (!membersErr && allMembers) {
-          allMembers.forEach((m: any) => {
-            const gId = m.task_group_id;
-            const sName = m.students 
-              ? (m.students.nickname ? `${m.students.name} (${m.students.nickname})` : m.students.name) 
-              : 'Unknown Student';
-            if (!membersMap[gId]) {
-              membersMap[gId] = [];
-            }
-            membersMap[gId].push(sName);
-          });
-          setGroupMembers(membersMap);
-        }
-      } else {
-        setGroupMembers({});
-      }
-
-      // Fetch task submissions (individual + group)
-      let subQuery = supabase.from('task_submissions').select('*');
-      if (groupIds.length > 0) {
-        subQuery = subQuery.or(`student_id.eq.${studentId},task_group_id.in.(${groupIds.join(',')})`);
-      } else {
-        subQuery = subQuery.eq('student_id', studentId);
-      }
-      const { data: subRows, error: subErr } = await subQuery.eq('class_id', classId);
-
-      // Fetch submission attachments (individual + group)
-      let attachQuery = supabase.from('submission_attachments').select('*');
-      if (groupIds.length > 0) {
-        attachQuery = attachQuery.or(`student_id.eq.${studentId},task_group_id.in.(${groupIds.join(',')})`);
-      } else {
-        attachQuery = attachQuery.eq('student_id', studentId);
-      }
-      const { data: attachRows, error: attachErr } = await attachQuery.eq('class_id', classId);
-
-      if (!subErr && subRows) {
-        const subMap: Record<string, any> = {};
-        subRows.forEach((s: any) => {
-          const sAttachments = (attachRows || []).filter((a: any) => a.submission_id === s.id);
-          subMap[s.task_id] = {
-            ...s,
-            attachments: sAttachments
-          };
-        });
-        setStudentSubmissions(subMap);
-      }
-    } catch (err: any) {
-      if (err && (err.code === 'PGRST205' || (err.message && err.message.includes('tasks') && err.message.includes('schema cache')))) {
-        setIsTasksTableMissing(true);
-        console.warn('Tasks table is missing in Supabase. Mission Control is disabled for student until migration is run.');
-      } else {
-        console.error('Failed to load student tasks:', err);
-      }
-    } finally {
-      setIsTasksLoading(false);
-    }
+    // Disabled in Phase 18G - Data fetched via RPC in fetchDashboardData
   };
 
   const getSubmitterName = (sub: any) => {
@@ -169,43 +66,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     }
     loadStudentTasks(loggedInClass.id, loggedInStudent.id);
 
-    if (isTasksTableMissing) return;
-
-    const tasksChannel = supabase
-      .channel(`student-tasks-${loggedInStudent.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tasks',
-          filter: `class_id=eq.${loggedInClass.id}`
-        },
-        () => {
-          if (loggedInClass && loggedInStudent) {
-            loadStudentTasks(loggedInClass.id, loggedInStudent.id);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'task_group_members',
-          filter: `student_id=eq.${loggedInStudent.id}`
-        },
-        () => {
-          if (loggedInClass && loggedInStudent) {
-            loadStudentTasks(loggedInClass.id, loggedInStudent.id);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(tasksChannel);
-    };
+    // Disabled in Phase 18I - Data fetched via polling/visibility changes instead
   }, [loggedInClass?.id, loggedInStudent?.id, isTasksTableMissing]);
 
   // Student task submission states
@@ -395,8 +256,11 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
 
       setSubmissionSuccess(true);
       // Reload everything
-      await loadStudentTasks(loggedInClass.id, loggedInStudent.id);
-      await loadEarnedBadges(loggedInClass.id, loggedInStudent.id);
+      const saved = window.localStorage.getItem(PROFILE_KEY);
+      const p = saved ? JSON.parse(saved).pin : pin;
+      if (p) {
+        await fetchDashboardData(loggedInClass.id, loggedInStudent.id, p);
+      }
       
       // Keep modal open briefly to show success, then auto-close or let user dismiss
       setTimeout(() => {
@@ -412,42 +276,11 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   };
 
   const loadEarnedBadges = async (classId: string, studentId: string) => {
-    setIsBadgesLoading(true);
-    try {
-      // Background passive automatic badge evaluation
-      await badgeDb.checkAndAwardAutomaticBadges(studentId, classId);
-      // Retrieve earned badges list
-      const badges = await badgeDb.fetchStudentBadges(classId, studentId);
-      setEarnedBadges(badges);
-      setIsBadgesTableMissing(false);
-    } catch (err: any) {
-      if (err && (err.code === 'PGRST205' || (err.message && (err.message.includes('badge_definitions') || err.message.includes('student_badges')) && err.message.includes('schema cache')))) {
-        setIsBadgesTableMissing(true);
-        console.warn('Badges tables are missing in Supabase. Badges display is disabled until migration is run.');
-      } else {
-        console.error('Failed to load earned badges:', err);
-      }
-    } finally {
-      setIsBadgesLoading(false);
-    }
+    // Disabled in Phase 18G - Data fetched via RPC in fetchDashboardData
   };
 
   const loadStudentLogs = async (classId: string, studentId: string) => {
-    setIsLogsLoading(true);
-    try {
-      const logs = await db.fetchStudentActivityLogs(classId, studentId);
-      setStudentLogs(logs);
-      setIsTableMissing(false);
-    } catch (err: any) {
-      if (err && (err.code === 'PGRST205' || (err.message && err.message.includes('activity_logs') && err.message.includes('schema cache')))) {
-        setIsTableMissing(true);
-        console.warn('Activity logs table is missing in Supabase. Student log view is disabled until migration is run.');
-      } else {
-        console.error('Failed to load student activity logs:', err);
-      }
-    } finally {
-      setIsLogsLoading(false);
-    }
+    // Disabled in Phase 18G - Data fetched via RPC in fetchDashboardData
   };
 
   useEffect(() => {
@@ -459,28 +292,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     const studentId = loggedInStudent.id;
     loadStudentLogs(classId, studentId);
 
-    if (isTableMissing) return;
-
-    // Subscribe to realtime updates on activity_logs for this student
-    const channel = supabase
-      .channel(`student-logs-${studentId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'activity_logs',
-          filter: `student_id=eq.${studentId}`
-        },
-        () => {
-          loadStudentLogs(classId, studentId);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    // Disabled in Phase 18I - Data fetched via polling/visibility changes instead
   }, [loggedInClass?.id, loggedInStudent?.id, isTableMissing]);
 
   // Auto-restore profile on refresh/mount
@@ -490,15 +302,43 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
         const saved = window.localStorage.getItem(PROFILE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed.classId && parsed.studentId) {
+          if (parsed.classId && parsed.studentId && parsed.pin) {
             setRestoringProfile(true);
             setError('');
-            const { classData, studentData } = await db.getStudentDashboardData(parsed.classId, parsed.studentId);
-            if (classData && studentData) {
-              setLoggedInClass(classData);
-              setLoggedInStudent(studentData);
+            const result = await db.fetchStudentDashboardDataSecure(parsed.classId, parsed.studentId, parsed.pin);
+            if (result.ok && result.classData && result.studentData) {
+              setLoggedInClass(result.classData);
+              setLoggedInStudent(result.studentData);
+              setTasks(result.tasks || []);
+              setStudentGroups(
+                (result.taskGroups || []).reduce((acc: any, tg: any) => ({ ...acc, [tg.task_id]: { id: tg.task_group_id, name: tg.name } }), {})
+              );
+              setGroupMembers(
+                (result.groupMembers || []).reduce((acc: any, m: any) => {
+                  const sName = m.student_nickname ? `${m.student_name} (${m.student_nickname})` : m.student_name;
+                  if (!acc[m.task_group_id]) acc[m.task_group_id] = [];
+                  acc[m.task_group_id].push(sName);
+                  return acc;
+                }, {})
+              );
+              
+              const subMap: Record<string, any> = {};
+              (result.submissions || []).forEach((s: any) => {
+                const sAttachments = (result.attachments || []).filter((a: any) => a.submission_id === s.id);
+                subMap[s.task_id] = { ...s, attachments: sAttachments };
+              });
+              setStudentSubmissions(subMap);
+              
+              setEarnedBadges(result.badges || []);
+              setStudentLogs(result.logs || []);
             } else {
-              setError('Profile no longer exists. Please log in again.');
+              if (result.reason === 'archived_class') {
+                setError('This class is currently archived. Please contact your teacher.');
+              } else if (result.reason === 'invalid_session') {
+                setError('Your session could not be verified. Please log in again.');
+              } else {
+                setError('Profile no longer exists. Please log in again.');
+              }
               window.localStorage.removeItem(PROFILE_KEY);
             }
           }
@@ -522,23 +362,51 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   };
 
   // Fetch the latest dashboard data helper
-  const fetchDashboardData = async (classId: string, studentId: string) => {
+  const fetchDashboardData = async (classId: string, studentId: string, studentPin: string) => {
     setIsLoading(true);
     setError('');
     try {
-      const { classData, studentData } = await db.getStudentDashboardData(classId, studentId);
-      if (classData && studentData) {
-        setLoggedInClass(classData);
-        setLoggedInStudent(studentData);
-        loadStudentTasks(classId, studentId);
-        // Automatically save session to localStorage when logged in successfully!
+      const result = await db.fetchStudentDashboardDataSecure(classId, studentId, studentPin);
+      if (result.ok && result.classData && result.studentData) {
+        setLoggedInClass(result.classData);
+        setLoggedInStudent(result.studentData);
+        setTasks(result.tasks || []);
+        setStudentGroups(
+          (result.taskGroups || []).reduce((acc: any, tg: any) => ({ ...acc, [tg.task_id]: { id: tg.task_group_id, name: tg.name } }), {})
+        );
+        setGroupMembers(
+          (result.groupMembers || []).reduce((acc: any, m: any) => {
+            const sName = m.student_nickname ? `${m.student_name} (${m.student_nickname})` : m.student_name;
+            if (!acc[m.task_group_id]) acc[m.task_group_id] = [];
+            acc[m.task_group_id].push(sName);
+            return acc;
+          }, {})
+        );
+        
+        const subMap: Record<string, any> = {};
+        (result.submissions || []).forEach((s: any) => {
+          const sAttachments = (result.attachments || []).filter((a: any) => a.submission_id === s.id);
+          subMap[s.task_id] = { ...s, attachments: sAttachments };
+        });
+        setStudentSubmissions(subMap);
+        
+        setEarnedBadges(result.badges || []);
+        setStudentLogs(result.logs || []);
+        
         window.localStorage.setItem(PROFILE_KEY, JSON.stringify({
           classId,
           studentId,
+          pin: studentPin,
         }));
       } else {
-        setError('Profile no longer exists. Please log in again.');
-        window.localStorage.removeItem(PROFILE_KEY);
+        handleLogout();
+        if (result.reason === 'archived_class') {
+          setError('This class is currently archived. Please contact your teacher.');
+        } else if (result.reason === 'invalid_session') {
+          setError('Your session could not be verified. Please log in again.');
+        } else {
+          setError('Profile no longer exists. Please log in again.');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Failed to connect.');
@@ -557,121 +425,70 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     // Helper to refresh in background
     const refreshData = async () => {
       try {
-        const { classData, studentData } = await db.getStudentDashboardData(classId, studentId);
-        if (classData && studentData) {
-          setLoggedInClass(classData);
-          setLoggedInStudent(studentData);
-          loadStudentTasks(classId, studentId);
+        const saved = window.localStorage.getItem(PROFILE_KEY);
+        const savedPin = saved ? JSON.parse(saved).pin : pin;
+        if (!savedPin) return;
+        const result = await db.fetchStudentDashboardDataSecure(classId, studentId, savedPin);
+        if (result.ok && result.classData && result.studentData) {
+          setLoggedInClass(result.classData);
+          setLoggedInStudent(result.studentData);
+          setTasks(result.tasks || []);
+          setStudentGroups(
+            (result.taskGroups || []).reduce((acc: any, tg: any) => ({ ...acc, [tg.task_id]: { id: tg.task_group_id, name: tg.name } }), {})
+          );
+          setGroupMembers(
+            (result.groupMembers || []).reduce((acc: any, m: any) => {
+              const sName = m.student_nickname ? `${m.student_name} (${m.student_nickname})` : m.student_name;
+              if (!acc[m.task_group_id]) acc[m.task_group_id] = [];
+              acc[m.task_group_id].push(sName);
+              return acc;
+            }, {})
+          );
+          
+          const subMap: Record<string, any> = {};
+          (result.submissions || []).forEach((s: any) => {
+            const sAttachments = (result.attachments || []).filter((a: any) => a.submission_id === s.id);
+            subMap[s.task_id] = { ...s, attachments: sAttachments };
+          });
+          setStudentSubmissions(subMap);
+          
+          setEarnedBadges(result.badges || []);
+          setStudentLogs(result.logs || []);
         } else {
-          // If data isn't found during refresh, they might have been deleted
+          // If data isn't found or session is invalid, log them out
           handleLogout();
-          setError('Your profile or class has been removed by the teacher.');
+          if (result.reason === 'archived_class') {
+            setError('This class is currently archived. Please contact your teacher.');
+          } else if (result.reason === 'invalid_session') {
+            setError('Your session could not be verified. Please log in again.');
+          } else {
+            setError('Your profile or class has been removed by the teacher.');
+          }
         }
       } catch (err) {
         console.error("Failed to fetch updated real-time data:", err);
       }
     };
 
-    // 1. Subscribe to the logged-in student row specifically (for instantaneous updates)
-    const studentSubscription = supabase
-      .channel(`student-self-${studentId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'students',
-          filter: `id=eq.${studentId}`,
-        },
-        (payload) => {
-          const updatedRow = payload.new as any;
-          if (updatedRow) {
-            setLoggedInStudent(prev => {
-              if (!prev) return null;
-              return {
-                ...prev,
-                name: updatedRow.name,
-                nickname: updatedRow.nickname || '',
-                lives: updatedRow.lives,
-                points: updatedRow.points,
-                pin: updatedRow.pin,
-              };
-            });
-          }
-          // Also trigger background refresh of full class data to keep things in perfect sync
-          refreshData();
-        }
-      )
-      .subscribe();
+    // 1. Polling interval (e.g., every 30 seconds)
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshData();
+      }
+    }, 30000);
 
-    // 2. Subscribe to all student changes in the same class (to recalculate rank/leaderboard)
-    const classStudentsSubscription = supabase
-      .channel(`class-students-${classId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'students',
-          filter: `class_id=eq.${classId}`,
-        },
-        (payload) => {
-          // If logged-in student got deleted, log them out!
-          if (payload.eventType === 'DELETE' && payload.old && (payload.old as any).id === studentId) {
-            handleLogout();
-            setError('Your student profile was removed by the teacher.');
-            return;
-          }
-          // Otherwise pull fresh class list/rankings
-          refreshData();
-        }
-      )
-      .subscribe();
-
-    // 3. Subscribe to current class detail updates (e.g., changing maxLives, level, or name, or DELETE)
-    const classSubscription = supabase
-      .channel(`class-details-${classId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'classes',
-          filter: `id=eq.${classId}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            handleLogout();
-            setError('This class has been deleted by the teacher.');
-            return;
-          }
-          refreshData();
-        }
-      )
-      .subscribe();
-
-    // 4. Subscribe to meetings updates (start/end) for this class
-    const meetingsSubscription = supabase
-      .channel(`class-meetings-${classId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'meetings',
-          filter: `class_id=eq.${classId}`,
-        },
-        () => {
-          refreshData();
-        }
-      )
-      .subscribe();
+    // 2. Visibility change listener (refresh when tab becomes visible)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      supabase.removeChannel(studentSubscription);
-      supabase.removeChannel(classStudentsSubscription);
-      supabase.removeChannel(classSubscription);
-      supabase.removeChannel(meetingsSubscription);
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [loggedInClass?.id, loggedInStudent?.id]);
 
@@ -684,27 +501,25 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     const normalizedEnteredPin = pin.trim();
 
     try {
-      const targetClass = await db.findClassByJoinCode(normalizedEnteredCode);
-      if (!targetClass) {
-        setError('Class code not found.');
+      // Use the secure RPC foundation for Phase 18E
+      const result = await db.loginStudentByCodeAndPin(normalizedEnteredCode, normalizedEnteredPin);
+
+      if (!result.ok) {
+        if (result.reason === 'archived_class') {
+          setError('This class is currently archived. Please contact your teacher.');
+        } else {
+          setError('Class Code or PIN is incorrect. Please check with your teacher.');
+        }
         setIsLoading(false);
         return;
       }
 
-      if (targetClass.is_archived) {
-        setError('This class is currently archived. Please contact your teacher.');
+      if (result.classData && result.studentData) {
+        await fetchDashboardData(result.classData.id, result.studentData.id, normalizedEnteredPin);
+      } else {
+        setError('Login failed. Please try again.');
         setIsLoading(false);
-        return;
       }
-
-      const student = await db.findStudentByClassAndPin(targetClass.id, normalizedEnteredPin);
-      if (!student) {
-        setError('PIN not found in this class.');
-        setIsLoading(false);
-        return;
-      }
-
-      await fetchDashboardData(targetClass.id, student.id);
     } catch (err: any) {
       setError(err.message || 'Login failed.');
       setIsLoading(false);
@@ -753,9 +568,13 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
           </div>
           <div className="flex items-center gap-2.5">
             <button
-              onClick={() => fetchDashboardData(loggedInClass.id, student.id)}
+              onClick={() => {
+                const saved = window.localStorage.getItem(PROFILE_KEY);
+                const p = saved ? JSON.parse(saved).pin : pin;
+                if (p) fetchDashboardData(loggedInClass.id, student.id, p);
+              }}
               className="text-xs font-semibold text-slate-400 hover:text-white transition-all bg-slate-900/60 hover:bg-slate-900 border border-slate-800/85 hover:border-slate-700/60 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 cursor-pointer focus:outline-none"
-              title="Refresh Data"
+              title="Sync: Updates your points, tasks, feedback, and badges."
             >
               {isLoading ? (
                 <Loader2 size={13} className="animate-spin text-emerald-400" />

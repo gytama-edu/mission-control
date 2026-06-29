@@ -718,6 +718,33 @@ export const findStudentByClassAndPin = async (classId: string, pin: string): Pr
   return data;
 };
 
+export const loginStudentByCodeAndPin = async (joinCode: string, pin: string): Promise<{ ok: boolean, reason?: string, classData?: ClassData, studentData?: Student }> => {
+  const { data, error } = await supabase.rpc('student_login_by_code_and_pin', {
+    p_class_code: joinCode,
+    p_student_pin: pin
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data as any;
+};
+
+export const fetchStudentDashboardDataSecure = async (classId: string, studentId: string, pin: string): Promise<any> => {
+  const { data, error } = await supabase.rpc('student_fetch_dashboard_data', {
+    p_class_id: classId,
+    p_student_id: studentId,
+    p_student_pin: pin
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+};
+
 export const getStudentDashboardData = async (classId: string, studentId: string): Promise<{ classData: ClassData | null, studentData: Student | null }> => {
   const { data: c, error: classError } = await supabase
     .from('classes')
