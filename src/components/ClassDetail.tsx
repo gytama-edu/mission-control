@@ -7,6 +7,7 @@ import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
 import { downloadCsv, sanitizeFilename } from '../utils/exportUtils';
 import { ConfirmActionModal } from './ConfirmActionModal';
+import { AiWritingCheck } from './AiWritingCheck';
 
 interface ClassDetailProps {
   classData: ClassData;
@@ -4930,7 +4931,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                               )}
 
                               {/* Review/Grade Section */}
-                              <div className="border-t border-slate-850 pt-4 mt-1">
+                              {isReviewingThis && selectedTaskForSubmissions.allow_text_submission && sub.submission_text && sub.submission_text.trim().length > 0 && (
+                                <AiWritingCheck 
+                                  submissionId={sub.id} 
+                                  taskId={selectedTaskForSubmissions.id}
+                                  studentName={sub.studentName}
+                                  submissionText={sub.submission_text}
+                                />
+                              )}
+                              <div className="border-t border-slate-850 pt-4 mt-4">
                                 {isUnsubmittedGroup ? (
                                   <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800 text-xs text-slate-500 italic text-center">
                                     Awaiting group transmission. Cannot review until submitted.
