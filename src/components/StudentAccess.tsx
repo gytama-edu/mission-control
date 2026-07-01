@@ -6,6 +6,7 @@ import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
 import { getEffectiveClassroomMode, isPrivateClassCategory, shouldShowCompetitiveRank } from '../utils/classroomUtils';
 import { getSubmissionStatus, getSubmissionStatusBadgeColor } from '../utils/submissionStatusUtils';
+import { buildStudentActivityFeed } from '../utils/activityFeedUtils';
 import { supabase } from '../lib/supabaseClient';
 
 interface StudentAccessProps {
@@ -1049,73 +1050,84 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 <div className="py-4 text-center text-slate-500 text-xs italic leading-relaxed">
                   Timeline features are disabled until the database tables are initialized in Supabase by the teacher.
                 </div>
-              ) : isLogsLoading && studentLogs.length === 0 ? (
-                <div className="py-6 text-center text-slate-500 text-sm font-medium">Loading history...</div>
-              ) : studentLogs.length === 0 ? (
-                <div className="py-8 px-4 text-center bg-slate-950/20 rounded-xl border border-slate-850 text-slate-500 text-xs italic">
-                  No point or life updates recorded yet. Keep up the good work!
-                </div>
-              ) : (
-                <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-                  {studentLogs.map((log) => {
-                    const isPoints = log.action_type === 'points_changed';
-                    const isLives = log.action_type === 'lives_changed';
-                    const isUndone = log.undone;
+              ) : (() => {
+                const feed = buildStudentActivityFeed({
+                  student: loggedInStudent,
+                  activityLogs: studentLogs,
+                  submissions: Object.values(studentSubmissions),
+                  tasks,
+                  studentBadges: earnedBadges
+                });
 
-                    let title = '';
-                    let badgeColor = 'bg-slate-800 text-slate-400 border border-slate-750';
+                if (isLogsLoading && feed.length === 0) {
+                  return <div className="py-6 text-center text-slate-500 text-sm font-medium">Loading history...</div>;
+                }
 
-                    if (isPoints) {
-                      const delta = log.points_delta || 0;
-                      const sign = delta > 0 ? '+' : '';
-                      title = `${sign}${delta} Pts`;
-                      badgeColor = delta > 0 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20';
-                    } else if (isLives) {
-                      const delta = log.lives_delta || 0;
-                      const sign = delta > 0 ? '+' : '';
-                      title = `${sign}${delta} Lives`;
-                      badgeColor = delta > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20';
-                    } else {
-                      title = 'Update';
-                    }
+                if (feed.length === 0) {
+                  return (
+                    <div className="py-8 px-4 text-center bg-slate-950/20 rounded-xl border border-slate-850 text-slate-500 text-xs italic">
+                      Your progress updates will appear here. Keep up the good work!
+                    </div>
+                  );
+                }
 
-                    return (
-                      <div
-                        key={log.id}
-                        className={`bg-slate-950/40 border border-slate-850/60 rounded-xl p-3 flex items-center justify-between gap-4 transition-all ${
-                          isUndone ? 'opacity-45 select-none' : ''
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 border ${badgeColor}`}>
-                            {title}
-                          </span>
-                          <div className="space-y-0.5">
-                            {log.reason ? (
-                              <p className={`text-xs font-semibold text-slate-200 leading-snug ${isUndone ? 'line-through' : ''}`}>
-                                "{log.reason}"
-                              </p>
-                            ) : (
-                              <p className={`text-xs text-slate-400 leading-snug ${isUndone ? 'line-through' : ''}`}>
-                                {isPoints ? (log.points_delta! > 0 ? 'Earned points' : 'Lost points') : (log.lives_delta! > 0 ? 'Restored lives' : 'Lost lives')}
-                              </p>
-                            )}
-                            <span className="text-[9px] text-slate-500 font-mono block">
-                              {new Date(log.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                return (
+                  <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {feed.map((item) => {
+                      let badgeColor = 'bg-slate-800 text-slate-400 border border-slate-750';
+                      let title = '';
+
+                      if (item.type === 'points') {
+                        const delta = item.delta || 0;
+                        const sign = delta > 0 ? '+' : '';
+                        title = `${sign}${delta} Pts`;
+                        badgeColor = delta > 0 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20';
+                      } else if (item.type === 'lives') {
+                        const delta = item.delta || 0;
+                        const sign = delta > 0 ? '+' : '';
+                        title = `${sign}${delta} Lives`;
+                        badgeColor = delta > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20';
+                      } else if (item.type === 'submission_new') {
+                        title = 'Submitted';
+                        badgeColor = 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
+                      } else if (item.type === 'submission_reviewed') {
+                        title = 'Feedback';
+                        badgeColor = 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
+                      } else if (item.type === 'badge_awarded') {
+                        title = 'Badge';
+                        badgeColor = 'bg-orange-500/10 text-orange-400 border border-orange-500/20';
+                      }
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`bg-slate-950/40 border ${item.isNew ? 'border-indigo-500/40 shadow-[0_0_8px_rgba(99,102,241,0.1)]' : 'border-slate-850/60'} rounded-xl p-3 flex items-center justify-between gap-4 transition-all`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 border ${badgeColor}`}>
+                              {title}
                             </span>
+                            <div className="space-y-0.5">
+                              <p className={`text-xs font-semibold ${item.isNew ? 'text-indigo-200' : 'text-slate-200'} leading-snug`}>
+                                {item.summary}
+                              </p>
+                              <span className="text-[9px] text-slate-500 font-mono block">
+                                {item.timestamp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
                           </div>
+                          
+                          {item.isNew && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-400 shrink-0">
+                              New
+                            </span>
+                          )}
                         </div>
-
-                        {isUndone && (
-                          <span className="text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded font-bold font-mono shrink-0">
-                            UNDONE
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

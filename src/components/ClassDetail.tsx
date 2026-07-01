@@ -7,6 +7,7 @@ import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
 import { getEffectiveClassroomMode } from '../utils/classroomUtils';
 import { getSubmissionStatus, getSubmissionStatusBadgeColor, getTaskSubmissionSummary } from '../utils/submissionStatusUtils';
+import { buildClassActivityFeed } from '../utils/activityFeedUtils';
 import { getPointActionMessage } from '../utils/pointActionUtils';
 import { downloadCsv, sanitizeFilename } from '../utils/exportUtils';
 import { ConfirmActionModal } from './ConfirmActionModal';
@@ -1348,6 +1349,54 @@ export function ClassDetail({
               </div>
             )}
           </div>
+
+          {/* Recent Activity Feed (Highlights) */}
+          {(() => {
+            const feed = buildClassActivityFeed({
+              activityLogs,
+              submissions: allSubmissions,
+              tasks,
+              students: classData.students || [],
+              studentBadges,
+              badgeDefinitions
+            });
+            const recentFeed = feed.slice(0, 5); // Show top 5 latest
+            
+            if (recentFeed.length === 0) return null;
+            
+            return (
+              <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-4 animate-fade-in shadow-xl select-none">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-slate-300 font-mono tracking-wider uppercase flex items-center gap-2">
+                    <Clock size={14} className="text-indigo-400" /> Recent Activity
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                  {recentFeed.map((item) => (
+                    <div 
+                      key={item.id} 
+                      className={`p-3 rounded-xl border flex flex-col gap-1.5 transition-colors ${
+                        item.isNew 
+                          ? 'bg-indigo-500/10 border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.05)]' 
+                          : 'bg-slate-950/40 border-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white truncate pr-2">{item.studentName}</span>
+                        {item.isNew && <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-400">New</span>}
+                      </div>
+                      <div className="text-[11px] text-slate-400 leading-snug line-clamp-2" title={item.summary}>
+                        {item.summary}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono mt-auto pt-1">
+                        {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Roster Grid */}
           {classData.students.length === 0 ? (
