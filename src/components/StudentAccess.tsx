@@ -561,6 +561,37 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
       ? new Date(loggedInClass.meetings[loggedInClass.meetings.length - 1].startedAt).toLocaleDateString()
       : 'No meetings yet';
 
+    // Calculate today's progress
+    const todayStr = new Date().toDateString();
+    const todayLogs = studentLogs.filter(log => {
+      if (log.undone) return false;
+      const logDate = new Date(log.created_at).toDateString();
+      return logDate === todayStr && typeof log.points_delta === 'number';
+    });
+
+    const todayPointsDelta = todayLogs.reduce((acc, log) => acc + (log.points_delta || 0), 0);
+    const latestLog = todayLogs.length > 0 ? todayLogs[0] : null;
+
+    // Calculate recent progress (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const recentLogs = studentLogs.filter(log => {
+      if (log.undone) return false;
+      const logDate = new Date(log.created_at);
+      return logDate >= sevenDaysAgo && typeof log.points_delta === 'number';
+    });
+    const recentPointsDelta = recentLogs.reduce((acc, log) => acc + (log.points_delta || 0), 0);
+
+    const isPointsOnly = getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points';
+    const isPrivate = loggedInClass.category === 'private';
+
+    const showRankCard = !isPrivate;
+    const showLivesCard = !isPointsOnly;
+
+    // Private + Points needs 2 extra cards to fill the row (Today's Progress & Recent Progress)
+    const showRecentProgressCard = isPrivate && isPointsOnly;
+
+
     return (
       <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 select-none">
         {/* Compact Polished Header */}
@@ -633,7 +664,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
             </div>
 
             <div className="flex flex-col sm:items-end gap-1.5">
-              {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'lives' && (
+              {showLivesCard && (
                 <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider border select-none ${statusColor}`}>
                   Status: {status}
                 </span>
@@ -648,26 +679,28 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
 
           {/* Core Stat Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-slate-800/60">
+            {/* Card 1: Points */}
             <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
               <div className="h-9 w-9 rounded-lg bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 shrink-0">
                 <Star className="text-yellow-400" size={18} />
               </div>
               <div>
                 <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">
-                  {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points' ? 'Points' : 'Points Earned'}
+                  {isPointsOnly ? 'Points' : 'Points Earned'}
                 </span>
                 <span className="text-xl font-mono font-bold text-yellow-400 leading-tight">{student.points}</span>
               </div>
             </div>
 
-            {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'lives' && (
+            {/* Card 2: Lives */}
+            {showLivesCard && (
               <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
                 <div className="h-9 w-9 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 shrink-0">
                   <Shield className="text-red-400" size={18} />
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">
-                    {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points' ? 'Lives' : 'Lives Remaining'}
+                    {isPointsOnly ? 'Lives' : 'Lives Remaining'}
                   </span>
                   <span className="text-xl font-mono font-bold text-white leading-tight">
                     {student.lives}<span className="text-xs text-slate-500 font-sans font-medium">/{loggedInClass.maxLives}</span>
@@ -676,7 +709,8 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
               </div>
             )}
 
-            {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points' && (
+            {/* Card 3: Rank */}
+            {showRankCard && (
               <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
                 <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0">
                   <Trophy className="text-blue-400" size={16} />
@@ -690,6 +724,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
               </div>
             )}
 
+            {/* Card 4: Badges */}
             <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
               <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center border border-purple-500/20 shrink-0">
                 <Award className="text-purple-400" size={18} />
@@ -701,6 +736,56 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 </span>
               </div>
             </div>
+
+            {/* Card 5: Today's Progress / Personal Progress */}
+            {(!showLivesCard || !showRankCard) && (
+              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
+                  <Rocket className="text-emerald-400" size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block truncate">
+                    {isPrivate && !isPointsOnly ? 'Personal Progress' : "Today's Progress"}
+                  </span>
+                  <div className="flex flex-col">
+                    <span className={`text-lg sm:text-xl font-mono font-bold leading-tight ${todayPointsDelta > 0 ? 'text-emerald-400' : todayPointsDelta < 0 ? 'text-rose-400' : 'text-slate-300'}`}>
+                      {todayPointsDelta > 0 ? '+' : ''}{todayPointsDelta} <span className="text-xs text-slate-500 font-sans font-medium">pts today</span>
+                    </span>
+                    {latestLog ? (
+                      <span className="text-[9px] text-slate-400 truncate mt-0.5" title={`Latest: ${latestLog.reason || latestLog.action_type.replace(/_/g, ' ')}`}>
+                        Latest: {latestLog.reason || latestLog.action_type.replace(/_/g, ' ')}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-slate-500 truncate mt-0.5">
+                        No progress logged yet today.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Card 6: Recent Progress (Only for Private + Points to get to 4 cards) */}
+            {showRecentProgressCard && (
+              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 shrink-0">
+                  <CheckCircle className="text-cyan-400" size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block truncate">
+                    Recent Progress
+                  </span>
+                  <div className="flex flex-col">
+                    <span className={`text-lg sm:text-xl font-mono font-bold leading-tight ${recentPointsDelta > 0 ? 'text-cyan-400' : recentPointsDelta < 0 ? 'text-rose-400' : 'text-slate-300'}`}>
+                      {recentPointsDelta > 0 ? '+' : ''}{recentPointsDelta} <span className="text-xs text-slate-500 font-sans font-medium">pts (7d)</span>
+                    </span>
+                    <span className="text-[9px] text-slate-500 truncate mt-0.5">
+                      Past 7 days
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

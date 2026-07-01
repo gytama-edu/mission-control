@@ -1008,7 +1008,6 @@ export function ClassDetail({
       // Let's manually re-trigger local fetches just to be safe.
       if (activeTab === 'reports') {
         const reportsData = await taskDb.fetchClassReportsData(classData.id);
-        setReportTasks(reportsData.tasks);
         setReportSubmissions(reportsData.submissions);
         setReportGroups(reportsData.groups);
         setReportGroupMembers(reportsData.groupMembers);
