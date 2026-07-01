@@ -4,7 +4,7 @@ import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, C
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
-import { getEffectiveClassroomMode } from '../utils/classroomUtils';
+import { getEffectiveClassroomMode, isPrivateClassCategory, shouldShowCompetitiveRank } from '../utils/classroomUtils';
 import { supabase } from '../lib/supabaseClient';
 
 interface StudentAccessProps {
@@ -585,10 +585,10 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     });
     const recentPointsDelta = recentLogs.reduce((acc, log) => acc + (log.points_delta || 0), 0);
 
-    const isPointsOnly = getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points';
-    const isPrivate = loggedInClass.category === 'private';
+    const isPointsOnly = getEffectiveClassroomMode(loggedInClass.category || (loggedInClass as any).class_category, loggedInClass.scoring_system) === 'points';
+    const isPrivate = isPrivateClassCategory(loggedInClass.category || (loggedInClass as any).class_category);
 
-    const showRankCard = !isPrivate;
+    const showRankCard = shouldShowCompetitiveRank(loggedInClass.category || (loggedInClass as any).class_category);
     const showLivesCard = !isPointsOnly;
 
     // Private + Points needs 2 extra cards to fill the row (Today's Progress & Recent Progress)
