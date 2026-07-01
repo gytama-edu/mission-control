@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
+import { getEffectiveClassroomMode } from '../utils/classroomUtils';
+import { getPointActionMessage } from '../utils/pointActionUtils';
 import { downloadCsv, sanitizeFilename } from '../utils/exportUtils';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { AiWritingCheck } from './AiWritingCheck';
@@ -12,7 +14,7 @@ import { AiWritingCheck } from './AiWritingCheck';
 interface ClassDetailProps {
   classData: ClassData;
   onBack: () => void;
-  onEditClass: (name: string, level: string, maxLives: number, category: 'regular' | 'private') => void;
+  onEditClass: (name: string, level: string, maxLives: number, category: 'regular' | 'private', scoringSystem: 'points' | 'lives') => void;
   onArchiveClass: () => void;
   onDeleteClass: () => void;
   onRegenerateJoinCode: () => void;
@@ -48,7 +50,11 @@ export function ClassDetail({
   const [activeTab, setActiveTab] = useState<'roster' | 'leaderboard' | 'activity_log' | 'meetings' | 'tasks' | 'settings' | 'badges' | 'reports'>('roster');
   
   const handleUpdatePoints = (studentId: string, change: number, reason?: string | null) => {
-    onUpdatePoints(studentId, change, reason);
+    let finalReason = reason;
+    if (!finalReason) {
+      finalReason = getPointActionMessage(change);
+    }
+    onUpdatePoints(studentId, change, finalReason);
   };
 
   const handleUpdateLives = (studentId: string, change: number, reason?: string | null) => {
@@ -825,13 +831,15 @@ export function ClassDetail({
   const [editClassLevel, setEditClassLevel] = useState(classData.level);
   const [editClassMaxLives, setEditClassMaxLives] = useState(classData.maxLives);
   const [editClassCategory, setEditClassCategory] = useState(classData.category || 'regular');
+  const [editClassScoringSystem, setEditClassScoringSystem] = useState(classData.scoring_system || (classData.category === 'private' ? 'lives' : 'points'));
 
   useEffect(() => {
     setEditClassName(classData.name);
     setEditClassLevel(classData.level);
     setEditClassMaxLives(classData.maxLives);
     setEditClassCategory(classData.category || 'regular');
-  }, [classData.name, classData.level, classData.maxLives, classData.category]);
+    setEditClassScoringSystem(classData.scoring_system || (classData.category === 'private' ? 'lives' : 'points'));
+  }, [classData.name, classData.level, classData.maxLives, classData.category, classData.scoring_system]);
 
   const activeMeeting = classData.meetings?.find(m => m.status === 'active');
 
@@ -981,7 +989,7 @@ export function ClassDetail({
 
   const handleSaveClass = (e: React.FormEvent) => {
     e.preventDefault();
-    onEditClass(editClassName, editClassLevel, editClassMaxLives, editClassCategory);
+    onEditClass(editClassName, editClassLevel, editClassMaxLives, editClassCategory, editClassScoringSystem);
     alert('Class settings updated!');
   };
 
@@ -1076,9 +1084,11 @@ export function ClassDetail({
               <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-900 text-slate-300 font-mono">
                 <Users size={12} className="text-rose-500/70" /> LEVEL: <strong className="text-white font-semibold">{classData.level}</strong>
               </span>
-              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-900 text-slate-300 font-mono">
-                <Shield size={12} className="text-rose-500/70" /> MAX LIVES: <strong className="text-white font-semibold">{classData.maxLives}</strong>
-              </span>
+              {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-900 text-slate-300 font-mono">
+                  <Shield size={12} className="text-rose-500/70" /> MAX LIVES: <strong className="text-white font-semibold">{classData.maxLives}</strong>
+                </span>
+              )}
               <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-900 text-slate-300 font-mono">
                 <Play size={12} className="text-rose-500/70" /> SESSIONS: <strong className="text-white font-semibold">{classData.meetings.length}</strong>
               </span>
@@ -1145,16 +1155,18 @@ export function ClassDetail({
         >
           <Users size={13} /> Roster
         </button>
-        <button
-          onClick={() => setActiveTab('leaderboard')}
-          className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
-            activeTab === 'leaderboard'
-              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold shadow-[0_0_10px_rgba(245,158,11,0.12)]'
-              : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
-          }`}
-        >
-          <Trophy size={13} /> Leaderboard
-        </button>
+        {classData.category !== 'private' && (
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
+              activeTab === 'leaderboard'
+                ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold shadow-[0_0_10px_rgba(245,158,11,0.12)]'
+                : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-slate-900/40'
+            }`}
+          >
+            <Trophy size={13} /> Leaderboard
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('activity_log')}
           className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl transition-all border cursor-pointer ${
@@ -1242,6 +1254,7 @@ export function ClassDetail({
                   <Plus size={15} /> Add
                 </button>
               </form>
+              <p className="text-[10px] text-slate-500 mt-2 font-mono ml-1">New students start with 50 points.</p>
             </div>
 
             {/* Right: Attach Reason (Quick Change modifier) */}
@@ -1322,7 +1335,9 @@ export function ClassDetail({
                     <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 select-none bg-slate-950/20">
                       <th className="py-2.5 px-4 font-semibold">Student Name</th>
                       <th className="py-2.5 px-4 font-semibold text-center w-24">PIN</th>
-                      <th className="py-2.5 px-4 font-semibold text-center w-36">Lives</th>
+                      {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                        <th className="py-2.5 px-4 font-semibold text-center w-36">Lives</th>
+                      )}
                       <th className="py-2.5 px-4 font-semibold text-center w-64">Points Control</th>
                       <th className="py-2.5 px-4 font-semibold text-right w-24">Actions</th>
                     </tr>
@@ -1342,35 +1357,39 @@ export function ClassDetail({
                                   ({student.name})
                                 </span>
                               )}
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
-                                {status.label}
-                              </span>
+                              {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
+                                  {status.label}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="py-2 px-4 text-center font-mono text-xs text-slate-300 font-bold select-none">
                             {student.pin}
                           </td>
-                          <td className="py-2 px-4">
-                            <div className="flex items-center justify-center gap-2 select-none">
-                              <button
-                                onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
-                                disabled={student.lives <= 0}
-                                className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
-                              >
-                                <Minus size={11} />
-                              </button>
-                              <span className={`font-mono font-bold text-sm ${student.lives === 0 ? 'text-red-500' : 'text-white'} w-6 text-center`}>
-                                {student.lives}
-                              </span>
-                              <button
-                                onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
-                                disabled={student.lives >= classData.maxLives}
-                                className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
-                              >
-                                <Plus size={11} />
-                              </button>
-                            </div>
-                          </td>
+                          {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                            <td className="py-2 px-4">
+                              <div className="flex items-center justify-center gap-2 select-none">
+                                <button
+                                  onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
+                                  disabled={student.lives <= 0}
+                                  className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                >
+                                  <Minus size={11} />
+                                </button>
+                                <span className={`font-mono font-bold text-sm ${student.lives === 0 ? 'text-red-500' : 'text-white'} w-6 text-center`}>
+                                  {student.lives}
+                                </span>
+                                <button
+                                  onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
+                                  disabled={student.lives >= classData.maxLives}
+                                  className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                >
+                                  <Plus size={11} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                           <td className="py-2 px-4">
                             <div className="flex items-center justify-center gap-3 select-none">
                               <span className="font-mono font-bold text-white text-sm w-10 text-right pr-2 border-r border-slate-800">
@@ -1385,6 +1404,13 @@ export function ClassDetail({
                                   -5
                                 </button>
                                 <button 
+                                  onClick={() => handleUpdatePoints(student.id, -3, getActiveReason())} 
+                                  disabled={student.points < 3} 
+                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  -3
+                                </button>
+                                <button 
                                   onClick={() => handleUpdatePoints(student.id, -1, getActiveReason())} 
                                   disabled={student.points < 1} 
                                   className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
@@ -1396,6 +1422,12 @@ export function ClassDetail({
                                   className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
                                 >
                                   +1
+                                </button>
+                                <button 
+                                  onClick={() => handleUpdatePoints(student.id, 3, getActiveReason())} 
+                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-medium cursor-pointer"
+                                >
+                                  +3
                                 </button>
                                 <button 
                                   onClick={() => handleUpdatePoints(student.id, 5, getActiveReason())} 
@@ -1457,9 +1489,11 @@ export function ClassDetail({
                               Real Name: {student.name}
                             </p>
                           )}
-                          <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
-                            {status.label}
-                          </div>
+                          {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                            <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
+                              {status.label}
+                            </div>
+                          )}
                           <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-1 font-mono select-none">
                             <Key size={10} className="text-rose-500/70" /> PIN: <strong className="text-slate-300 font-semibold">{student.pin}</strong>
                           </div>
@@ -1486,32 +1520,34 @@ export function ClassDetail({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <div className={`grid ${getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' ? 'grid-cols-2' : 'grid-cols-1'} gap-2.5`}>
                         {/* Lives Control */}
-                        <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex flex-col justify-between select-none">
-                          <div className="text-[10px] text-slate-500 font-mono uppercase tracking-widest flex items-center gap-1.5">
-                            <Shield size={12} className="text-red-400" /> Lives
+                        {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                          <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex flex-col justify-between select-none">
+                            <div className="text-[10px] text-slate-500 font-mono uppercase tracking-widest flex items-center gap-1.5">
+                              <Shield size={12} className="text-red-400" /> Lives
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <button
+                                onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
+                                disabled={student.lives <= 0}
+                                className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              >
+                                <Minus size={16} />
+                              </button>
+                              <span className={`font-mono text-xl font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
+                                {student.lives}
+                              </span>
+                              <button
+                                onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
+                                disabled={student.lives >= classData.maxLives}
+                                className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between mt-2">
-                            <button
-                              onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
-                              disabled={student.lives <= 0}
-                              className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
-                            >
-                              <Minus size={16} />
-                            </button>
-                            <span className={`font-mono text-xl font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
-                              {student.lives}
-                            </span>
-                            <button
-                              onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
-                              disabled={student.lives >= classData.maxLives}
-                              className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </div>
-                        </div>
+                        )}
 
                         {/* Points Control */}
                         <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex flex-col justify-between select-none">
@@ -1522,10 +1558,12 @@ export function ClassDetail({
                           <div className="flex flex-col gap-2 mt-2">
                             <div className="flex items-center justify-between gap-2">
                               <button onClick={() => handleUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
+                              <button onClick={() => handleUpdatePoints(student.id, -3, getActiveReason())} disabled={student.points < 3} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-3</button>
                               <button onClick={() => handleUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
                             </div>
                             <div className="flex items-center justify-between gap-2">
                               <button onClick={() => handleUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+1</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 3, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+3</button>
                               <button onClick={() => handleUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-bold">+5</button>
                               <button onClick={() => handleUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/40 text-white font-bold cursor-pointer">+10</button>
                             </div>
@@ -1541,7 +1579,7 @@ export function ClassDetail({
         </div>
       )}
 
-      {activeTab === 'leaderboard' && (
+      {classData.category !== 'private' && activeTab === 'leaderboard' && (
         <div className="space-y-4 animate-fade-in">
           <div className="overflow-hidden bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl shadow-xl max-w-2xl">
             {sortedStudents.length === 0 ? (
@@ -2068,11 +2106,13 @@ alter publication supabase_realtime add table public.activity_logs;`}
 
                       {/* Middle: Summary Stats */}
                       {meeting.summary ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 bg-slate-950/40 px-3 py-2 rounded-lg border border-slate-850/60 flex-1 max-w-xl text-[11px] font-mono text-slate-400">
+                        <div className={`grid grid-cols-2 gap-x-4 gap-y-1 bg-slate-950/40 px-3 py-2 rounded-lg border border-slate-850/60 flex-1 max-w-xl text-[11px] font-mono text-slate-400 ${getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
                           <div>Duration: <span className="text-slate-200 font-bold">{meeting.summary.duration}</span></div>
                           <div>Actions: <span className="text-slate-200 font-bold">{meeting.summary.total_actions}</span></div>
                           <div>Points: <span className="text-rose-400 font-bold">{meeting.summary.total_point_changes}</span></div>
-                          <div>Lives Lost: <span className="text-red-400 font-bold">❤️ {meeting.summary.total_lives_lost}</span></div>
+                          {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                            <div>Lives Lost: <span className="text-red-400 font-bold">❤️ {meeting.summary.total_lives_lost}</span></div>
+                          )}
                         </div>
                       ) : (
                         <div className="text-[11px] text-slate-500 italic bg-slate-950/20 px-3 py-2 rounded-lg border border-slate-850/30 flex-1 max-w-xl">
@@ -3070,33 +3110,39 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                     {/* Class Standings Panel */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-6 shadow-xl">
-                        <h3 className="text-lg font-display font-bold text-white mb-4">Class Performance Highlights</h3>
+                        <h3 className="text-lg font-display font-bold text-white mb-4">
+                          {classData.category !== 'private' ? 'Class Performance Highlights' : 'Class Status Snapshot'}
+                        </h3>
                         <div className="space-y-4">
-                          <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
-                            <div>
-                              <p className="text-sm font-medium text-slate-400">Class Top Performer</p>
-                              <p className="text-base font-bold text-white mt-1">
-                                {highestStudent ? (highestStudent.nickname ? `${highestStudent.name} (${highestStudent.nickname})` : highestStudent.name) : 'None'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-xs text-slate-500 block">Score</span>
-                              <span className="text-lg font-bold text-rose-500">{highestStudent ? highestStudent.points : 0} pts</span>
-                            </div>
-                          </div>
+                          {classData.category !== 'private' && (
+                            <>
+                              <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-400">Class Top Performer</p>
+                                  <p className="text-base font-bold text-white mt-1">
+                                    {highestStudent ? (highestStudent.nickname ? `${highestStudent.name} (${highestStudent.nickname})` : highestStudent.name) : 'None'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-xs text-slate-500 block">Score</span>
+                                  <span className="text-lg font-bold text-rose-500">{highestStudent ? highestStudent.points : 0} pts</span>
+                                </div>
+                              </div>
 
-                          <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
-                            <div>
-                              <p className="text-sm font-medium text-slate-400">Needs Support</p>
-                              <p className="text-base font-bold text-white mt-1">
-                                {lowestStudent ? (lowestStudent.nickname ? `${lowestStudent.name} (${lowestStudent.nickname})` : lowestStudent.name) : 'None'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-xs text-slate-500 block">Score</span>
-                              <span className="text-lg font-bold text-slate-400">{lowestStudent ? lowestStudent.points : 0} pts</span>
-                            </div>
-                          </div>
+                              <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-400">Needs Support</p>
+                                  <p className="text-base font-bold text-white mt-1">
+                                    {lowestStudent ? (lowestStudent.nickname ? `${lowestStudent.name} (${lowestStudent.nickname})` : lowestStudent.name) : 'None'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-xs text-slate-500 block">Score</span>
+                                  <span className="text-lg font-bold text-slate-400">{lowestStudent ? lowestStudent.points : 0} pts</span>
+                                </div>
+                              </div>
+                            </>
+                          )}
 
                           <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
                             <div>
@@ -3188,10 +3234,12 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                             <p className="text-sm text-slate-400 mt-1">Joined: {new Date(student.joinedAt).toLocaleDateString()}</p>
                           </div>
                           <div className="flex items-center gap-6">
-                            <div className="text-center bg-slate-950/40 p-3 rounded-lg border border-slate-800 min-w-[80px]">
-                              <span className="text-xs text-slate-500 block">Rank</span>
-                              <span className="text-lg font-bold text-amber-500">#{studentRank}</span>
-                            </div>
+                            {classData.category !== 'private' && (
+                              <div className="text-center bg-slate-950/40 p-3 rounded-lg border border-slate-800 min-w-[80px]">
+                                <span className="text-xs text-slate-500 block">Rank</span>
+                                <span className="text-lg font-bold text-amber-500">#{studentRank}</span>
+                              </div>
+                            )}
                             <div className="text-center bg-slate-950/40 p-3 rounded-lg border border-slate-800 min-w-[80px]">
                               <span className="text-xs text-slate-500 block">Points</span>
                               <span className="text-lg font-bold text-rose-500">{student.points}</span>
@@ -3321,9 +3369,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 bg-slate-950/20 select-none">
-                            <th className="py-2.5 px-4 font-semibold">Rank</th>
+                            {classData.category !== 'private' && (
+                              <th className="py-2.5 px-4 font-semibold">Rank</th>
+                            )}
                             <th className="py-2.5 px-4 font-semibold">Student Name</th>
-                            <th className="py-2.5 px-4 font-semibold text-center">Lives</th>
+                            {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                              <th className="py-2.5 px-4 font-semibold text-center">Lives</th>
+                            )}
                             <th className="py-2.5 px-4 font-semibold text-center">Points</th>
                             <th className="py-2.5 px-4 font-semibold text-center">Submissions</th>
                             <th className="py-2.5 px-4 font-semibold text-center">Badges</th>
@@ -3340,7 +3392,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
 
                             return (
                               <tr key={student.id} className="hover:bg-slate-900/40 transition-colors">
-                                <td className="py-2 px-4 font-mono text-xs text-amber-500 font-bold">#{rank}</td>
+                                {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'points' && (
+                                  <td className="py-2 px-4 font-mono text-xs text-amber-500 font-bold">#{rank}</td>
+                                )}
                                 <td className="py-2 px-4">
                                   <span className="font-display font-bold text-sm text-white">
                                     {student.nickname || student.name}
@@ -3485,8 +3539,12 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                             <th className="p-4 text-center">Duration</th>
                             <th className="p-4 text-center">Actions</th>
                             <th className="p-4 text-center">Points Awarded</th>
-                            <th className="p-4 text-center">Lives Lost</th>
-                            <th className="p-4 text-center">Lives Gained</th>
+                            {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                              <>
+                                <th className="p-4 text-center">Lives Lost</th>
+                                <th className="p-4 text-center">Lives Gained</th>
+                              </>
+                            )}
                             <th className="p-4">Most Active Crew</th>
                           </tr>
                         </thead>
@@ -3513,8 +3571,12 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                 <td className="p-4 text-center font-mono text-sm">{duration}</td>
                                 <td className="p-4 text-center font-mono text-sm text-purple-400">{totalActions}</td>
                                 <td className="p-4 text-center font-mono text-sm text-rose-400 font-semibold">+{totalPoints}</td>
-                                <td className="p-4 text-center font-mono text-sm text-red-400">-{totalLivesLost}</td>
-                                <td className="p-4 text-center font-mono text-sm text-emerald-400">+{totalLivesGained}</td>
+                                {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                                  <>
+                                    <td className="p-4 text-center font-mono text-sm text-red-400">-{totalLivesLost}</td>
+                                    <td className="p-4 text-center font-mono text-sm text-emerald-400">+{totalLivesGained}</td>
+                                  </>
+                                )}
                                 <td className="p-4 font-mono text-sm text-slate-300">{summary.most_active_student || 'N/A'}</td>
                               </tr>
                             );
@@ -3758,27 +3820,44 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Max Lives (1-20)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  required
-                  value={editClassMaxLives}
-                  onChange={(e) => setEditClassMaxLives(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs font-mono"
-                />
-              </div>
+              {editClassScoringSystem === 'lives' && (
+                <div>
+                  <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Max Lives (1-20)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    required
+                    value={editClassMaxLives}
+                    onChange={(e) => setEditClassMaxLives(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs font-mono"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Category</label>
                 <select
                   value={editClassCategory}
-                  onChange={(e) => setEditClassCategory(e.target.value as 'regular' | 'private')}
+                  onChange={(e) => {
+                    const newCategory = e.target.value as 'regular' | 'private';
+                    setEditClassCategory(newCategory);
+                    setEditClassScoringSystem(newCategory === 'private' ? 'lives' : 'points');
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs"
                 >
                   <option value="regular">Regular</option>
                   <option value="private">Private</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Scoring System</label>
+                <select
+                  value={editClassScoringSystem}
+                  onChange={(e) => setEditClassScoringSystem(e.target.value as 'points' | 'lives')}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs"
+                >
+                  <option value="points">Points Only</option>
+                  <option value="lives">Lives Challenge</option>
                 </select>
               </div>
             </div>
@@ -4589,23 +4668,25 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono uppercase font-bold">Points Awarded</span>
                   </div>
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 text-center col-span-2">
-                    <div className="flex justify-around items-center h-full">
-                      <div>
-                        <span className="text-lg font-bold text-red-500 block">
-                          -{selectedMeetingForSummary.summary.total_lives_lost}
-                        </span>
-                        <span className="text-[9px] text-slate-500 font-mono uppercase">Lives Lost</span>
-                      </div>
-                      <div className="h-6 w-px bg-slate-800" />
-                      <div>
-                        <span className="text-lg font-bold text-emerald-400 block">
-                          +{selectedMeetingForSummary.summary.total_lives_gained}
-                        </span>
-                        <span className="text-[9px] text-slate-500 font-mono uppercase">Lives Recovered</span>
+                  {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 text-center col-span-2">
+                      <div className="flex justify-around items-center h-full">
+                        <div>
+                          <span className="text-lg font-bold text-red-500 block">
+                            -{selectedMeetingForSummary.summary.total_lives_lost}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono uppercase">Lives Lost</span>
+                        </div>
+                        <div className="h-6 w-px bg-slate-800" />
+                        <div>
+                          <span className="text-lg font-bold text-emerald-400 block">
+                            +{selectedMeetingForSummary.summary.total_lives_gained}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono uppercase">Lives Recovered</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -4634,7 +4715,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                     </div>
                   )}
 
-                  {selectedMeetingForSummary.summary.lost_lives_students && selectedMeetingForSummary.summary.lost_lives_students.length > 0 && (
+                  {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && selectedMeetingForSummary.summary.lost_lives_students && selectedMeetingForSummary.summary.lost_lives_students.length > 0 && (
                     <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-850/80 space-y-2">
                       <span className="text-xs text-slate-400 font-medium block">Classroom Incidents (Lives Lost)</span>
                       <div className="flex flex-wrap gap-2">

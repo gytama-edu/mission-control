@@ -97,10 +97,7 @@ export function useClasses(teacherId: string | null) {
         
         for (const s of c.students || []) {
           const pin = s.pin || generatePin();
-          const newStudent = await db.addStudent(newClass.id, s.name, s.lives, String(pin));
-          if (s.points > 0) {
-            await db.updateStudentPoints(newStudent.id, s.points);
-          }
+          const newStudent = await db.addStudent(newClass.id, s.name, s.lives, String(pin), s.points !== undefined ? s.points : 50);
           if (s.nickname) {
             await db.updateStudent(newStudent.id, s.name, s.nickname);
           }
@@ -116,9 +113,9 @@ export function useClasses(teacherId: string | null) {
     }
   };
 
-  const addClass = async (name: string, level: string, maxLives: number, category: 'regular' | 'private' = 'regular') => {
+  const addClass = async (name: string, level: string, maxLives: number, category: 'regular' | 'private' = 'regular', scoringSystem: 'points' | 'lives' = 'points') => {
     try {
-      await db.createClass(name, level, maxLives, generateJoinCode(), teacherId || undefined, category);
+      await db.createClass(name, level, maxLives, generateJoinCode(), teacherId || undefined, category, scoringSystem);
       await loadData();
     } catch (err: any) { alert(err.message); }
   };
@@ -131,13 +128,9 @@ export function useClasses(teacherId: string | null) {
     } catch (err: any) { alert(err.message); }
   };
 
-  const editClass = async (id: string, name: string, level: string, maxLives: number, category?: 'regular' | 'private') => {
+  const editClass = async (id: string, name: string, level: string, maxLives: number, category?: 'regular' | 'private', scoringSystem?: 'points' | 'lives') => {
     try {
-      if (category) {
-        await db.updateClass(id, name, level, maxLives, category);
-      } else {
-        await db.updateClass(id, name, level, maxLives);
-      }
+      await db.updateClass(id, name, level, maxLives, category, scoringSystem);
       await loadData();
     } catch (err: any) { alert(err.message); }
   };

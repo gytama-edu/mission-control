@@ -181,7 +181,7 @@ export default function App() {
         <ClassDetail
           classData={activeClass}
           onBack={() => setActiveClassId(null)}
-          onEditClass={(name, level, maxLives) => editClass(activeClass.id, name, level, maxLives)}
+          onEditClass={(name, level, maxLives, category, scoringSystem) => editClass(activeClass.id, name, level, maxLives, category, scoringSystem)}
           onArchiveClass={() => {
             archiveClass(activeClass.id);
             setActiveClassId(null);

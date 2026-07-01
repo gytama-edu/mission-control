@@ -4,6 +4,7 @@ import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, C
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
+import { getEffectiveClassroomMode } from '../utils/classroomUtils';
 import { supabase } from '../lib/supabaseClient';
 
 interface StudentAccessProps {
@@ -632,9 +633,11 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
             </div>
 
             <div className="flex flex-col sm:items-end gap-1.5">
-              <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider border select-none ${statusColor}`}>
-                Status: {status}
-              </span>
+              {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'lives' && (
+                <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider border select-none ${statusColor}`}>
+                  Status: {status}
+                </span>
+              )}
               {!activeMeeting && (
                 <span className="bg-slate-900/60 text-slate-500 border border-slate-850 px-2.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider">
                   No Active Session
@@ -650,34 +653,42 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 <Star className="text-yellow-400" size={18} />
               </div>
               <div>
-                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Points</span>
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">
+                  {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points' ? 'Points' : 'Points Earned'}
+                </span>
                 <span className="text-xl font-mono font-bold text-yellow-400 leading-tight">{student.points}</span>
               </div>
             </div>
 
-            <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 shrink-0">
-                <Shield className="text-red-400" size={18} />
+            {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'lives' && (
+              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 shrink-0">
+                  <Shield className="text-red-400" size={18} />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">
+                    {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points' ? 'Lives' : 'Lives Remaining'}
+                  </span>
+                  <span className="text-xl font-mono font-bold text-white leading-tight">
+                    {student.lives}<span className="text-xs text-slate-500 font-sans font-medium">/{loggedInClass.maxLives}</span>
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Lives</span>
-                <span className="text-xl font-mono font-bold text-white leading-tight">
-                  {student.lives}<span className="text-xs text-slate-500 font-sans font-medium">/{loggedInClass.maxLives}</span>
-                </span>
-              </div>
-            </div>
+            )}
 
-            <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0">
-                <Trophy className="text-blue-400" size={16} />
+            {getEffectiveClassroomMode(loggedInClass.category, loggedInClass.scoring_system) === 'points' && (
+              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0">
+                  <Trophy className="text-blue-400" size={16} />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Rank</span>
+                  <span className="text-xl font-mono font-bold text-white leading-tight">
+                    #{rank > 0 ? rank : '-'}<span className="text-xs text-slate-500 font-sans font-medium">/{loggedInClass.students.length}</span>
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Rank</span>
-                <span className="text-xl font-mono font-bold text-white leading-tight">
-                  #{rank > 0 ? rank : '-'}<span className="text-xs text-slate-500 font-sans font-medium">/{loggedInClass.students.length}</span>
-                </span>
-              </div>
-            </div>
+            )}
 
             <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-3 flex items-center gap-3">
               <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center border border-purple-500/20 shrink-0">

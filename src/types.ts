@@ -43,6 +43,7 @@ export interface ClassData {
   teacherId?: string | null;
   isArchived?: boolean;
   category?: 'regular' | 'private';
+  scoring_system?: 'points' | 'lives';
 }
 
 export interface ActivityLog {

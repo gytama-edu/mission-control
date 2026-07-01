@@ -244,6 +244,7 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
     createdAt: c.created_at,
     isArchived: c.is_archived || false,
     category: c.class_category || 'regular',
+    scoring_system: c.scoring_system,
     students: (students || [])
       .filter(s => s.class_id === c.id)
       .map(s => ({
@@ -270,8 +271,8 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
   }));
 };
 
-export const createClass = async (name: string, level: string, maxLives: number, joinCode: string, teacherId?: string, category: 'regular' | 'private' = 'regular'): Promise<any> => {
-  const payload: any = { name, level, max_lives: maxLives, join_code: joinCode, class_category: category };
+export const createClass = async (name: string, level: string, maxLives: number, joinCode: string, teacherId?: string, category: 'regular' | 'private' = 'regular', scoringSystem: 'points' | 'lives' = 'points'): Promise<any> => {
+  const payload: any = { name, level, max_lives: maxLives, join_code: joinCode, class_category: category, scoring_system: scoringSystem };
   if (teacherId) {
     payload.teacher_id = teacherId;
   }
@@ -284,7 +285,7 @@ export const createClass = async (name: string, level: string, maxLives: number,
   if (error) throw error;
 
   // Log class creation
-  await logActivity(data.id, 'class_created', null, 0, 0, null, { name, level });
+  await logActivity(data.id, 'class_created', null, 0, 0, null, { name, level, scoringSystem });
 
   return data;
 };
@@ -305,10 +306,13 @@ export const claimClass = async (classId: string, teacherId: string): Promise<an
   return data;
 };
 
-export const updateClass = async (id: string, name: string, level: string, maxLives: number, category?: 'regular' | 'private'): Promise<any> => {
+export const updateClass = async (id: string, name: string, level: string, maxLives: number, category?: 'regular' | 'private', scoringSystem?: 'points' | 'lives'): Promise<any> => {
   const payload: any = { name, level, max_lives: maxLives };
   if (category) {
     payload.class_category = category;
+  }
+  if (scoringSystem) {
+    payload.scoring_system = scoringSystem;
   }
   const { data, error } = await supabase
     .from('classes')
@@ -384,7 +388,7 @@ export const regenerateJoinCode = async (id: string, newCode: string): Promise<a
   return data;
 };
 
-export const addStudent = async (classId: string, name: string, maxLives: number, pin: string): Promise<any> => {
+export const addStudent = async (classId: string, name: string, maxLives: number, pin: string, initialPoints: number = 50): Promise<any> => {
   const { data, error } = await supabase
     .from('students')
     .insert([{
@@ -392,7 +396,7 @@ export const addStudent = async (classId: string, name: string, maxLives: number
       name,
       pin,
       lives: maxLives,
-      points: 0
+      points: initialPoints
     }])
     .select()
     .single();

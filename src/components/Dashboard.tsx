@@ -7,7 +7,7 @@ interface DashboardProps {
   classes: ClassData[];
   isLoading: boolean;
   error: string | null;
-  onAddClass: (name: string, level: string, maxLives: number, category: 'regular' | 'private') => void;
+  onAddClass: (name: string, level: string, maxLives: number, category: 'regular' | 'private', scoringSystem: 'points' | 'lives') => void;
   onArchiveClass: (id: string) => void;
   onRestoreClass: (id: string) => void;
   onDeleteClass: (id: string) => void;
@@ -39,6 +39,7 @@ export function Dashboard({
   const [newClassLevel, setNewClassLevel] = useState('');
   const [newClassMaxLives, setNewClassMaxLives] = useState(5);
   const [newClassCategory, setNewClassCategory] = useState<'regular' | 'private'>('regular');
+  const [newClassScoringSystem, setNewClassScoringSystem] = useState<'points' | 'lives'>('points');
   const [showArchived, setShowArchived] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -129,11 +130,12 @@ export function Dashboard({
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
-    onAddClass(newClassName.trim(), newClassLevel.trim() || 'General', newClassMaxLives, newClassCategory);
+    onAddClass(newClassName.trim(), newClassLevel.trim() || 'General', newClassMaxLives, newClassCategory, newClassScoringSystem);
     setNewClassName('');
     setNewClassLevel('');
     setNewClassMaxLives(5);
     setNewClassCategory('regular');
+    setNewClassScoringSystem('points');
     setIsAdding(false);
   };
 
@@ -322,7 +324,11 @@ export function Dashboard({
               <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Category</label>
               <select
                 value={newClassCategory}
-                onChange={(e) => setNewClassCategory(e.target.value as 'regular' | 'private')}
+                onChange={(e) => {
+                  const val = e.target.value as 'regular' | 'private';
+                  setNewClassCategory(val);
+                  setNewClassScoringSystem(val === 'private' ? 'lives' : 'points');
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
               >
                 <option value="regular">Regular</option>
@@ -330,17 +336,30 @@ export function Dashboard({
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Max Lives (1-20)</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                required
-                value={newClassMaxLives}
-                onChange={(e) => setNewClassMaxLives(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
-              />
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Scoring System</label>
+              <select
+                value={newClassScoringSystem}
+                onChange={(e) => setNewClassScoringSystem(e.target.value as 'points' | 'lives')}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
+              >
+                <option value="points">Points Only</option>
+                <option value="lives">Lives Challenge</option>
+              </select>
             </div>
+            {newClassScoringSystem === 'lives' && (
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Max Lives (1-20)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  required
+                  value={newClassMaxLives}
+                  onChange={(e) => setNewClassMaxLives(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
+                />
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
