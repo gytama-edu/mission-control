@@ -525,7 +525,7 @@ export const startNewMeeting = async (classId: string, maxLives: number): Promis
   if (checkError) throw checkError;
 
   if (activeMeeting) {
-    throw new Error('A meeting is already active. End the current meeting before starting a new one.');
+    throw new Error('A session is already active. End the current session before starting a new one.');
   }
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -545,15 +545,8 @@ export const startNewMeeting = async (classId: string, maxLives: number): Promis
 
   if (meetingError) throw meetingError;
 
-  const { error: studentError } = await supabase
-    .from('students')
-    .update({ lives: maxLives })
-    .eq('class_id', classId);
-
-  if (studentError) throw studentError;
-
-  // Log meeting started
-  await logActivity(classId, 'meeting_started', null, 0, 0, null, { reset_lives_to: maxLives }, meeting.id);
+  // Log session started
+  await logActivity(classId, 'meeting_started', null, 0, 0, null, { action: 'Session Started' }, meeting.id);
 
   return meeting;
 };

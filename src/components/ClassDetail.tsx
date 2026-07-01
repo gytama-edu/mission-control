@@ -1203,7 +1203,7 @@ export function ClassDetail({
                   onClick={() => setIsEndMeetingModalOpen(true)}
                   className="bg-red-950/40 hover:bg-red-600 border border-red-500/20 hover:border-red-500/50 text-red-400 hover:text-white px-3.5 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-all font-bold cursor-pointer"
                 >
-                  End Meeting
+                  End Session
                 </button>
               </div>
             ) : (
@@ -1212,7 +1212,7 @@ export function ClassDetail({
                 className="w-full bg-rose-600 hover:bg-rose-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-rose-600/15"
               >
                 <Play size={14} className="fill-current text-white" />
-                Initialize Meeting
+                Start Session
               </button>
             )}
           </div>
@@ -2179,7 +2179,7 @@ alter publication supabase_realtime add table public.activity_logs;`}
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-display font-bold text-white">Meeting History</h2>
+              <h2 className="text-xl font-display font-bold text-white">Session History</h2>
               <p className="text-sm text-slate-400">Review class sessions, summaries, and performance metrics.</p>
             </div>
           </div>
@@ -2252,7 +2252,7 @@ alter publication supabase_realtime add table public.activity_logs;`}
                           onClick={() => setIsEndMeetingModalOpen(true)}
                           className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
                         >
-                          End Meeting
+                          End Session
                         </button>
                       ) : meeting.summary ? (
                         <button
@@ -3220,7 +3220,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
               { id: 'overview', label: 'Class Overview' },
               { id: 'students', label: 'Student Progress' },
               { id: 'tasks', label: 'Task Performance' },
-              { id: 'meetings', label: 'Meeting Summary' },
+              { id: 'meetings', label: 'Session Summary' },
               { id: 'badges', label: 'Badge Summary' },
               { id: 'activity', label: 'Activity Summary' },
             ].map((subTab) => (
@@ -3344,7 +3344,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                           <div className="flex justify-between items-center bg-slate-950/40 p-4 border border-slate-800/80 rounded-xl">
                             <div>
                               <p className="text-sm font-medium text-slate-400">Activity Level</p>
-                              <p className="text-base font-bold text-white mt-1">Meetings Hosted</p>
+                              <p className="text-base font-bold text-white mt-1">Sessions Hosted</p>
                             </div>
                             <div className="text-right">
                               <span className="text-xs text-slate-500 block">Last Session</span>
@@ -3724,7 +3724,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                 return (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <div className="p-5 border-b border-slate-800">
-                      <h3 className="text-lg font-display font-bold text-white">Classroom Meeting Summary</h3>
+                      <h3 className="text-lg font-display font-bold text-white">Classroom Session Summary</h3>
                       <p className="text-sm text-slate-400 mt-0.5">Historical session logs showing points, lives, and interactions from active meetings.</p>
                     </div>
                     <div className="overflow-x-auto">
@@ -3921,7 +3921,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         { id: 'lives', label: 'Lives Only' },
                         { id: 'tasks', label: 'Tasks & Evaluations' },
                         { id: 'badges', label: 'Badges Earned' },
-                        { id: 'meetings', label: 'Meetings Sessions' },
+                        { id: 'meetings', label: 'Sessions' },
                       ].map((filter) => (
                         <button
                           key={filter.id}
@@ -4652,10 +4652,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
       {isMeetingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-2xl font-display font-bold text-white mb-2">Start a new meeting?</h3>
+            <h3 className="text-2xl font-display font-bold text-white mb-2">Start a new session?</h3>
             <p className="text-slate-300 mb-6 leading-relaxed">
-              All student lives will reset to the class maximum.<br />
-              Student points will stay the same.
+              Are you sure you want to start a new session?
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -4671,7 +4670,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2"
               >
-                <Play size={18} className="fill-current" /> Start Meeting
+                <Play size={18} className="fill-current" /> Start Session
               </button>
             </div>
           </div>
@@ -4772,10 +4771,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
           <div className="bg-slate-900 border border-red-500/20 rounded-2xl max-w-md w-full p-6 shadow-2xl">
             <div className="flex items-center gap-3 text-red-400 mb-4">
               <AlertTriangle size={28} />
-              <h3 className="text-2xl font-display font-bold text-white">End class meeting?</h3>
+              <h3 className="text-2xl font-display font-bold text-white">End class session?</h3>
             </div>
             <p className="text-slate-300 mb-6 leading-relaxed text-sm">
-              This will close the active meeting and generate a comprehensive session summary report.
+              This will close the active session and generate a comprehensive session summary report.
             </p>
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2 mb-6">
               <div className="flex items-center gap-2">
@@ -4798,7 +4797,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                 onClick={handleEndMeeting}
                 className="bg-red-650 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-2"
               >
-                End Meeting
+                End Session
               </button>
             </div>
           </div>
@@ -5573,7 +5572,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                       <option value="group_tasks_completed">Group Task Count Completed</option>
                       <option value="first_submission">First Task Submitted</option>
                       <option value="first_reviewed_task">First Task Reviewed/Graded by Teacher</option>
-                      <option value="no_lives_lost_meeting">Completed a Meeting with Perfect Lives</option>
+                      <option value="no_lives_lost_meeting">Completed a Session with Perfect Lives</option>
                       <option value="comeback_from_zero_lives">Zero Lives Comeback</option>
                     </select>
                   </div>

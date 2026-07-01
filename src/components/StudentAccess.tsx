@@ -545,7 +545,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
 
     const latestMeeting = loggedInClass.meetings.length > 0 
       ? new Date(loggedInClass.meetings[loggedInClass.meetings.length - 1].startedAt).toLocaleDateString()
-      : 'No meetings yet';
+      : 'No sessions yet';
 
     // Calculate today's progress
     const todayStr = new Date().toDateString();
@@ -623,7 +623,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
           </div>
         </header>
 
-        {/* Real-time active meeting alert banner */}
+        {/* Real-time active session alert banner */}
         {activeMeeting && (
           <div className="mb-6 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg select-none animate-fade-in">
             <div className="flex items-center gap-2.5">
@@ -632,8 +632,8 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
               <div>
-                <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Class Meeting in Session</p>
-                <p className="text-[11px] text-slate-400 leading-normal">Your teacher is hosting a meeting. Complete tasks to earn points in real-time!</p>
+                <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Class Session is Active</p>
+                <p className="text-[11px] text-slate-400 leading-normal">Today's session is in progress.</p>
               </div>
             </div>
           </div>
