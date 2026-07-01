@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClassData, Student, ActivityLog, Task, StudentBadge } from '../types';
-import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle, Award, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle, Award, GraduationCap, X } from 'lucide-react';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
@@ -1094,30 +1094,30 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
 
         {/* Task Submission Modal */}
         {selectedTaskForSubmission && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div className="bg-slate-900 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl w-full h-full sm:h-auto sm:max-h-[90vh] max-w-2xl overflow-hidden shadow-2xl flex flex-col">
               {/* Modal Header */}
-              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="p-5 sm:px-6 sm:py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
                 <div>
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <CheckSquare size={18} className="text-purple-400" />
+                  <h3 className="text-xl sm:text-lg font-bold text-white flex items-center gap-2">
+                    <CheckSquare size={20} className="text-purple-400" />
                     {selectedTaskForSubmission.title}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-sm sm:text-xs text-slate-500 mt-1 sm:mt-0.5">
                     Reward: <span className="text-yellow-500 font-semibold font-mono">⭐ {selectedTaskForSubmission.reward_points} pts</span>
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedTaskForSubmission(null)}
-                  className="text-slate-400 hover:text-white transition-colors p-1"
+                  className="text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors p-2 rounded-xl"
                 >
-                  ✕
+                  <X size={24} />
                 </button>
               </div>
 
               {/* Modal Body */}
-              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="p-5 sm:p-6 overflow-y-auto space-y-5 sm:space-y-4 flex-1">
                 {/* Task Details */}
                 {selectedTaskForSubmission.description && (
                   <div className="bg-slate-950 border border-slate-850 p-4 rounded-xl">
@@ -1226,38 +1226,38 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                   <form onSubmit={handleTaskSubmit} className="space-y-4">
                     {/* Text Area Input */}
                     {selectedTaskForSubmission.allow_text_submission && (
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <div className="space-y-2">
+                        <label className="block text-sm sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
                           Your Text Answer
                         </label>
                         <textarea
-                          rows={4}
+                          rows={6}
                           value={submissionText}
                           onChange={(e) => setSubmissionText(e.target.value)}
                           placeholder="Type your response here..."
                           required={!selectedTaskForSubmission.allow_attachment_submission}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-base sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500 min-h-[160px] sm:min-h-[220px] leading-relaxed resize-y"
                         />
                       </div>
                     )}
 
                     {/* File Attachment Upload */}
                     {selectedTaskForSubmission.allow_attachment_submission && (
-                      <div className="space-y-2">
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <div className="space-y-3">
+                        <label className="block text-sm sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
                           Upload Files & Documentations
                         </label>
-                        <div className="border border-dashed border-slate-800 bg-slate-950 hover:bg-slate-950/65 rounded-xl p-4 text-center cursor-pointer transition-colors relative">
+                        <div className="border border-dashed border-slate-800 bg-slate-950 hover:bg-slate-950/65 rounded-xl p-6 sm:p-5 text-center cursor-pointer transition-colors relative group">
                           <input
                             type="file"
                             multiple
                             maxLength={selectedTaskForSubmission.max_attachments}
                             onChange={handleFileChange}
-                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                           />
-                          <Upload className="mx-auto text-slate-500 mb-2" size={20} />
-                          <p className="text-xs text-slate-400">Drag or browse to attach files</p>
-                          <p className="text-[10px] text-slate-500 mt-1">
+                          <Upload className="mx-auto text-slate-500 mb-3 group-hover:text-slate-400 transition-colors" size={28} />
+                          <p className="text-sm sm:text-xs text-slate-300 font-medium">Drag or browse to attach files</p>
+                          <p className="text-xs sm:text-[10px] text-slate-500 mt-1.5">
                             Up to {selectedTaskForSubmission.max_attachments} file(s) • Max size: {selectedTaskForSubmission.max_attachment_size_mb}MB each
                           </p>
                         </div>
@@ -1296,28 +1296,28 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                     )}
 
                     {submissionError && (
-                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl flex items-center gap-2 text-xs">
-                        <AlertTriangle size={14} className="shrink-0" />
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 sm:p-3 rounded-xl flex items-center gap-3 sm:gap-2 text-sm sm:text-xs">
+                        <AlertTriangle size={18} className="shrink-0" />
                         <span>{submissionError}</span>
                       </div>
                     )}
 
-                    <div className="flex gap-2 pt-2 justify-end">
+                    <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4 sm:justify-end mt-auto">
                       <button
                         type="button"
                         onClick={() => setSelectedTaskForSubmission(null)}
-                        className="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                        className="w-full sm:w-auto bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white px-5 py-3.5 sm:py-2.5 rounded-xl text-sm sm:text-xs font-bold transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={isSubmittingTask}
-                        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-2"
+                        className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-3.5 sm:py-2.5 rounded-xl text-sm sm:text-xs font-bold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20"
                       >
                         {isSubmittingTask ? (
                           <>
-                            <Loader2 className="animate-spin" size={14} /> Transmitting...
+                            <Loader2 className="animate-spin" size={18} /> Transmitting...
                           </>
                         ) : studentSubmissions[selectedTaskForSubmission.id] ? (
                           'Update Submission'
