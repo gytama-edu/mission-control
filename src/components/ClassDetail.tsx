@@ -6,6 +6,7 @@ import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
 import { getEffectiveClassroomMode } from '../utils/classroomUtils';
+import { getSubmissionStatus, getSubmissionStatusBadgeColor, getTaskSubmissionSummary } from '../utils/submissionStatusUtils';
 import { getPointActionMessage } from '../utils/pointActionUtils';
 import { downloadCsv, sanitizeFilename } from '../utils/exportUtils';
 import { ConfirmActionModal } from './ConfirmActionModal';
@@ -377,6 +378,7 @@ export function ClassDetail({
   const [reviewScore, setReviewScore] = useState<number>(0);
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({});
+  const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
 
   // Task form states
   const [taskFormTitle, setTaskFormTitle] = useState('');
@@ -402,13 +404,14 @@ export function ClassDetail({
       setTasks(data);
       setIsTasksTableMissing(false);
 
-      // Fetch submission counts
+      // Fetch submission counts and queue data
       const { data: subsData, error: subsErr } = await supabase
         .from('task_submissions')
-        .select('task_id')
+        .select('id, task_id, student_id, task_group_id, status, created_at, updated_at')
         .eq('class_id', classData.id);
       
       if (!subsErr && subsData) {
+        setAllSubmissions(subsData);
         const counts: Record<string, number> = {};
         subsData.forEach(sub => {
           counts[sub.task_id] = (counts[sub.task_id] || 0) + 1;
@@ -720,6 +723,10 @@ export function ClassDetail({
       
       // Update local selected submission
       const updatedSub = subs.find(s => s.id === selectedSubmissionForReview.id);
+      if (updatedSub) setSelectedSubmissionForReview(updatedSub);
+      
+      // Refresh class-wide data to update the Review Queue counts
+      loadTasks();
       setSelectedSubmissionForReview(updatedSub || null);
       
       // Also refresh the class data (points, logs) in the background so the roster updates
@@ -2372,6 +2379,66 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                 </button>
               </div>
 
+              {/* Submission Review Queue Summary */}
+              {tasks.length > 0 && (() => {
+                let needsReview = 0;
+                let reviewed = 0;
+                let notSubmitted = 0;
+                
+                // Approximate 'not submitted' using simple math (students * individual tasks - total submissions)
+                // This is a rough estimation just for the high-level dashboard queue summary.
+                const individualTasks = tasks.filter(t => t.task_type === 'individual' && t.status !== 'draft');
+                const expectedTotal = individualTasks.length * classData.students.length;
+                let currentSubmissionsInPublishedTasks = 0;
+
+                allSubmissions.forEach(sub => {
+                  const task = tasks.find(t => t.id === sub.task_id);
+                  if (task && task.status !== 'draft') {
+                    if (task.task_type === 'individual') {
+                      currentSubmissionsInPublishedTasks++;
+                    }
+                    const st = getSubmissionStatus(sub);
+                    if (st === 'Needs Review' || st === 'Submitted (Late)') needsReview++;
+                    if (st === 'Reviewed' || st === 'Needs Revision') reviewed++;
+                  }
+                });
+
+                notSubmitted = Math.max(0, expectedTotal - currentSubmissionsInPublishedTasks);
+
+                return (
+                  <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/80 rounded-2xl p-4 animate-fade-in shadow-xl select-none">
+                    <h3 className="text-sm font-bold text-slate-300 font-mono tracking-wider uppercase mb-3 flex items-center gap-2">
+                      <FileText size={14} className="text-purple-400" /> Submission Review Queue
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-slate-950/50 border border-amber-500/20 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-amber-500/5 group-hover:bg-amber-500/10 transition-colors"></div>
+                        <span className="text-2xl font-bold text-amber-500 font-mono relative z-10">{needsReview}</span>
+                        <span className="text-[10px] uppercase font-bold text-amber-500/70 tracking-wider relative z-10 mt-1">Needs Review</span>
+                      </div>
+                      
+                      <div className="bg-slate-950/50 border border-emerald-500/20 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors"></div>
+                        <span className="text-2xl font-bold text-emerald-500 font-mono relative z-10">{reviewed}</span>
+                        <span className="text-[10px] uppercase font-bold text-emerald-500/70 tracking-wider relative z-10 mt-1">Reviewed</span>
+                      </div>
+
+                      <div className="bg-slate-950/50 border border-purple-500/20 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-purple-500/5 group-hover:bg-purple-500/10 transition-colors"></div>
+                        <span className="text-2xl font-bold text-purple-400 font-mono relative z-10">{needsReview + reviewed}</span>
+                        <span className="text-[10px] uppercase font-bold text-purple-400/70 tracking-wider relative z-10 mt-1">Submitted</span>
+                      </div>
+
+                      <div className="bg-slate-950/50 border border-slate-700/50 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-slate-800/10 group-hover:bg-slate-800/20 transition-colors"></div>
+                        <span className="text-2xl font-bold text-slate-500 font-mono relative z-10">{notSubmitted}</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-500/70 tracking-wider relative z-10 mt-1">Not Submitted</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {isTasksLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-500 space-y-3">
                   <Loader2 className="animate-spin text-slate-600" size={24} />
@@ -2446,23 +2513,36 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                         {/* Submissions & Quick Actions on the Right */}
                         <div className="flex flex-wrap lg:flex-nowrap items-center gap-3 shrink-0 self-start lg:self-center">
                           {/* Submission Tracker */}
-                          {normalizedTaskType === 'individual' ? (
-                            <div className="text-[11px] text-slate-400 bg-slate-950/40 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-semibold font-mono select-none">
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                (submissionCounts[task.id] || 0) === classData.students.length && classData.students.length > 0 
-                                  ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
-                                  : (submissionCounts[task.id] || 0) > 0 
-                                    ? 'bg-amber-500 shadow-[0_0_6px_#f59e0b]' 
-                                    : 'bg-slate-650'
-                              }`} />
-                              Submissions: <span className="text-slate-100 font-bold">{submissionCounts[task.id] || 0}{'/'}{classData.students.length}</span>
-                            </div>
-                          ) : (
-                            <div className="text-[11px] text-slate-400 bg-slate-950/40 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-semibold font-mono select-none">
-                              <Users size={11} className="text-purple-400" />
-                              <span>Group Task</span>
-                            </div>
-                          )}
+                          {(() => {
+                            const summary = getTaskSubmissionSummary(task, classData.students, allSubmissions);
+                            return (
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 select-none">
+                                {normalizedTaskType === 'individual' ? (
+                                  <div className="text-[11px] text-slate-400 bg-slate-950/40 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-semibold font-mono">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      summary.totalSubmitted === classData.students.length && classData.students.length > 0 
+                                        ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                                        : summary.totalSubmitted > 0 
+                                          ? 'bg-amber-500 shadow-[0_0_6px_#f59e0b]' 
+                                          : 'bg-slate-650'
+                                    }`} />
+                                    Submissions: <span className="text-slate-100 font-bold">{summary.totalSubmitted}{'/'}{classData.students.length}</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] text-slate-400 bg-slate-950/40 px-2.5 py-1.5 rounded-lg border border-slate-850 flex items-center gap-1.5 font-semibold font-mono">
+                                    <Users size={11} className="text-purple-400" />
+                                    <span>Group Task ({summary.totalSubmitted} Subs)</span>
+                                  </div>
+                                )}
+                                
+                                {summary.needsReview > 0 && (
+                                  <div className="text-[10px] text-amber-500 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20 font-bold uppercase tracking-wider flex items-center gap-1">
+                                    {summary.needsReview} Need Review
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Controls Group */}
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -3484,7 +3564,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                               const taskGroupsForTask = reportGroups.filter(g => g.task_id === task.id);
 
                               let submittedCount = taskSubs.length;
-                              let reviewedCount = taskSubs.filter(s => s.status === 'reviewed').length;
+                              let reviewedCount = taskSubs.filter(s => getSubmissionStatus(s) === 'Reviewed').length;
                               let missingCount = 0;
                               let completionRate = 0;
 
@@ -5035,16 +5115,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                             statusBadgeText = 'Not Submitted';
                             statusStyle = 'text-slate-400 bg-slate-800/50 border-slate-700/50';
                           } else {
-                            const statusColors: Record<string, string> = {
-                              reviewed: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-                              returned: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-                              late: 'text-red-400 bg-red-500/10 border-red-500/20',
-                              submitted: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
-                            };
-                            statusStyle = statusColors[sub.status] || statusColors.submitted;
-                            if (sub.status === 'submitted' || sub.status === 'late') {
-                              statusBadgeText = sub.status === 'late' ? 'Needs Review (Late)' : 'Needs Review';
-                            }
+                            const derivedStatus = getSubmissionStatus(sub);
+                            statusBadgeText = derivedStatus;
+                            statusStyle = getSubmissionStatusBadgeColor(derivedStatus);
                           }
 
                           const isReviewingThis = selectedSubmissionForReview?.id === sub.id;

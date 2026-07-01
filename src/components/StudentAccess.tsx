@@ -5,6 +5,7 @@ import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
 import * as badgeDb from '../services/badgeData';
 import { getEffectiveClassroomMode, isPrivateClassCategory, shouldShowCompetitiveRank } from '../utils/classroomUtils';
+import { getSubmissionStatus, getSubmissionStatusBadgeColor } from '../utils/submissionStatusUtils';
 import { supabase } from '../lib/supabaseClient';
 
 interface StudentAccessProps {
@@ -840,24 +841,12 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                     const submitterName = getSubmitterName(submission);
                     const formattedSubTime = submission ? new Date(submission.created_at).toLocaleString() : '';
 
-                    let submissionStatus = 'Not submitted';
-                    let statusBadgeColor = 'bg-slate-950 text-slate-500 border-slate-850';
-
-                    if (submission) {
-                      if (submission.status === 'reviewed') {
-                        submissionStatus = 'Reviewed';
-                        statusBadgeColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                      } else if (submission.status === 'returned') {
-                        submissionStatus = 'Returned';
-                        statusBadgeColor = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-                      } else if (submission.status === 'late') {
-                        submissionStatus = 'Late Submission';
-                        statusBadgeColor = 'bg-red-500/10 text-red-400 border-red-500/20';
-                      } else {
-                        submissionStatus = 'Submitted';
-                        statusBadgeColor = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-                      }
-                    }
+                    const submissionStatus = getSubmissionStatus(submission);
+                    // Hide "Needs Review" from students, just show "Submitted" to avoid confusion
+                    const displayStatus = (submissionStatus === 'Needs Review' || submissionStatus === 'Submitted (Late)') 
+                      ? 'Submitted' 
+                      : submissionStatus;
+                    const statusBadgeColor = getSubmissionStatusBadgeColor(submissionStatus);
 
                     let subTypeLabel = '';
                     if (task.allow_text_submission && task.allow_attachment_submission) {
@@ -891,7 +880,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                               {task.task_type}
                             </span>
                             <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase tracking-wider ${statusBadgeColor}`}>
-                              {submissionStatus}
+                              {displayStatus}
                             </span>
                           </div>
 
@@ -1252,22 +1241,17 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 </div>
 
                 {/* Existing Submission Details */}
-                {studentSubmissions[selectedTaskForSubmission.id] && (
-                  <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Saved Submission</h4>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${
-                        studentSubmissions[selectedTaskForSubmission.id].status === 'reviewed'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          : studentSubmissions[selectedTaskForSubmission.id].status === 'returned'
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          : studentSubmissions[selectedTaskForSubmission.id].status === 'late'
-                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                          : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                      }`}>
-                        {studentSubmissions[selectedTaskForSubmission.id].status}
-                      </span>
-                    </div>
+                {studentSubmissions[selectedTaskForSubmission.id] && (() => {
+                  const subStatus = getSubmissionStatus(studentSubmissions[selectedTaskForSubmission.id]);
+                  const displaySubStatus = (subStatus === 'Needs Review' || subStatus === 'Submitted (Late)') ? 'Submitted' : subStatus;
+                  return (
+                    <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Saved Submission</h4>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${getSubmissionStatusBadgeColor(subStatus)}`}>
+                          {displaySubStatus}
+                        </span>
+                      </div>
 
                     {studentSubmissions[selectedTaskForSubmission.id].submission_text && (
                       <div className="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-850 italic">
@@ -1321,7 +1305,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                       </div>
                     )}
                   </div>
-                )}
+                );})()}
 
                 {/* Submission form */}
                 {selectedTaskForSubmission.status === 'closed' ? (
