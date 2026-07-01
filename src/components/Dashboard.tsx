@@ -7,7 +7,7 @@ interface DashboardProps {
   classes: ClassData[];
   isLoading: boolean;
   error: string | null;
-  onAddClass: (name: string, level: string, maxLives: number) => void;
+  onAddClass: (name: string, level: string, maxLives: number, category: 'regular' | 'private') => void;
   onArchiveClass: (id: string) => void;
   onRestoreClass: (id: string) => void;
   onDeleteClass: (id: string) => void;
@@ -38,6 +38,7 @@ export function Dashboard({
   const [newClassName, setNewClassName] = useState('');
   const [newClassLevel, setNewClassLevel] = useState('');
   const [newClassMaxLives, setNewClassMaxLives] = useState(5);
+  const [newClassCategory, setNewClassCategory] = useState<'regular' | 'private'>('regular');
   const [showArchived, setShowArchived] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -87,10 +88,11 @@ export function Dashboard({
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
-    onAddClass(newClassName.trim(), newClassLevel.trim() || 'General', newClassMaxLives);
+    onAddClass(newClassName.trim(), newClassLevel.trim() || 'General', newClassMaxLives, newClassCategory);
     setNewClassName('');
     setNewClassLevel('');
     setNewClassMaxLives(5);
+    setNewClassCategory('regular');
     setIsAdding(false);
   };
 
@@ -253,7 +255,7 @@ export function Dashboard({
             <LayoutGrid size={16} className="text-rose-500" />
             Create New Class
           </h2>
-          <form onSubmit={handleAddSubmit} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+          <form onSubmit={handleAddSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Class Name</label>
               <input
@@ -274,6 +276,17 @@ export function Dashboard({
                 placeholder="e.g. Beginner or Grade 5"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
               />
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Category</label>
+              <select
+                value={newClassCategory}
+                onChange={(e) => setNewClassCategory(e.target.value as 'regular' | 'private')}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500/50 transition-all text-xs font-sans"
+              >
+                <option value="regular">Regular</option>
+                <option value="private">Private</option>
+              </select>
             </div>
             <div>
               <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Max Lives (1-20)</label>
@@ -410,7 +423,7 @@ export function Dashboard({
                         </code>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5 select-none">
+                        <div className="flex items-center gap-1.5 select-none flex-wrap">
                           {hasActiveSession ? (
                             <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.12)]">
                               <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
@@ -423,6 +436,15 @@ export function Dashboard({
                           ) : (
                             <span className="inline-flex items-center bg-slate-800/40 text-slate-400 border border-slate-800/40 text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full">
                               Active
+                            </span>
+                          )}
+                          {c.category === 'private' ? (
+                            <span className="inline-flex items-center bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full">
+                              Private
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full">
+                              Regular
                             </span>
                           )}
                         </div>

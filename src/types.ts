@@ -42,6 +42,7 @@ export interface ClassData {
   joinCode: string;
   teacherId?: string | null;
   isArchived?: boolean;
+  category?: 'regular' | 'private';
 }
 
 export interface ActivityLog {

@@ -12,6 +12,12 @@ interface StudentAccessProps {
 
 const PROFILE_KEY = 'mission_control_student_profile';
 
+const countWords = (value: string | null): number => {
+  const text = (value || "").trim();
+  if (!text) return 0;
+  return text.split(/\s+/).filter(Boolean).length;
+};
+
 export function StudentAccess({ onBack }: StudentAccessProps) {
   const [joinCode, setJoinCode] = useState('');
   const [pin, setPin] = useState('');
@@ -1230,14 +1236,19 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                         <label className="block text-sm sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
                           Your Text Answer
                         </label>
-                        <textarea
-                          rows={6}
-                          value={submissionText}
-                          onChange={(e) => setSubmissionText(e.target.value)}
-                          placeholder="Type your response here..."
-                          required={!selectedTaskForSubmission.allow_attachment_submission}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-base sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500 min-h-[160px] sm:min-h-[220px] leading-relaxed resize-y"
-                        />
+                        <div className="relative">
+                          <textarea
+                            rows={6}
+                            value={submissionText}
+                            onChange={(e) => setSubmissionText(e.target.value)}
+                            placeholder="Type your response here..."
+                            required={!selectedTaskForSubmission.allow_attachment_submission}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-base sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500 min-h-[160px] sm:min-h-[220px] leading-relaxed resize-y pb-8"
+                          />
+                          <div className="absolute bottom-3 right-4 text-xs font-mono text-slate-500 select-none pointer-events-none">
+                            {countWords(submissionText)} {countWords(submissionText) === 1 ? 'word' : 'words'}
+                          </div>
+                        </div>
                       </div>
                     )}
 

@@ -12,7 +12,7 @@ import { AiWritingCheck } from './AiWritingCheck';
 interface ClassDetailProps {
   classData: ClassData;
   onBack: () => void;
-  onEditClass: (name: string, level: string, maxLives: number) => void;
+  onEditClass: (name: string, level: string, maxLives: number, category: 'regular' | 'private') => void;
   onArchiveClass: () => void;
   onDeleteClass: () => void;
   onRegenerateJoinCode: () => void;
@@ -824,6 +824,7 @@ export function ClassDetail({
   const [editClassName, setEditClassName] = useState(classData.name);
   const [editClassLevel, setEditClassLevel] = useState(classData.level);
   const [editClassMaxLives, setEditClassMaxLives] = useState(classData.maxLives);
+  const [editClassCategory, setEditClassCategory] = useState(classData.category || 'regular');
 
   const activeMeeting = classData.meetings?.find(m => m.status === 'active');
 
@@ -973,7 +974,7 @@ export function ClassDetail({
 
   const handleSaveClass = (e: React.FormEvent) => {
     e.preventDefault();
-    onEditClass(editClassName, editClassLevel, editClassMaxLives);
+    onEditClass(editClassName, editClassLevel, editClassMaxLives, editClassCategory);
     alert('Class settings updated!');
   };
 
@@ -3761,6 +3762,17 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                   onChange={(e) => setEditClassMaxLives(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs font-mono"
                 />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">Category</label>
+                <select
+                  value={editClassCategory}
+                  onChange={(e) => setEditClassCategory(e.target.value as 'regular' | 'private')}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500/50 transition-all text-xs"
+                >
+                  <option value="regular">Regular</option>
+                  <option value="private">Private</option>
+                </select>
               </div>
             </div>
             

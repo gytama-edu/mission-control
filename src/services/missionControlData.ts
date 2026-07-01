@@ -243,6 +243,7 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
     teacherId: c.teacher_id,
     createdAt: c.created_at,
     isArchived: c.is_archived || false,
+    category: c.class_category || 'regular',
     students: (students || [])
       .filter(s => s.class_id === c.id)
       .map(s => ({
@@ -269,8 +270,8 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
   }));
 };
 
-export const createClass = async (name: string, level: string, maxLives: number, joinCode: string, teacherId?: string): Promise<any> => {
-  const payload: any = { name, level, max_lives: maxLives, join_code: joinCode };
+export const createClass = async (name: string, level: string, maxLives: number, joinCode: string, teacherId?: string, category: 'regular' | 'private' = 'regular'): Promise<any> => {
+  const payload: any = { name, level, max_lives: maxLives, join_code: joinCode, class_category: category };
   if (teacherId) {
     payload.teacher_id = teacherId;
   }
@@ -304,10 +305,14 @@ export const claimClass = async (classId: string, teacherId: string): Promise<an
   return data;
 };
 
-export const updateClass = async (id: string, name: string, level: string, maxLives: number): Promise<any> => {
+export const updateClass = async (id: string, name: string, level: string, maxLives: number, category?: 'regular' | 'private'): Promise<any> => {
+  const payload: any = { name, level, max_lives: maxLives };
+  if (category) {
+    payload.class_category = category;
+  }
   const { data, error } = await supabase
     .from('classes')
-    .update({ name, level, max_lives: maxLives })
+    .update(payload)
     .eq('id', id)
     .select()
     .single();

@@ -8,6 +8,7 @@ CREATE TABLE classes (
   join_code text UNIQUE NOT NULL,
   teacher_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
   is_archived boolean NOT NULL DEFAULT false,
+  class_category text NOT NULL DEFAULT 'regular' CHECK (class_category IN ('regular', 'private')),
   created_at timestamptz DEFAULT now()
 );
 

@@ -116,9 +116,9 @@ export function useClasses(teacherId: string | null) {
     }
   };
 
-  const addClass = async (name: string, level: string, maxLives: number) => {
+  const addClass = async (name: string, level: string, maxLives: number, category: 'regular' | 'private' = 'regular') => {
     try {
-      await db.createClass(name, level, maxLives, generateJoinCode(), teacherId || undefined);
+      await db.createClass(name, level, maxLives, generateJoinCode(), teacherId || undefined, category);
       await loadData();
     } catch (err: any) { alert(err.message); }
   };
@@ -131,9 +131,13 @@ export function useClasses(teacherId: string | null) {
     } catch (err: any) { alert(err.message); }
   };
 
-  const editClass = async (id: string, name: string, level: string, maxLives: number) => {
+  const editClass = async (id: string, name: string, level: string, maxLives: number, category?: 'regular' | 'private') => {
     try {
-      await db.updateClass(id, name, level, maxLives);
+      if (category) {
+        await db.updateClass(id, name, level, maxLives, category);
+      } else {
+        await db.updateClass(id, name, level, maxLives);
+      }
       await loadData();
     } catch (err: any) { alert(err.message); }
   };
