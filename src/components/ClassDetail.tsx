@@ -826,6 +826,13 @@ export function ClassDetail({
   const [editClassMaxLives, setEditClassMaxLives] = useState(classData.maxLives);
   const [editClassCategory, setEditClassCategory] = useState(classData.category || 'regular');
 
+  useEffect(() => {
+    setEditClassName(classData.name);
+    setEditClassLevel(classData.level);
+    setEditClassMaxLives(classData.maxLives);
+    setEditClassCategory(classData.category || 'regular');
+  }, [classData.name, classData.level, classData.maxLives, classData.category]);
+
   const activeMeeting = classData.meetings?.find(m => m.status === 'active');
 
   const handleEndMeeting = async () => {

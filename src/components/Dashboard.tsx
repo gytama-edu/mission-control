@@ -42,6 +42,47 @@ export function Dashboard({
   const [showArchived, setShowArchived] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  
+  const [sortMode, setSortMode] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem('missionControlClassSortMode') || 'name-asc';
+    } catch {
+      return 'name-asc';
+    }
+  });
+
+  const handleSortChange = (mode: string) => {
+    setSortMode(mode);
+    try {
+      window.localStorage.setItem('missionControlClassSortMode', mode);
+    } catch {}
+  };
+
+  const sortClassesList = (list: ClassData[], mode: string) => {
+    const arr = [...list];
+    switch (mode) {
+      case 'name-desc':
+        return arr.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+      case 'newest':
+        return arr.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      case 'oldest':
+        return arr.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+      case 'regular-first':
+        return arr.sort((a, b) => {
+          const order: Record<string, number> = { regular: 0, private: 1 };
+          return (order[a.category || 'regular'] ?? 0) - (order[b.category || 'regular'] ?? 0);
+        });
+      case 'private-first':
+        return arr.sort((a, b) => {
+          const order: Record<string, number> = { private: 0, regular: 1 };
+          return (order[a.category || 'regular'] ?? 1) - (order[b.category || 'regular'] ?? 1);
+        });
+      case 'name-asc':
+      default:
+        return arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }
+  };
+
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -114,8 +155,8 @@ export function Dashboard({
     }
   };
 
-  const activeClasses = classes.filter(c => !c.isArchived);
-  const archivedClasses = classes.filter(c => c.isArchived);
+  const activeClasses = sortClassesList(classes.filter(c => !c.isArchived), sortMode);
+  const archivedClasses = sortClassesList(classes.filter(c => c.isArchived), sortMode);
 
   const totalClasses = activeClasses.length;
   const totalStudents = activeClasses.reduce((sum, c) => sum + (c.students?.length || 0), 0);
@@ -350,7 +391,20 @@ export function Dashboard({
               </span>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={sortMode}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="bg-slate-950/40 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-rose-500/50 transition-colors cursor-pointer"
+              >
+                <option value="name-asc">Sort: Name A–Z</option>
+                <option value="name-desc">Sort: Name Z–A</option>
+                <option value="newest">Sort: Newest First</option>
+                <option value="oldest">Sort: Oldest First</option>
+                <option value="regular-first">Sort: Regular First</option>
+                <option value="private-first">Sort: Private First</option>
+              </select>
+              
               <button
                 onClick={() => setShowArchived(!showArchived)}
                 className={`text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -531,6 +585,15 @@ export function Dashboard({
                         {!c.teacherId && (
                           <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[8px] px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider">
                             Unclaimed
+                          </span>
+                        )}
+                        {c.category === 'private' ? (
+                          <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[8px] px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider">
+                            Private
+                          </span>
+                        ) : (
+                          <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[8px] px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider">
+                            Regular
                           </span>
                         )}
                       </div>
