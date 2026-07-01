@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ClassData, Student, ActivityLog, Task, StudentBadge } from '../types';
 import { ArrowLeft, Key, Rocket, Shield, Star, Trophy, Clock, LogOut, Loader2, CheckSquare, Users, Upload, FileText, Trash2, Paperclip, AlertTriangle, Check, CheckCircle, Award, GraduationCap, X } from 'lucide-react';
 import * as db from '../services/missionControlData';
@@ -371,10 +371,14 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     setPin('');
   };
 
+  const fetchDashboardDataRef = useRef<((classId: string, studentId: string, studentPin: string, isAutoSync?: boolean) => Promise<void>) | null>(null);
+
   // Fetch the latest dashboard data helper
-  const fetchDashboardData = async (classId: string, studentId: string, studentPin: string) => {
-    setIsLoading(true);
-    setError('');
+  const fetchDashboardData = async (classId: string, studentId: string, studentPin: string, isAutoSync: boolean = false) => {
+    if (!isAutoSync) {
+      setIsLoading(true);
+      setError('');
+    }
     try {
       const result = await db.fetchStudentDashboardDataSecure(classId, studentId, studentPin);
       if (result.ok && result.classData && result.studentData) {
@@ -421,79 +425,56 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to connect.');
+      if (!isAutoSync) {
+        setError(err.message || 'Failed to connect.');
+      } else {
+        console.error("Auto-sync failed:", err);
+      }
     } finally {
-      setIsLoading(false);
+      if (!isAutoSync) {
+        setIsLoading(false);
+      }
     }
   };
 
-  // Realtime subscription setup
+  useEffect(() => {
+    fetchDashboardDataRef.current = fetchDashboardData;
+  });
+
+  // Safe Auto-Sync & Visibility Refresh
   useEffect(() => {
     if (!loggedInClass || !loggedInStudent) return;
-
+    
+    let isVisible = document.visibilityState === 'visible';
+    let isSyncing = false;
     const classId = loggedInClass.id;
     const studentId = loggedInStudent.id;
 
-    // Helper to refresh in background
-    const refreshData = async () => {
+    const performAutoSync = async () => {
+      if (!isVisible || isSyncing || !fetchDashboardDataRef.current) return;
+      
+      const saved = window.localStorage.getItem(PROFILE_KEY);
+      const savedPin = saved ? JSON.parse(saved).pin : pin;
+      if (!savedPin) return;
+
+      isSyncing = true;
       try {
-        const saved = window.localStorage.getItem(PROFILE_KEY);
-        const savedPin = saved ? JSON.parse(saved).pin : pin;
-        if (!savedPin) return;
-        const result = await db.fetchStudentDashboardDataSecure(classId, studentId, savedPin);
-        if (result.ok && result.classData && result.studentData) {
-          setLoggedInClass(result.classData);
-          setLoggedInStudent(result.studentData);
-          setTasks(result.tasks || []);
-          setStudentGroups(
-            (result.taskGroups || []).reduce((acc: any, tg: any) => ({ ...acc, [tg.task_id]: { id: tg.task_group_id, name: tg.name } }), {})
-          );
-          setGroupMembers(
-            (result.groupMembers || []).reduce((acc: any, m: any) => {
-              const sName = m.student_nickname ? `${m.student_name} (${m.student_nickname})` : m.student_name;
-              if (!acc[m.task_group_id]) acc[m.task_group_id] = [];
-              acc[m.task_group_id].push(sName);
-              return acc;
-            }, {})
-          );
-          
-          const subMap: Record<string, any> = {};
-          (result.submissions || []).forEach((s: any) => {
-            const sAttachments = (result.attachments || []).filter((a: any) => a.submission_id === s.id);
-            subMap[s.task_id] = { ...s, attachments: sAttachments };
-          });
-          setStudentSubmissions(subMap);
-          
-          setEarnedBadges(result.badges || []);
-          setStudentLogs(result.logs || []);
-        } else {
-          // If data isn't found or session is invalid, log them out
-          handleLogout();
-          if (result.reason === 'archived_class') {
-            setError('This class is currently archived. Please contact your teacher.');
-          } else if (result.reason === 'invalid_session') {
-            setError('Your session could not be verified. Please log in again.');
-          } else {
-            setError('Your profile or class has been removed by the teacher.');
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch updated real-time data:", err);
+        await fetchDashboardDataRef.current(classId, studentId, savedPin, true);
+      } finally {
+        isSyncing = false;
       }
     };
 
-    // 1. Polling interval (e.g., every 30 seconds)
-    const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refreshData();
-      }
-    }, 30000);
+    // 1. Polling interval (every 60 seconds)
+    const intervalId = setInterval(performAutoSync, 60000);
 
     // 2. Visibility change listener (refresh when tab becomes visible)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        refreshData();
+      const currentlyVisible = document.visibilityState === 'visible';
+      if (currentlyVisible && !isVisible) {
+        performAutoSync();
       }
+      isVisible = currentlyVisible;
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);

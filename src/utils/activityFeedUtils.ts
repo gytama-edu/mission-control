@@ -48,7 +48,7 @@ export function buildClassActivityFeed(params: {
     }
 
     // Review/return event
-    if (sub.reviewed_at && (status === 'Reviewed' || status === 'Needs Revision' || status === 'Returned')) {
+    if (sub.reviewed_at && (status === 'Reviewed' || status === 'Needs Revision')) {
       feed.push({
         id: `sub-review-${sub.id}`,
         type: 'submission_reviewed',

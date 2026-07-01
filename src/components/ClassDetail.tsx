@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
 import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
@@ -57,10 +57,12 @@ export function ClassDetail({
       finalReason = getPointActionMessage(change);
     }
     onUpdatePoints(studentId, change, finalReason);
+    setTimeout(() => handleSyncRef.current?.(true), 1000);
   };
 
   const handleUpdateLives = (studentId: string, change: number, reason?: string | null) => {
     onUpdateLives(studentId, change, reason);
+    setTimeout(() => handleSyncRef.current?.(true), 1000);
   };
 
   // Reports & Analytics States
@@ -732,6 +734,7 @@ export function ClassDetail({
       
       // Also refresh the class data (points, logs) in the background so the roster updates
       onSync();
+      setTimeout(() => handleSyncRef.current?.(true), 1000);
 
       alert("Review saved and points awarded.");
     } catch (err: any) {
@@ -1004,7 +1007,10 @@ export function ClassDetail({
     alert('Class settings updated!');
   };
 
-  const handleSync = async () => {
+  const handleSyncRef = useRef<((isAutoSync?: boolean) => Promise<void>) | null>(null);
+
+  const handleSync = async (isAutoSync: boolean = false) => {
+    if (isSyncing) return;
     setIsSyncing(true);
     try {
       // onSync is typed as () => void, but syncData in App actually returns a Promise. 
@@ -1062,11 +1068,48 @@ export function ClassDetail({
       setLastSynced(new Date());
     } catch (err) {
       console.error(err);
-      alert('Could not sync data. Please try again.');
+      if (!isAutoSync) {
+        alert('Could not sync data. Please try again.');
+      }
     } finally {
       setIsSyncing(false);
     }
   };
+
+  useEffect(() => {
+    handleSyncRef.current = handleSync;
+  });
+
+  // Safe Auto-Sync & Visibility Refresh
+  useEffect(() => {
+    let syncInterval: ReturnType<typeof setInterval>;
+    let isVisible = document.visibilityState === 'visible';
+
+    const performAutoSync = () => {
+      if (isVisible && handleSyncRef.current) {
+        handleSyncRef.current(true);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      const currentlyVisible = document.visibilityState === 'visible';
+      if (currentlyVisible && !isVisible) {
+        // Tab became visible again
+        if (handleSyncRef.current) {
+          handleSyncRef.current(true);
+        }
+      }
+      isVisible = currentlyVisible;
+    };
+
+    syncInterval = setInterval(performAutoSync, 60000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(syncInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []); // Run once on mount
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -1130,7 +1173,7 @@ export function ClassDetail({
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:ml-auto shrink-0">
             <button
-              onClick={handleSync}
+              onClick={() => handleSync(false)}
               disabled={isSyncing}
               className="bg-slate-950 hover:bg-slate-900 text-blue-400 hover:text-blue-300 px-4 py-2.5 rounded-xl font-mono uppercase tracking-wider text-xs font-bold border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group shadow-sm h-full relative min-h-[42px]"
             >
