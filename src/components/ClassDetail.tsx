@@ -722,6 +722,9 @@ export function ClassDetail({
       const updatedSub = subs.find(s => s.id === selectedSubmissionForReview.id);
       setSelectedSubmissionForReview(updatedSub || null);
       
+      // Also refresh the class data (points, logs) in the background so the roster updates
+      onSync();
+
       alert("Review saved and points awarded.");
     } catch (err: any) {
       console.error('[DEBUG] handleSaveReview error:', err, {
@@ -996,24 +999,21 @@ export function ClassDetail({
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      await onSync();
-      // Since ClassDetail also handles badges, tasks, reports independently via local fetch,
-      // it might be nice to refresh them too if they are visible.
-      // But they are refreshed via `useEffect` based on `classData.id` mostly.
-      // `useClasses` syncData will update `classData`, triggering those.
-      // But let's add `fetchX` if needed, wait, we don't need to overcomplicate.
-      // The prompt says: "refresh relevant data for the current page ... refresh badges if already displayed, etc."
-      // Actually `onSync` triggers `loadData` in `useClasses`, which updates `classes`, which passes new `classData`,
-      // which will re-trigger the local effects if `classData` properties change. But they might not re-trigger if only child rows changed.
-      // Let's manually re-trigger local fetches just to be safe.
+      // onSync is typed as () => void, but syncData in App actually returns a Promise. 
+      // We'll wrap it in Promise.resolve() just in case to safely await it if it's asynchronous.
+      await Promise.resolve(onSync());
+      
+      // Refresh common data blindly
+      loadTasks();
+      const logs = await db.fetchActivityLogs(classData.id);
+      setActivityLogs(logs);
+
+      // Refresh specific tab data
       if (activeTab === 'reports') {
         const reportsData = await taskDb.fetchClassReportsData(classData.id);
         setReportSubmissions(reportsData.submissions);
         setReportGroups(reportsData.groups);
         setReportGroupMembers(reportsData.groupMembers);
-      } else if (activeTab === 'activity') {
-        const logs = await db.fetchActivityLogs(classData.id);
-        setActivityLogs(logs);
       } else if (activeTab === 'badges') {
         const [defs, sBadges] = await Promise.all([
           badgeDb.fetchBadgeDefinitions(classData.id),
@@ -1021,10 +1021,36 @@ export function ClassDetail({
         ]);
         setBadgeDefinitions(defs);
         setStudentBadges(sBadges);
-      } else if (activeTab === 'tasks') {
-        const fetchedTasks = await taskDb.fetchTasksByClass(classData.id);
-        setAllTasks(fetchedTasks);
       }
+      
+      // Refresh tasks tab specific if needed
+      const fetchedTasks = await taskDb.fetchTasksByClass(classData.id);
+      setAllTasks(fetchedTasks);
+      
+      // Refresh modal data if open
+      if (selectedTaskForSubmissions) {
+        let subs;
+        if (selectedTaskForSubmissions.task_type === 'group') {
+          const rawSubs = await taskDb.fetchGroupTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+          subs = rawSubs.map((s: any) => ({
+            ...s,
+            id: s.submission_id || s.group_id,
+            studentName: s.group_name,
+            isGroup: true,
+            created_at: s.created_at || null,
+            members: (s.group_members || []).map((m: any) => m.nickname ? `${m.name} (${m.nickname})` : m.name),
+            group_members_raw: s.group_members || []
+          }));
+        } else {
+          subs = await taskDb.fetchTaskSubmissions(selectedTaskForSubmissions.id, classData.id);
+        }
+        setTaskSubmissions(subs);
+        if (selectedSubmissionForReview) {
+          const updated = subs.find((s: any) => s.id === selectedSubmissionForReview.id);
+          setSelectedSubmissionForReview(updated || null);
+        }
+      }
+
       setLastSynced(new Date());
     } catch (err) {
       console.error(err);

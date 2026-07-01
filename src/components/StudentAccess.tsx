@@ -24,6 +24,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [restoringProfile, setRestoringProfile] = useState(false);
   
   const [loggedInClass, setLoggedInClass] = useState<ClassData | null>(null);
@@ -400,6 +401,8 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
         setEarnedBadges(result.badges || []);
         setStudentLogs(result.logs || []);
         
+        setLastSynced(new Date());
+        
         window.localStorage.setItem(PROFILE_KEY, JSON.stringify({
           classId,
           studentId,
@@ -605,22 +608,29 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
             </span>
           </div>
           <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => {
-                const saved = window.localStorage.getItem(PROFILE_KEY);
-                const p = saved ? JSON.parse(saved).pin : pin;
-                if (p) fetchDashboardData(loggedInClass.id, student.id, p);
-              }}
-              className="text-xs font-semibold text-slate-400 hover:text-white transition-all bg-slate-900/60 hover:bg-slate-900 border border-slate-800/85 hover:border-slate-700/60 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 cursor-pointer focus:outline-none"
-              title="Sync: Updates your points, tasks, feedback, and badges."
-            >
-              {isLoading ? (
-                <Loader2 size={13} className="animate-spin text-emerald-400" />
-              ) : (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <div className="flex flex-col items-end">
+              <button
+                onClick={() => {
+                  const saved = window.localStorage.getItem(PROFILE_KEY);
+                  const p = saved ? JSON.parse(saved).pin : pin;
+                  if (p) fetchDashboardData(loggedInClass.id, student.id, p);
+                }}
+                className="text-xs font-semibold text-slate-400 hover:text-white transition-all bg-slate-900/60 hover:bg-slate-900 border border-slate-800/85 hover:border-slate-700/60 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 cursor-pointer focus:outline-none relative"
+                title="Sync: Updates your points, tasks, feedback, and badges."
+              >
+                {isLoading ? (
+                  <Loader2 size={13} className="animate-spin text-emerald-400" />
+                ) : (
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                )}
+                <span>{isLoading ? 'Syncing...' : 'Sync'}</span>
+              </button>
+              {lastSynced && !isLoading && (
+                <span className="text-[8px] text-slate-500 whitespace-nowrap mt-0.5 pr-1 hidden sm:block">
+                  Last: {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               )}
-              Sync
-            </button>
+            </div>
             <button 
               onClick={handleLogout}
               className="text-xs font-semibold text-slate-400 hover:text-white transition-all bg-slate-900/60 hover:bg-slate-900 border border-slate-800/85 hover:border-slate-700/60 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 cursor-pointer focus:outline-none"
