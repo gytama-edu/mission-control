@@ -1443,25 +1443,25 @@ export function ClassDetail({
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
-                    <div className="bg-slate-900/50 px-3 py-1.5 rounded-lg border border-emerald-500/20 text-center min-w-[80px]">
-                      <p className="text-[10px] text-slate-400 font-mono uppercase tracking-wider mb-0.5">Duration</p>
-                      <p className="text-sm font-bold text-white font-mono">{sessionDuration} min</p>
+                    <div className="bg-slate-900/50 px-4 py-2.5 min-w-[90px] rounded-lg border border-emerald-500/20 text-center min-w-[80px]">
+                      <p className="text-xs text-slate-400 font-mono uppercase tracking-wider mb-1">Duration</p>
+                      <p className="text-base font-bold text-white font-mono">{sessionDuration} min</p>
                     </div>
-                    <div className="bg-slate-900/50 px-3 py-1.5 rounded-lg border border-emerald-500/20 text-center min-w-[80px]">
-                      <p className="text-[10px] text-slate-400 font-mono uppercase tracking-wider mb-0.5">{isPrivate ? 'Points Earned' : 'Session Points'}</p>
-                      <p className="text-sm font-bold text-rose-400 font-mono">+{totalPoints}</p>
+                    <div className="bg-slate-900/50 px-4 py-2.5 min-w-[90px] rounded-lg border border-emerald-500/20 text-center min-w-[80px]">
+                      <p className="text-xs text-slate-400 font-mono uppercase tracking-wider mb-1">{isPrivate ? 'Points Earned' : 'Session Points'}</p>
+                      <p className="text-base font-bold text-rose-400 font-mono">+{totalPoints}</p>
                     </div>
-                    <div className="bg-slate-900/50 px-3 py-1.5 rounded-lg border border-emerald-500/20 text-center min-w-[80px]">
-                      <p className="text-[10px] text-slate-400 font-mono uppercase tracking-wider mb-0.5">Actions</p>
-                      <p className="text-sm font-bold text-purple-400 font-mono">{totalActions}</p>
+                    <div className="bg-slate-900/50 px-4 py-2.5 min-w-[90px] rounded-lg border border-emerald-500/20 text-center min-w-[80px]">
+                      <p className="text-xs text-slate-400 font-mono uppercase tracking-wider mb-1">Actions</p>
+                      <p className="text-base font-bold text-purple-400 font-mono">{totalActions}</p>
                     </div>
-                    <div className="bg-slate-900/50 px-3 py-1.5 rounded-lg border border-emerald-500/20 text-center min-w-[80px] hidden sm:block">
-                      <p className="text-[10px] text-slate-400 font-mono uppercase tracking-wider mb-0.5">Submits</p>
-                      <p className="text-sm font-bold text-blue-400 font-mono">{allSubmissions.filter(s => new Date(s.created_at).getTime() >= new Date(activeMeeting.startedAt).getTime()).length}</p>
+                    <div className="bg-slate-900/50 px-4 py-2.5 min-w-[90px] rounded-lg border border-emerald-500/20 text-center min-w-[80px] hidden sm:block">
+                      <p className="text-xs text-slate-400 font-mono uppercase tracking-wider mb-1">Submits</p>
+                      <p className="text-base font-bold text-blue-400 font-mono">{allSubmissions.filter(s => new Date(s.created_at).getTime() >= new Date(activeMeeting.startedAt).getTime()).length}</p>
                     </div>
-                    <div className="bg-slate-900/50 px-3 py-1.5 rounded-lg border border-emerald-500/20 text-center min-w-[80px] hidden sm:block">
-                      <p className="text-[10px] text-slate-400 font-mono uppercase tracking-wider mb-0.5">Reviews</p>
-                      <p className="text-sm font-bold text-indigo-400 font-mono">{allSubmissions.filter(s => s.reviewed_at && new Date(s.reviewed_at).getTime() >= new Date(activeMeeting.startedAt).getTime()).length}</p>
+                    <div className="bg-slate-900/50 px-4 py-2.5 min-w-[90px] rounded-lg border border-emerald-500/20 text-center min-w-[80px] hidden sm:block">
+                      <p className="text-xs text-slate-400 font-mono uppercase tracking-wider mb-1">Reviews</p>
+                      <p className="text-base font-bold text-indigo-400 font-mono">{allSubmissions.filter(s => s.reviewed_at && new Date(s.reviewed_at).getTime() >= new Date(activeMeeting.startedAt).getTime()).length}</p>
                     </div>
                   </div>
                 </div>
@@ -1490,24 +1490,24 @@ export function ClassDetail({
                     <Clock size={14} className="text-indigo-400" /> Recent Activity
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                   {recentFeed.map((item) => (
                     <div 
                       key={item.id} 
-                      className={`p-3 rounded-xl border flex flex-col gap-1.5 transition-colors ${
+                      className={`p-4 rounded-xl border flex flex-col gap-2 transition-colors ${
                         item.isNew 
                           ? 'bg-indigo-500/10 border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.05)]' 
                           : 'bg-slate-950/40 border-slate-800'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white truncate pr-2">{item.studentName}</span>
-                        {item.isNew && <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-400">New</span>}
+                        <span className="text-sm font-bold text-white truncate pr-2">{item.studentName}</span>
+                        {item.isNew && <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">New</span>}
                       </div>
-                      <div className="text-[11px] text-slate-400 leading-snug line-clamp-2" title={item.summary}>
+                      <div className="text-xs text-slate-400 leading-relaxed line-clamp-2" title={item.summary}>
                         {item.summary}
                       </div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-auto pt-1">
+                      <div className="text-xs text-slate-500 font-mono mt-auto pt-1.5">
                         {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
@@ -1538,7 +1538,9 @@ export function ClassDetail({
                       {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
                         <th className="py-2.5 px-4 font-semibold text-center w-36">Lives</th>
                       )}
-                      <th className="py-2.5 px-4 font-semibold text-center w-64">Points Control</th>
+                      <th className="py-2.5 px-4 font-semibold text-center w-24">Points</th>
+                      <th className="py-2.5 px-4 font-semibold text-center w-36">Deduct</th>
+                      <th className="py-2.5 px-4 font-semibold text-center w-48">Add</th>
                       <th className="py-2.5 px-4 font-semibold text-right w-24">Actions</th>
                     </tr>
                   </thead>
@@ -1547,111 +1549,115 @@ export function ClassDetail({
                       const status = getStudentStatus(student.lives, classData.maxLives);
                       return (
                         <tr key={student.id} className="hover:bg-slate-900/40 transition-colors">
-                          <td className="py-2 px-4">
+                          <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
-                              <span className="font-display font-bold text-sm text-white">
+                              <span className="font-display font-bold text-base text-white">
                                 {student.nickname || student.name}
                               </span>
                               {student.nickname && (
-                                <span className="text-[10px] text-slate-500 font-medium font-sans">
+                                <span className="text-xs text-slate-500 font-medium font-sans">
                                   ({student.name})
                                 </span>
                               )}
                               {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
-                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
                                   {status.label}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-4 text-center font-mono text-xs text-slate-300 font-bold select-none">
+                          <td className="py-3 px-4 text-center font-mono text-sm text-slate-300 font-bold select-none">
                             {student.pin}
                           </td>
                           {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
-                            <td className="py-2 px-4">
-                              <div className="flex items-center justify-center gap-2 select-none">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center justify-center gap-3 select-none">
                                 <button
                                   onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
                                   disabled={student.lives <= 0}
-                                  className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                  className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                                 >
-                                  <Minus size={11} />
+                                  <Minus size={14} />
                                 </button>
-                                <span className={`font-mono font-bold text-sm ${student.lives === 0 ? 'text-red-500' : 'text-white'} w-6 text-center`}>
+                                <span className={`font-mono font-bold text-base ${student.lives === 0 ? 'text-red-500' : 'text-white'} w-6 text-center`}>
                                   {student.lives}
                                 </span>
                                 <button
                                   onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
                                   disabled={student.lives >= classData.maxLives}
-                                  className="w-6 h-6 rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                  className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                                 >
-                                  <Plus size={11} />
+                                  <Plus size={14} />
                                 </button>
                               </div>
                             </td>
                           )}
-                          <td className="py-2 px-4">
-                            <div className="flex items-center justify-center gap-3 select-none">
-                              <span className="font-mono font-bold text-white text-sm w-10 text-right pr-2 border-r border-slate-800">
-                                {student.points}
-                              </span>
-                              <div className="flex items-center gap-1">
+                          <td className="py-3 px-4 text-center">
+                            <span className="font-mono font-bold text-white text-base">
+                              {student.points}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center gap-1.5 select-none">
                                 <button 
                                   onClick={() => handleUpdatePoints(student.id, -5, getActiveReason())} 
                                   disabled={student.points < 5} 
-                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  className="text-xs px-2 py-1.5 font-mono rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
                                 >
                                   -5
                                 </button>
                                 <button 
                                   onClick={() => handleUpdatePoints(student.id, -3, getActiveReason())} 
                                   disabled={student.points < 3} 
-                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  className="text-xs px-2 py-1.5 font-mono rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
                                 >
                                   -3
                                 </button>
                                 <button 
                                   onClick={() => handleUpdatePoints(student.id, -1, getActiveReason())} 
                                   disabled={student.points < 1} 
-                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-slate-950 border border-slate-850 hover:border-slate-750 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  className="text-xs px-2 py-1.5 font-mono rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 hover:bg-slate-900 text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
                                 >
                                   -1
                                 </button>
-                                <button 
-                                  onClick={() => handleUpdatePoints(student.id, 1, getActiveReason())} 
-                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
-                                >
-                                  +1
-                                </button>
+                                </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center gap-1.5 select-none">
+                              <button
+                                onClick={() => handleUpdatePoints(student.id, 1, getActiveReason())}
+                                className="text-xs px-2 py-1.5 font-mono rounded-lg bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/30 text-rose-400 cursor-pointer transition-colors"
+                              >
+                                +1
+                              </button>
                                 <button 
                                   onClick={() => handleUpdatePoints(student.id, 3, getActiveReason())} 
-                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-medium cursor-pointer"
+                                  className="text-xs px-2 py-1.5 font-mono rounded-lg bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-medium cursor-pointer transition-colors"
                                 >
                                   +3
                                 </button>
                                 <button 
                                   onClick={() => handleUpdatePoints(student.id, 5, getActiveReason())} 
-                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-semibold cursor-pointer"
+                                  className="text-xs px-2 py-1.5 font-mono rounded-lg bg-rose-950/40 border border-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-semibold cursor-pointer transition-colors"
                                 >
                                   +5
                                 </button>
                                 <button 
                                   onClick={() => handleUpdatePoints(student.id, 10, getActiveReason())} 
-                                  className="text-[9px] px-1.5 py-0.5 font-mono rounded bg-rose-600/20 border border-rose-500/30 hover:bg-rose-600/30 text-white font-bold cursor-pointer"
+                                  className="text-xs px-2 py-1.5 font-mono rounded-lg bg-rose-600/20 border border-rose-500/30 hover:bg-rose-600/40 text-white font-bold cursor-pointer transition-colors shadow-[0_0_10px_rgba(225,29,72,0.1)]"
                                 >
                                   +10
                                 </button>
-                              </div>
                             </div>
                           </td>
-                          <td className="py-2 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleOpenAwardModal(student.id)}
-                                className="text-slate-500 hover:text-amber-400 p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                                className="text-slate-500 hover:text-amber-400 p-2 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                                 title="Award Badge"
                               >
-                                <Award size={13} />
+                                <Award size={16} />
                               </button>
                               <button
                                 onClick={() => {
@@ -1659,10 +1665,10 @@ export function ClassDetail({
                                   setEditStudentName(student.name);
                                   setEditStudentNickname(student.nickname || '');
                                 }}
-                                className="text-slate-500 hover:text-white p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                                className="text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                                 title="Edit Student"
                               >
-                                <Edit2 size={13} />
+                                <Edit2 size={16} />
                               </button>
                             </div>
                           </td>
@@ -1681,30 +1687,30 @@ export function ClassDetail({
                     <div key={student.id} className="bg-slate-900/50 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3 relative group hover:border-slate-700/60 transition-all duration-200 shadow-md">
                       <div className="flex justify-between items-start gap-2">
                         <div className="min-w-0">
-                          <h3 className="font-display font-bold text-sm text-white truncate flex items-center gap-1.5">
+                          <h3 className="font-display font-bold text-base text-white truncate flex items-center gap-1.5">
                             {student.nickname || student.name}
                           </h3>
                           {student.nickname && (
-                            <p className="text-[10px] text-slate-500 font-medium truncate">
+                            <p className="text-xs text-slate-500 font-medium truncate">
                               Real Name: {student.name}
                             </p>
                           )}
                           {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
-                            <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
+                            <div className={`mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${status.color} select-none`}>
                               {status.label}
                             </div>
                           )}
-                          <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-1 font-mono select-none">
-                            <Key size={10} className="text-rose-500/70" /> PIN: <strong className="text-slate-300 font-semibold">{student.pin}</strong>
+                          <div className="mt-2 text-xs text-slate-500 flex items-center gap-1 font-mono select-none">
+                            <Key size={12} className="text-rose-500/70" /> PIN: <strong className="text-slate-300 font-bold">{student.pin}</strong>
                           </div>
                         </div>
-                        <div className="flex gap-1 shrink-0">
+                        <div className="flex gap-2 shrink-0">
                           <button
                             onClick={() => handleOpenAwardModal(student.id)}
-                            className="text-slate-500 hover:text-amber-400 p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                            className="text-slate-500 hover:text-amber-400 p-2 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                             title="Award Badge"
                           >
-                            <Award size={14} />
+                            <Award size={18} />
                           </button>
                           <button
                             onClick={() => {
@@ -1712,10 +1718,10 @@ export function ClassDetail({
                               setEditStudentName(student.name);
                               setEditStudentNickname(student.nickname || '');
                             }}
-                            className="text-slate-500 hover:text-white p-1 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                            className="text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                             title="Edit Student"
                           >
-                            <Edit2 size={14} />
+                            <Edit2 size={18} />
                           </button>
                         </div>
                       </div>
@@ -1731,19 +1737,19 @@ export function ClassDetail({
                               <button
                                 onClick={() => handleUpdateLives(student.id, -1, getActiveReason())}
                                 disabled={student.lives <= 0}
-                                className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                className="w-12 h-12 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                               >
-                                <Minus size={16} />
+                                <Minus size={20} />
                               </button>
-                              <span className={`font-mono text-xl font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
+                              <span className={`font-mono text-2xl font-bold ${student.lives === 0 ? 'text-red-500' : 'text-white'}`}>
                                 {student.lives}
                               </span>
                               <button
                                 onClick={() => handleUpdateLives(student.id, 1, getActiveReason())}
                                 disabled={student.lives >= classData.maxLives}
-                                className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                className="w-12 h-12 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
                               >
-                                <Plus size={16} />
+                                <Plus size={20} />
                               </button>
                             </div>
                           </div>
@@ -1753,19 +1759,19 @@ export function ClassDetail({
                         <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex flex-col justify-between select-none">
                           <div className="text-[10px] text-slate-500 font-mono uppercase tracking-widest flex items-center justify-between">
                             <span className="flex items-center gap-1.5"><Star size={12} className="text-amber-400" /> Points</span>
-                            <span className="font-mono font-bold text-white text-sm">{student.points}</span>
+                            <span className="font-mono font-bold text-white text-base">{student.points}</span>
                           </div>
                           <div className="flex flex-col gap-2 mt-2">
                             <div className="flex items-center justify-between gap-2">
-                              <button onClick={() => handleUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
-                              <button onClick={() => handleUpdatePoints(student.id, -3, getActiveReason())} disabled={student.points < 3} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-3</button>
-                              <button onClick={() => handleUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
+                              <button onClick={() => handleUpdatePoints(student.id, -5, getActiveReason())} disabled={student.points < 5} className="flex-1 text-base py-3 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-5</button>
+                              <button onClick={() => handleUpdatePoints(student.id, -3, getActiveReason())} disabled={student.points < 3} className="flex-1 text-base py-3 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-3</button>
+                              <button onClick={() => handleUpdatePoints(student.id, -1, getActiveReason())} disabled={student.points < 1} className="flex-1 text-base py-3 font-mono rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">-1</button>
                             </div>
                             <div className="flex items-center justify-between gap-2">
-                              <button onClick={() => handleUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+1</button>
-                              <button onClick={() => handleUpdatePoints(student.id, 3, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+3</button>
-                              <button onClick={() => handleUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-bold">+5</button>
-                              <button onClick={() => handleUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-sm py-2.5 font-mono rounded-lg bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/40 text-white font-bold cursor-pointer">+10</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 1, getActiveReason())} className="flex-1 text-base py-3 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+1</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 3, getActiveReason())} className="flex-1 text-base py-3 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-medium">+3</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 5, getActiveReason())} className="flex-1 text-base py-3 font-mono rounded-lg bg-rose-950/60 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 cursor-pointer font-bold">+5</button>
+                              <button onClick={() => handleUpdatePoints(student.id, 10, getActiveReason())} className="flex-1 text-base py-3 font-mono rounded-lg bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/40 text-white font-bold cursor-pointer">+10</button>
                             </div>
                           </div>
                         </div>
@@ -1819,7 +1825,7 @@ export function ClassDetail({
                               {student.nickname || student.name}
                             </span>
                             {student.nickname && (
-                              <span className="text-[10px] text-slate-500 font-medium font-sans">
+                              <span className="text-xs text-slate-500 font-medium font-sans">
                                 ({student.name})
                               </span>
                             )}
@@ -3616,7 +3622,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                 <div key={sb.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex items-start gap-3">
                                   <span className="text-2xl p-2 bg-slate-900 border border-slate-800 rounded-lg">{badgeDef?.icon || '⭐'}</span>
                                   <div>
-                                    <p className="text-sm font-bold text-white">{badgeDef?.name || 'Unknown Achievement'}</p>
+                                    <p className="text-base font-bold text-white">{badgeDef?.name || 'Unknown Achievement'}</p>
                                     <p className="text-xs text-slate-400 mt-1">{badgeDef?.description}</p>
                                     <span className="text-[10px] text-slate-500 font-mono block mt-2">
                                       Awarded: {new Date(sb.awarded_at).toLocaleDateString()}
@@ -3754,7 +3760,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                   </td>
                                   <td className="py-2.5 px-4 font-mono text-[10px] text-slate-400 uppercase tracking-wider">{task.task_type}</td>
                                   <td className="py-2.5 px-4 text-[10px] font-medium uppercase tracking-wider">
-                                    <span className={`px-2 py-0.5 rounded-full ${
+                                    <span className={`px-3 py-1 rounded-full ${
                                       task.status === 'published' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
                                       task.status === 'closed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                                       'bg-slate-800 text-slate-400 border border-slate-700'
@@ -3868,21 +3874,21 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
-                              <th className="p-4">Session Date</th>
-                              <th className="p-4 text-center">Status</th>
-                              <th className="p-4 text-center">Duration</th>
-                              <th className="p-4 text-center">Actions</th>
-                              <th className="p-4 text-center">Points</th>
-                              <th className="p-4 text-center hidden md:table-cell">Submissions</th>
-                              <th className="p-4 text-center hidden md:table-cell">Reviews</th>
+                            <tr className="border-b border-slate-800 bg-slate-950/50 text-sm font-mono uppercase tracking-wider text-slate-400">
+                              <th className="py-4 px-6">Session Date</th>
+                              <th className="py-4 px-6 text-center">Status</th>
+                              <th className="py-4 px-6 text-center">Duration</th>
+                              <th className="py-4 px-6 text-center">Actions</th>
+                              <th className="py-4 px-6 text-center">Points</th>
+                              <th className="py-4 px-6 text-center hidden md:table-cell">Submissions</th>
+                              <th className="py-4 px-6 text-center hidden md:table-cell">Reviews</th>
                               {isLives && (
                                 <>
-                                  <th className="p-4 text-center">Lives Lost</th>
-                                  <th className="p-4 text-center">Lives Gained</th>
+                                  <th className="py-4 px-6 text-center">Lives Lost</th>
+                                  <th className="py-4 px-6 text-center">Lives Gained</th>
                                 </>
                               )}
-                              {!isPrivate && <th className="p-4">Highlights</th>}
+                              {!isPrivate && <th className="py-4 px-6">Highlights</th>}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -3930,27 +3936,27 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                               
                               return (
                                 <tr key={meeting.id} className="hover:bg-slate-850/30 transition-colors">
-                                  <td className="p-4 font-medium text-white whitespace-nowrap">{startedDate}</td>
-                                  <td className="p-4 text-center text-xs font-bold uppercase">
+                                  <td className="py-4 px-6 font-medium text-white whitespace-nowrap text-base">{startedDate}</td>
+                                  <td className="py-4 px-6 text-center text-xs font-bold uppercase">
                                     <span className={`px-2 py-0.5 rounded-full ${meeting.status === 'active' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
                                       {meeting.status}
                                     </span>
                                   </td>
-                                  <td className="p-4 text-center font-mono text-sm whitespace-nowrap">{duration}</td>
-                                  <td className="p-4 text-center font-mono text-sm text-purple-400">{totalActions}</td>
-                                  <td className="p-4 text-center font-mono text-sm text-rose-400 font-semibold">
+                                  <td className="py-4 px-6 text-center font-mono text-base whitespace-nowrap">{duration}</td>
+                                  <td className="py-4 px-6 text-center font-mono text-base text-purple-400">{totalActions}</td>
+                                  <td className="py-4 px-6 text-center font-mono text-base text-rose-400 font-semibold">
                                     {totalPoints >= 0 ? `+${totalPoints}` : totalPoints}
                                   </td>
-                                  <td className="p-4 text-center font-mono text-sm text-blue-400 hidden md:table-cell">{submissionsDuring}</td>
-                                  <td className="p-4 text-center font-mono text-sm text-indigo-400 hidden md:table-cell">{reviewsDuring}</td>
+                                  <td className="py-4 px-6 text-center font-mono text-base text-blue-400 hidden md:table-cell">{submissionsDuring}</td>
+                                  <td className="py-4 px-6 text-center font-mono text-base text-indigo-400 hidden md:table-cell">{reviewsDuring}</td>
                                   {isLives && (
                                     <>
-                                      <td className="p-4 text-center font-mono text-sm text-red-400">-{totalLivesLost}</td>
-                                      <td className="p-4 text-center font-mono text-sm text-emerald-400">+{totalLivesGained}</td>
+                                      <td className="py-4 px-6 text-center font-mono text-base text-red-400">-{totalLivesLost}</td>
+                                      <td className="py-4 px-6 text-center font-mono text-base text-emerald-400">+{totalLivesGained}</td>
                                     </>
                                   )}
                                   {!isPrivate && (
-                                    <td className="p-4 font-mono text-sm text-slate-300">
+                                    <td className="py-4 px-6 font-mono text-base text-slate-300">
                                       {summary.most_active_student || (totalActions > 0 ? 'See Activity' : 'N/A')}
                                     </td>
                                   )}
@@ -4039,10 +4045,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                           <table className="w-full text-left border-collapse">
                             <thead>
                               <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-mono uppercase tracking-wider text-slate-400">
-                                <th className="p-4">Badge</th>
-                                <th className="p-4">Description</th>
-                                <th className="p-4">Trigger / Category</th>
-                                <th className="p-4 text-center">Awarded Frequency</th>
+                                <th className="py-4 px-6">Badge</th>
+                                <th className="py-4 px-6">Description</th>
+                                <th className="py-4 px-6">Trigger / Category</th>
+                                <th className="py-4 px-6 text-center">Awarded Frequency</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -4050,15 +4056,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.task_group_members;`;
                                 const count = badgeCounts[badge.id]?.count || 0;
                                 return (
                                   <tr key={badge.id} className="hover:bg-slate-850/30 transition-colors">
-                                    <td className="p-4 flex items-center gap-3">
+                                    <td className="py-4 px-6 flex items-center gap-3">
                                       <span className="text-2xl p-1.5 bg-slate-950 border border-slate-800 rounded-lg">{badge.icon || '⭐'}</span>
                                       <span className="font-semibold text-white">{badge.name}</span>
                                     </td>
-                                    <td className="p-4 text-sm text-slate-400">{badge.description}</td>
-                                    <td className="p-4 font-mono text-xs text-slate-400 uppercase">
+                                    <td className="py-4 px-6 text-sm text-slate-400">{badge.description}</td>
+                                    <td className="py-4 px-6 font-mono text-xs text-slate-400 uppercase">
                                       {badge.trigger_type || badge.badge_type || 'Teacher Manual Choice'}
                                     </td>
-                                    <td className="p-4 text-center font-mono text-base font-bold text-amber-500">{count}</td>
+                                    <td className="py-4 px-6 text-center font-mono text-base font-bold text-amber-500">{count}</td>
                                   </tr>
                                 );
                               })}
