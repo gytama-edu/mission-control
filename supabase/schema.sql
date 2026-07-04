@@ -2950,7 +2950,7 @@ GRANT EXECUTE ON FUNCTION public.guardian_verify_access(text, text) TO anon, aut
 -- ==============================================================================
 -- PHASE 25C: GUARDIAN DASHBOARD RPC
 -- ==============================================================================
-CREATE OR REPLACE FUNCTION public.guardian_fetch_dashboard_data(
+CREATE OR REPLACE FUNCTION public.verify_guardian_access(
   p_class_code text,
   p_guardian_code text
 ) RETURNS jsonb
@@ -3003,11 +3003,9 @@ BEGIN
   SELECT coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)
   INTO v_tasks_json
   FROM tasks t
-  WHERE t.class_id = v_class.id
-    AND t.status IN ('published', 'closed');
+  WHERE t.class_id = v_class.id AND t.status IN ('published', 'closed');
 
-  -- 5. Submissions (only this student, ignoring groups for parent dashboard simplicity, or we could include group submissions)
-  -- Since we just want the student's submissions:
+  -- 5. Submissions (only this student)
   SELECT coalesce(jsonb_agg(to_jsonb(sub)), '[]'::jsonb)
   INTO v_submissions_json
   FROM task_submissions sub
@@ -3046,7 +3044,7 @@ BEGIN
     LIMIT 100
   ) log;
 
-  -- Return minimal safe info
+  -- Return aggregated data
   RETURN jsonb_build_object(
     'ok', true,
     'classData', jsonb_build_object(
@@ -3061,7 +3059,8 @@ BEGIN
       'name', v_student.name,
       'nickname', v_student.nickname,
       'points', v_student.points,
-      'lives', v_student.lives
+      'lives', v_student.lives,
+      'badges_count', (SELECT count(*) FROM student_badges WHERE student_id = v_student.id)
     ),
     'tasks', v_tasks_json,
     'submissions', v_submissions_json,
@@ -3071,4 +3070,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.guardian_fetch_dashboard_data(text, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.verify_guardian_access(text, text) TO anon, authenticated;

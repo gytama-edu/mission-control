@@ -856,7 +856,7 @@ export const fetchGuardianStudentPreview = async (classCode: string, guardianCod
   
   console.log(`[Guardian Login] Attempting login. Class Code length: ${normalizedClassCode.length}, Guardian Code length: ${normalizedGuardianCode.length}`);
 
-  const { data, error } = await supabase.rpc('guardian_fetch_dashboard_data', {
+  const { data, error } = await supabase.rpc('verify_guardian_access', {
     p_class_code: normalizedClassCode,
     p_guardian_code: normalizedGuardianCode
   });
