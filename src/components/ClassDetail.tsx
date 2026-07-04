@@ -689,13 +689,18 @@ export function ClassDetail({
   };
 
   const handleGenerateAiDraft = async () => {
-    if (!selectedSubmissionForReview) return;
-    console.log('[DEBUG] Generating AI draft for submission:', selectedSubmissionForReview.id);
+    const submissionId = selectedSubmissionForReview?.id || selectedSubmissionForReview?.submission_id;
+    if (!submissionId) {
+      setAiDraftError("Submission ID was not found for this review.");
+      return;
+    }
+
+    console.log('[DEBUG] Generating AI draft for submission:', submissionId);
     setIsGeneratingAiDraft(true);
     setAiDraftResult(null);
     setAiDraftError(null);
     try {
-      const draft = await db.generateAIFeedbackDraft(selectedSubmissionForReview.id);
+      const draft = await db.generateAIFeedbackDraft(submissionId);
       console.log('[DEBUG] AI draft received:', draft);
       setAiDraftResult(draft);
     } catch (err: any) {

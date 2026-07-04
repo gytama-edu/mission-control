@@ -810,7 +810,7 @@ export const getStudentDashboardData = async (classId: string, studentId: string
 export const generateAIFeedbackDraft = async (submissionId: string) => {
   try {
     const { data, error } = await supabase.functions.invoke('generate-ai-feedback', {
-      body: { submission_id: submissionId }
+      body: { submissionId, submission_id: submissionId }
     });
 
     if (error) {
