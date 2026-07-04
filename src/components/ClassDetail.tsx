@@ -690,13 +690,16 @@ export function ClassDetail({
 
   const handleGenerateAiDraft = async () => {
     if (!selectedSubmissionForReview) return;
+    console.log('[DEBUG] Generating AI draft for submission:', selectedSubmissionForReview.id);
     setIsGeneratingAiDraft(true);
     setAiDraftResult(null);
     setAiDraftError(null);
     try {
       const draft = await db.generateAIFeedbackDraft(selectedSubmissionForReview.id);
+      console.log('[DEBUG] AI draft received:', draft);
       setAiDraftResult(draft);
     } catch (err: any) {
+      console.error('[DEBUG] AI draft error:', err);
       setAiDraftError(err.message || 'AI draft could not be generated right now. You can still write feedback manually.');
     } finally {
       setIsGeneratingAiDraft(false);
@@ -5607,9 +5610,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                                           <button
                                             type="button"
                                             onClick={handleGenerateAiDraft}
-                                            disabled={isGeneratingAiDraft || !sub.submission_text}
-                                            className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 transition-all ${isGeneratingAiDraft || !sub.submission_text ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 opacity-60 cursor-not-allowed' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500 hover:text-white'}`}
-                                            title={!sub.submission_text ? "AI feedback is available for text submissions only." : "Generate AI Draft"}
+                                            disabled={isGeneratingAiDraft || !sub.submission_text || sub.submission_text.trim().length === 0}
+                                            className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 transition-all ${isGeneratingAiDraft || !sub.submission_text || sub.submission_text.trim().length === 0 ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 opacity-60 cursor-not-allowed' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500 hover:text-white'}`}
+                                            title={(!sub.submission_text || sub.submission_text.trim().length === 0) ? "AI feedback is available for text submissions only." : "Generate AI Draft"}
                                           >
                                             {isGeneratingAiDraft ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
                                             {isGeneratingAiDraft ? "Generating..." : "AI Draft"}
