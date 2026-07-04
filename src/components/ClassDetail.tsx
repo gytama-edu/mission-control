@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive, Activity } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive, Activity, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
@@ -5582,7 +5582,18 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
 
                                     <div className="grid sm:grid-cols-3 gap-4">
                                       <div className="sm:col-span-2 space-y-1.5">
-                                        <label className="block text-[11px] text-slate-400 font-medium">Feedback / Evaluation comments</label>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                          <label className="block text-[11px] text-slate-400 font-medium">Feedback / Evaluation comments</label>
+                                          <button
+                                            type="button"
+                                            disabled
+                                            className="text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded flex items-center gap-1 opacity-60 cursor-not-allowed"
+                                            title="AI Feedback (Coming Soon)"
+                                          >
+                                            <Sparkles size={10} />
+                                            AI Draft
+                                          </button>
+                                        </div>
                                         <textarea
                                           rows={3}
                                           value={reviewFeedback}

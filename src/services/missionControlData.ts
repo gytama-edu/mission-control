@@ -805,3 +805,26 @@ export const getStudentDashboardData = async (classId: string, studentId: string
   const studentData = classData.students.find(st => st.id === studentId);
   return { classData, studentData: studentData || null };
 };
+
+
+export const generateAIFeedbackDraft = async (submissionId: string) => {
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-ai-feedback', {
+      body: { submission_id: submissionId }
+    });
+
+    if (error) {
+      console.error('Edge function invocation error:', error);
+      throw error;
+    }
+
+    if (data && data.error) {
+       throw new Error(data.error);
+    }
+
+    return data.draft;
+  } catch (error: any) {
+    console.error('generateAIFeedbackDraft error:', error);
+    throw error;
+  }
+};
