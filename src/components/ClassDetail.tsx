@@ -237,22 +237,26 @@ export function ClassDetail({
   };
 
   const [isResettingGuardianCode, setIsResettingGuardianCode] = useState(false);
+  const [guardianCodeError, setGuardianCodeError] = useState<string | null>(null);
+  const [optimisticGuardianCodes, setOptimisticGuardianCodes] = useState<Record<string, string>>({});
 
   const handleResetGuardianCode = async (studentId: string) => {
     setIsResettingGuardianCode(true);
+    setGuardianCodeError(null);
     try {
-      await db.updateGuardianCode(studentId);
+      const newCode = await db.updateGuardianCode(studentId);
+      setOptimisticGuardianCodes(prev => ({ ...prev, [studentId]: newCode }));
       onSync();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to reset guardian code');
+      setGuardianCodeError('Guardian code could not be generated. Please sync and try again.');
     } finally {
       setIsResettingGuardianCode(false);
     }
   };
 
   const handleCopyGuardianInfo = (student: any) => {
-    const code = student.guardian_access_code || 'Not generated';
+    const code = (optimisticGuardianCodes[student.id] || student.guardian_access_code) || 'Not generated';
     navigator.clipboard.writeText(`Guardian Access for ${student.name}\nClass Code: ${classData.joinCode}\nGuardian Code: ${code}\nOpen Mission Control and choose Guardian Access.`);
     alert('Guardian info copied!');
   };
@@ -1571,6 +1575,14 @@ export function ClassDetail({
             );
           })()}
 
+          {guardianCodeError && (
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl text-sm mb-4 flex items-center justify-between">
+              <span>{guardianCodeError}</span>
+              <button onClick={() => setGuardianCodeError(null)} className="text-rose-400 hover:text-rose-300">
+                &times;
+              </button>
+            </div>
+          )}
           {/* Roster Grid */}
           {classData.students.length === 0 ? (
             <div className="text-center py-20 bg-slate-900/35 border border-dashed border-slate-800/80 rounded-2xl backdrop-blur-sm px-6 max-w-xl mx-auto my-12">
@@ -1628,14 +1640,14 @@ export function ClassDetail({
                               <div className="flex flex-col items-center justify-center gap-1.5 bg-sky-950/10 rounded px-2 py-1.5 border border-sky-900/30">
                                 <div className="flex items-center gap-1.5 text-[10px]">
                                   <ShieldCheck size={10} className="text-sky-500/70" />
-                                  {student.guardian_access_code ? (
-                                    <strong className="text-sky-300/90 tracking-wider">{student.guardian_access_code}</strong>
+                                  {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
+                                    <strong className="text-sky-300/90 tracking-wider">{(optimisticGuardianCodes[student.id] || student.guardian_access_code)}</strong>
                                   ) : (
                                     <span className="text-slate-500 italic">None</span>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  {student.guardian_access_code ? (
+                                  {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
                                     <>
                                       <button 
                                         onClick={() => handleCopyGuardianInfo(student)}
@@ -1810,14 +1822,14 @@ export function ClassDetail({
                             <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono select-none">
                               <ShieldCheck size={12} className="text-sky-500/70" />
                               <span>Parent:</span>
-                              {student.guardian_access_code ? (
-                                <strong className="text-sky-300/90 tracking-wider text-xs">{student.guardian_access_code}</strong>
+                              {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
+                                <strong className="text-sky-300/90 tracking-wider text-xs">{(optimisticGuardianCodes[student.id] || student.guardian_access_code)}</strong>
                               ) : (
                                 <span className="text-slate-500 italic">None</span>
                               )}
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {student.guardian_access_code ? (
+                              {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
                                 <>
                                   <button 
                                     onClick={() => handleCopyGuardianInfo(student)}
