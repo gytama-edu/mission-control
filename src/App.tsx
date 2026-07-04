@@ -9,6 +9,7 @@ import { Dashboard } from './components/Dashboard';
 import { ClassDetail } from './components/ClassDetail';
 import { Landing } from './components/Landing';
 import { StudentAccess } from './components/StudentAccess';
+import { GuardianAccess } from './components/GuardianAccess';
 import { TeacherAuth } from './components/TeacherAuth';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
 import { AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';

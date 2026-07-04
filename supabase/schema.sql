@@ -2881,3 +2881,76 @@ GRANT EXECUTE ON FUNCTION public.student_fetch_dashboard_data(uuid, uuid, text) 
 
 
 
+
+-- Phase 25B: Parent/Guardian Access Code
+ALTER TABLE public.students
+ADD COLUMN IF NOT EXISTS guardian_access_code text;
+
+-- ==============================================================================
+-- PHASE 25B: GUARDIAN ACCESS RPC
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.guardian_verify_access(
+  p_class_code text,
+  p_guardian_code text
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_class_id uuid;
+  v_class_name text;
+  v_category text;
+  v_scoring_system text;
+  v_student_id uuid;
+  v_student_name text;
+  v_student_nickname text;
+  v_student_points integer;
+  v_student_lives integer;
+  v_result json;
+BEGIN
+  -- 1. Find the class
+  SELECT id, name, category, scoring_system 
+  INTO v_class_id, v_class_name, v_category, v_scoring_system
+  FROM classes
+  WHERE class_code = UPPER(p_class_code);
+
+  IF v_class_id IS NULL THEN
+    RETURN json_build_object('ok', false, 'reason', 'invalid_code');
+  END IF;
+
+  -- 2. Find the student
+  SELECT id, name, nickname, points, lives
+  INTO v_student_id, v_student_name, v_student_nickname, v_student_points, v_student_lives
+  FROM students
+  WHERE class_id = v_class_id
+    AND guardian_access_code = UPPER(p_guardian_code);
+
+  IF v_student_id IS NULL THEN
+    RETURN json_build_object('ok', false, 'reason', 'invalid_code');
+  END IF;
+
+  -- 3. Return preview data
+  v_result := json_build_object(
+    'ok', true,
+    'classData', json_build_object(
+      'id', v_class_id,
+      'name', v_class_name,
+      'category', v_category,
+      'scoring_system', v_scoring_system
+    ),
+    'studentData', json_build_object(
+      'id', v_student_id,
+      'name', v_student_name,
+      'nickname', v_student_nickname,
+      'points', v_student_points,
+      'lives', v_student_lives
+    )
+  );
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.guardian_verify_access(text, text) TO anon, authenticated;

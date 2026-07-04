@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { generateGuardianCode } from '../utils/classroomUtils';
 import { ClassData, Student, Meeting, ActivityLog } from '../types';
 
 export const logActivity = async (
@@ -396,7 +397,8 @@ export const addStudent = async (classId: string, name: string, maxLives: number
       name,
       pin,
       lives: maxLives,
-      points: initialPoints
+      points: initialPoints,
+      guardian_access_code: generateGuardianCode()
     }])
     .select()
     .single();
@@ -827,4 +829,29 @@ export const generateAIFeedbackDraft = async (submissionId: string) => {
     console.error('generateAIFeedbackDraft error:', error);
     throw error;
   }
+};
+
+export const updateGuardianCode = async (studentId: string): Promise<string> => {
+  const newCode = generateGuardianCode();
+  const { error } = await supabase
+    .from('students')
+    .update({ guardian_access_code: newCode })
+    .eq('id', studentId);
+
+  if (error) throw error;
+  return newCode;
+};
+
+export const fetchGuardianStudentPreview = async (classCode: string, guardianCode: string): Promise<any> => {
+  const { data, error } = await supabase.rpc('guardian_verify_access', {
+    p_class_code: classCode,
+    p_guardian_code: guardianCode
+  });
+
+  if (error) {
+    console.error(error);
+    return { ok: false, reason: 'error' };
+  }
+  
+  return data;
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive, Activity, Sparkles } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive, Activity, Sparkles, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
@@ -1735,6 +1735,9 @@ export function ClassDetail({
                           )}
                           <div className="mt-2 text-xs text-slate-500 flex items-center gap-1 font-mono select-none">
                             <Key size={12} className="text-rose-500/70" /> PIN: <strong className="text-slate-300 font-bold">{student.pin}</strong>
+                          </div>
+                          <div className="mt-1 text-[10px] text-slate-500 flex items-center gap-1 font-mono select-none">
+                            <ShieldCheck size={10} className="text-sky-500/70" /> Guardian Code: <strong className="text-slate-300 font-bold">{student.guardian_access_code || 'None'}</strong>
                           </div>
                         </div>
                         <div className="flex gap-2 shrink-0">
