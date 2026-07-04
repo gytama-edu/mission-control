@@ -843,7 +843,7 @@ export const updateGuardianCode = async (studentId: string): Promise<string> => 
 };
 
 export const fetchGuardianStudentPreview = async (classCode: string, guardianCode: string): Promise<any> => {
-  const { data, error } = await supabase.rpc('guardian_verify_access', {
+  const { data, error } = await supabase.rpc('guardian_fetch_dashboard_data', {
     p_class_code: classCode,
     p_guardian_code: guardianCode
   });
