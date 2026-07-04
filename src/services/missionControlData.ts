@@ -255,7 +255,8 @@ export const fetchClasses = async (teacherId?: string | null): Promise<ClassData
         pin: s.pin,
         lives: s.lives,
         points: s.points,
-        joinedAt: s.created_at
+        joinedAt: s.created_at,
+        guardian_access_code: s.guardian_access_code
       })),
     meetings: (meetings || [])
       .filter(m => m.class_id === c.id)
@@ -790,7 +791,8 @@ export const getStudentDashboardData = async (classId: string, studentId: string
       lives: s.lives,
       points: s.points,
       pin: s.pin,
-      joinedAt: s.created_at
+      joinedAt: s.created_at,
+      guardian_access_code: s.guardian_access_code
     })),
     meetings: meetings.map((m: any) => ({
       id: m.id,

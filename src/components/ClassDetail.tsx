@@ -256,7 +256,11 @@ export function ClassDetail({
   };
 
   const handleCopyGuardianInfo = (student: any) => {
-    const code = (optimisticGuardianCodes[student.id] || student.guardian_access_code) || 'Not generated';
+    const code = (optimisticGuardianCodes[student.id] || student.guardian_access_code);
+    if (!code) {
+      alert('Generate a guardian code first.');
+      return;
+    }
     navigator.clipboard.writeText(`Guardian Access for ${student.name}\nClass Code: ${classData.joinCode}\nGuardian Code: ${code}\nOpen Mission Control and choose Guardian Access.`);
     alert('Guardian info copied!');
   };
