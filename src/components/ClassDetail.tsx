@@ -378,6 +378,7 @@ export function ClassDetail({
   const [isFetchingSubmissions, setIsFetchingSubmissions] = useState(false);
   const [submissionsError, setSubmissionsError] = useState<string | null>(null);
   const [selectedSubmissionForReview, setSelectedSubmissionForReview] = useState<any | null>(null);
+  const [reviewSuccessMessage, setReviewSuccessMessage] = useState<string | null>(null);
   const [reviewFeedback, setReviewFeedback] = useState('');
   const [reviewScore, setReviewScore] = useState<number>(0);
   const [isSavingReview, setIsSavingReview] = useState(false);
@@ -686,6 +687,7 @@ export function ClassDetail({
     setReviewScore(sub.awarded_points || 0);
     setAiDraftResult(null);
     setAiDraftError(null);
+    setReviewSuccessMessage(null);
   };
 
   const handleGenerateAiDraft = async () => {
@@ -765,7 +767,8 @@ export function ClassDetail({
       onSync();
       setTimeout(() => handleSyncRef.current?.(true), 1000);
 
-      alert("Review saved and points awarded.");
+      setReviewSuccessMessage('Review saved successfully.');
+      setTimeout(() => setReviewSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error('[DEBUG] handleSaveReview error:', err, {
         selectedTaskId: selectedTaskForSubmissions.id,
@@ -5599,10 +5602,17 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                                   /* Active Review Form */
                                   <div className="space-y-4 bg-slate-950/30 p-4 rounded-xl border border-slate-850 animate-fade-in">
                                     <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-850/60">
-                                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                                        <CheckSquare size={13} className="text-purple-400" />
-                                        Task Review & Feedback Form
-                                      </h4>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                          <CheckSquare size={13} className="text-purple-400" />
+                                          Task Review & Feedback Form
+                                        </h4>
+                                        {sub.awarded_points !== undefined && sub.awarded_points !== null && (
+                                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider flex items-center gap-1">
+                                            <CheckSquare size={10} /> Review Saved
+                                          </span>
+                                        )}
+                                      </div>
                                       <span className="text-[10px] font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                                         Reviewing: {sub.studentName}
                                       </span>
@@ -5694,7 +5704,12 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                                       </div>
                                     </div>
 
-                                    <div className="flex flex-wrap justify-end gap-2 pt-1 border-t border-slate-850/60">
+                                    <div className="flex flex-wrap items-center justify-end gap-3 pt-1 border-t border-slate-850/60">
+                                      {reviewSuccessMessage && (
+                                        <div className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 flex items-center gap-1.5 animate-fade-in mr-auto">
+                                          <CheckSquare size={12} /> {reviewSuccessMessage}
+                                        </div>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => setSelectedSubmissionForReview(null)}
@@ -5720,7 +5735,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                                         className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                                       >
                                         {isSavingReview ? <Loader2 size={11} className="animate-spin" /> : null}
-                                        Complete & Grade
+                                        {sub.awarded_points !== undefined && sub.awarded_points !== null ? 'Update Review' : 'Complete & Grade'}
                                       </button>
                                     </div>
                                   </div>
