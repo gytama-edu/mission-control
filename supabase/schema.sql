@@ -2897,37 +2897,30 @@ RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS $
 DECLARE
-  v_class_id uuid;
-  v_class_name text;
-  v_category text;
-  v_scoring_system text;
-  v_student_id uuid;
-  v_student_name text;
-  v_student_nickname text;
-  v_student_points integer;
-  v_student_lives integer;
+  v_class record;
+  v_student record;
   v_result json;
 BEGIN
   -- 1. Find the class
-  SELECT id, name, category, scoring_system 
-  INTO v_class_id, v_class_name, v_category, v_scoring_system
+  SELECT *
+  INTO v_class
   FROM classes
-  WHERE class_code = UPPER(p_class_code);
+  WHERE upper(join_code) = upper(trim(p_class_code));
 
-  IF v_class_id IS NULL THEN
+  IF NOT FOUND THEN
     RETURN json_build_object('ok', false, 'reason', 'invalid_code');
   END IF;
 
   -- 2. Find the student
-  SELECT id, name, nickname, points, lives
-  INTO v_student_id, v_student_name, v_student_nickname, v_student_points, v_student_lives
+  SELECT *
+  INTO v_student
   FROM students
-  WHERE class_id = v_class_id
-    AND guardian_access_code = UPPER(p_guardian_code);
+  WHERE class_id = v_class.id
+    AND upper(guardian_access_code) = upper(trim(p_guardian_code));
 
-  IF v_student_id IS NULL THEN
+  IF NOT FOUND THEN
     RETURN json_build_object('ok', false, 'reason', 'invalid_code');
   END IF;
 
@@ -2935,23 +2928,22 @@ BEGIN
   v_result := json_build_object(
     'ok', true,
     'classData', json_build_object(
-      'id', v_class_id,
-      'name', v_class_name,
-      'category', v_category,
-      'scoring_system', v_scoring_system
+      'id', v_class.id,
+      'name', v_class.name,
+      'category', v_class.class_category
     ),
     'studentData', json_build_object(
-      'id', v_student_id,
-      'name', v_student_name,
-      'nickname', v_student_nickname,
-      'points', v_student_points,
-      'lives', v_student_lives
+      'id', v_student.id,
+      'name', v_student.name,
+      'nickname', v_student.nickname,
+      'points', v_student.points,
+      'lives', v_student.lives
     )
   );
 
   RETURN v_result;
 END;
-$$;
+$;
 
 GRANT EXECUTE ON FUNCTION public.guardian_verify_access(text, text) TO anon, authenticated;
 
@@ -2977,7 +2969,7 @@ BEGIN
   -- 1. Find class
   SELECT * INTO v_class
   FROM classes
-  WHERE class_code = UPPER(p_class_code);
+  WHERE upper(join_code) = upper(trim(p_class_code));
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_code');
@@ -2987,7 +2979,7 @@ BEGIN
   SELECT * INTO v_student
   FROM students
   WHERE class_id = v_class.id
-    AND guardian_access_code = UPPER(p_guardian_code);
+    AND upper(guardian_access_code) = upper(trim(p_guardian_code));
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_code');
@@ -3061,8 +3053,7 @@ BEGIN
       'id', v_class.id,
       'name', v_class.name,
       'level', v_class.level,
-      'category', v_class.category,
-      'scoring_system', v_class.scoring_system,
+      'category', v_class.class_category,
       'meetings', v_meetings_json
     ),
     'studentData', jsonb_build_object(
