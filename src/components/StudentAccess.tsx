@@ -577,6 +577,36 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
     // Private + Points needs 2 extra cards to fill the row (Today's Progress & Recent Progress)
     const showRecentProgressCard = isPrivate && isPointsOnly;
 
+    const sortedTasks = [...tasks].sort((a, b) => {
+      const isClosedA = a.status === "closed";
+      const isClosedB = b.status === "closed";
+      if (isClosedA !== isClosedB) return isClosedA ? 1 : -1;
+
+      const subA = studentSubmissions[a.id];
+      const subB = studentSubmissions[b.id];
+      const statusA = getSubmissionStatus(subA);
+      const statusB = getSubmissionStatus(subB);
+
+      const getPriority = (status) => {
+        if (status === "Not Submitted" || status === "Needs Revision") return 1;
+        if (status === "Needs Review" || status === "Submitted (Late)") return 2;
+        if (status === "Reviewed") return 3;
+        return 4;
+      };
+
+      const priA = getPriority(statusA);
+      const priB = getPriority(statusB);
+
+      if (priA !== priB) {
+        return priA - priB;
+      }
+
+      const timeA = new Date(a.created_at || 0).getTime();
+      const timeB = new Date(b.created_at || 0).getTime();
+      return timeB - timeA;
+    });
+
+
 
     return (
       <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 select-none">
@@ -815,7 +845,7 @@ export function StudentAccess({ onBack }: StudentAccessProps) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {tasks.map((task) => {
+                  {sortedTasks.map((task) => {
                     const assignedGroup = studentGroups[task.id];
                     const isClosed = task.status === 'closed';
 
