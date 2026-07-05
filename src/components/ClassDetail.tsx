@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ClassData, ActivityLog, Task, TaskGroup, TaskGroupMember } from '../types';
-import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive, Activity, Sparkles, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Minus, Star, Play, Trophy, Settings, Trash2, Edit2, X, AlertTriangle, Key, Copy, RefreshCw, Clock, Undo2, Folder, CheckSquare, PlusCircle, FileText, Paperclip, Loader2, Award, BarChart2, Printer, TrendingUp, Archive, Activity, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import * as db from '../services/missionControlData';
 import * as taskDb from '../services/taskData';
@@ -234,35 +234,6 @@ export function ClassDetail({
         setIsBadgesLoading(false);
       }
     }
-  };
-
-  const [isResettingGuardianCode, setIsResettingGuardianCode] = useState(false);
-  const [guardianCodeError, setGuardianCodeError] = useState<string | null>(null);
-  const [optimisticGuardianCodes, setOptimisticGuardianCodes] = useState<Record<string, string>>({});
-
-  const handleResetGuardianCode = async (studentId: string) => {
-    setIsResettingGuardianCode(true);
-    setGuardianCodeError(null);
-    try {
-      const newCode = await db.updateGuardianCode(studentId);
-      setOptimisticGuardianCodes(prev => ({ ...prev, [studentId]: newCode }));
-      onSync();
-    } catch (err: any) {
-      console.error(err);
-      setGuardianCodeError('Guardian code could not be generated. Please sync and try again.');
-    } finally {
-      setIsResettingGuardianCode(false);
-    }
-  };
-
-  const handleCopyGuardianInfo = (student: any) => {
-    const code = (optimisticGuardianCodes[student.id] || student.guardian_access_code);
-    if (!code) {
-      alert('Generate a guardian code first.');
-      return;
-    }
-    navigator.clipboard.writeText(`Guardian Access for ${student.name}\nClass Code: ${classData.joinCode}\nGuardian Code: ${code}\nOpen Mission Control and choose Guardian Access.`);
-    alert('Guardian info copied!');
   };
 
   const handleOpenAwardModal = (studentId: string = '') => {
@@ -1579,14 +1550,6 @@ export function ClassDetail({
             );
           })()}
 
-          {guardianCodeError && (
-            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl text-sm mb-4 flex items-center justify-between">
-              <span>{guardianCodeError}</span>
-              <button onClick={() => setGuardianCodeError(null)} className="text-rose-400 hover:text-rose-300">
-                &times;
-              </button>
-            </div>
-          )}
           {/* Roster Grid */}
           {classData.students.length === 0 ? (
             <div className="text-center py-20 bg-slate-900/35 border border-dashed border-slate-800/80 rounded-2xl backdrop-blur-sm px-6 max-w-xl mx-auto my-12">
@@ -1604,7 +1567,7 @@ export function ClassDetail({
                   <thead>
                     <tr className="border-b border-slate-800/60 text-[10px] font-mono uppercase tracking-widest text-slate-500 select-none bg-slate-950/20">
                       <th className="py-2.5 px-4 font-semibold">Student Name</th>
-                      <th className="py-2.5 px-4 font-semibold text-center">Credentials</th>
+                      <th className="py-2.5 px-4 font-semibold text-center w-24">PIN</th>
                       {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
                         <th className="py-2.5 px-4 font-semibold text-center w-36">Lives</th>
                       )}
@@ -1636,55 +1599,8 @@ export function ClassDetail({
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-mono text-xs text-slate-400 select-none">
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center justify-center gap-1.5 bg-slate-950/40 rounded px-2 py-1">
-                                <Key size={10} className="text-slate-500" /> <strong className="text-slate-300 text-sm">{student.pin}</strong>
-                              </div>
-                              <div className="flex flex-col items-center justify-center gap-1.5 bg-sky-950/10 rounded px-2 py-1.5 border border-sky-900/30">
-                                <div className="flex items-center gap-1.5 text-[10px]">
-                                  <ShieldCheck size={10} className="text-sky-500/70" />
-                                  {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
-                                    <strong className="text-sky-300/90 tracking-wider">{(optimisticGuardianCodes[student.id] || student.guardian_access_code)}</strong>
-                                  ) : (
-                                    <span className="text-slate-500 italic">None</span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
-                                    <>
-                                      <button 
-                                        onClick={() => handleCopyGuardianInfo(student)}
-                                        className="text-[9px] uppercase tracking-wider bg-sky-900/30 hover:bg-sky-900/50 text-sky-400 px-1.5 py-0.5 rounded border border-sky-800/50 transition-colors"
-                                        title="Copy Info"
-                                      >
-                                        Copy
-                                      </button>
-                                      <button 
-                                        disabled={isResettingGuardianCode}
-                                        onClick={() => {
-                                          if (confirm('Regenerate Guardian Code? Old code will stop working.')) {
-                                            handleResetGuardianCode(student.id);
-                                          }
-                                        }}
-                                        className="text-[9px] uppercase tracking-wider bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/50 transition-colors disabled:opacity-50"
-                                        title="Reset Code"
-                                      >
-                                        Reset
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button 
-                                      disabled={isResettingGuardianCode}
-                                      onClick={() => handleResetGuardianCode(student.id)}
-                                      className="text-[9px] uppercase tracking-wider bg-sky-600/20 hover:bg-sky-600/40 text-sky-400 px-2 py-0.5 rounded border border-sky-500/30 transition-colors disabled:opacity-50"
-                                    >
-                                      Generate
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                          <td className="py-3 px-4 text-center font-mono text-sm text-slate-300 font-bold select-none">
+                            {student.pin}
                           </td>
                           {getEffectiveClassroomMode(classData.category, classData.scoring_system) === 'lives' && (
                             <td className="py-3 px-4">
@@ -1817,54 +1733,8 @@ export function ClassDetail({
                               {status.label}
                             </div>
                           )}
-                          <div className="mt-3 text-xs text-slate-500 flex items-center justify-between gap-1 font-mono select-none">
-                            <div className="flex items-center gap-1.5">
-                              <Key size={12} className="text-slate-500" /> PIN: <strong className="text-slate-300 font-bold">{student.pin}</strong>
-                            </div>
-                          </div>
-                          <div className="mt-1.5 flex items-center justify-between gap-2 bg-slate-950/40 rounded px-2 py-1.5 border border-slate-800/40">
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono select-none">
-                              <ShieldCheck size={12} className="text-sky-500/70" />
-                              <span>Parent:</span>
-                              {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
-                                <strong className="text-sky-300/90 tracking-wider text-xs">{(optimisticGuardianCodes[student.id] || student.guardian_access_code)}</strong>
-                              ) : (
-                                <span className="text-slate-500 italic">None</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              {(optimisticGuardianCodes[student.id] || student.guardian_access_code) ? (
-                                <>
-                                  <button 
-                                    onClick={() => handleCopyGuardianInfo(student)}
-                                    className="text-[9px] uppercase tracking-wider bg-sky-900/30 hover:bg-sky-900/50 text-sky-400 px-2 py-1 rounded border border-sky-800/50 transition-colors"
-                                    title="Copy Info"
-                                  >
-                                    Copy
-                                  </button>
-                                  <button 
-                                    disabled={isResettingGuardianCode}
-                                    onClick={() => {
-                                      if (confirm('Regenerate Guardian Code? Old code will stop working.')) {
-                                        handleResetGuardianCode(student.id);
-                                      }
-                                    }}
-                                    className="text-[9px] uppercase tracking-wider bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-300 px-2 py-1 rounded border border-slate-700/50 transition-colors disabled:opacity-50"
-                                    title="Reset Code"
-                                  >
-                                    Reset
-                                  </button>
-                                </>
-                              ) : (
-                                <button 
-                                  disabled={isResettingGuardianCode}
-                                  onClick={() => handleResetGuardianCode(student.id)}
-                                  className="text-[9px] uppercase tracking-wider bg-sky-600/20 hover:bg-sky-600/40 text-sky-400 px-2 py-1 rounded border border-sky-500/30 transition-colors disabled:opacity-50"
-                                >
-                                  Generate
-                                </button>
-                              )}
-                            </div>
+                          <div className="mt-2 text-xs text-slate-500 flex items-center gap-1 font-mono select-none">
+                            <Key size={12} className="text-rose-500/70" /> PIN: <strong className="text-slate-300 font-bold">{student.pin}</strong>
                           </div>
                         </div>
                         <div className="flex gap-2 shrink-0">
@@ -5069,60 +4939,31 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.student_badges;`}
                 >
                   Save Changes
                 </button>
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 mt-2">Student Credentials</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const student = classData.students.find(s => s.id === editingStudentId);
-                        if (student) {
-                          navigator.clipboard.writeText(`Class Code: ${classData.joinCode}\nStudent: ${student.name}\nPIN: ${student.pin}`);
-                          alert('Login info copied!');
-                        }
-                      }}
-                      className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Copy size={14} /> Copy PIN
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm('Regenerate PIN for this student?')) {
-                          onRegenerateStudentPin(editingStudentId);
-                        }
-                      }}
-                      className="w-full bg-slate-800 hover:bg-slate-700 text-amber-500 hover:text-amber-400 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
-                    >
-                      <RefreshCw size={14} /> Reset PIN
-                    </button>
-                  </div>
-                  
-                  <div className="text-xs font-bold text-sky-500/70 uppercase tracking-wider mb-1 mt-4 flex items-center gap-1.5"><ShieldCheck size={12}/> Guardian Access</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const student = classData.students.find(s => s.id === editingStudentId);
-                        if (student) handleCopyGuardianInfo(student);
-                      }}
-                      className="w-full bg-sky-900/30 hover:bg-sky-900/50 border border-sky-800/50 text-sky-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Copy size={14} /> Copy Parent Info
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isResettingGuardianCode}
-                      onClick={() => {
-                        if (confirm('Regenerate Guardian Code for this student? The old code will no longer work.')) {
-                          handleResetGuardianCode(editingStudentId);
-                        }
-                      }}
-                      className="w-full bg-sky-900/30 hover:bg-sky-900/50 border border-sky-800/50 text-sky-400 hover:text-sky-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-                    >
-                      <RefreshCw size={14} className={isResettingGuardianCode ? "animate-spin" : ""} /> Reset Code
-                    </button>
-                  </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const student = classData.students.find(s => s.id === editingStudentId);
+                      if (student) {
+                        navigator.clipboard.writeText(`Class Code: ${classData.joinCode}\nStudent: ${student.name}\nPIN: ${student.pin}`);
+                        alert('Login info copied!');
+                      }
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Copy size={14} /> Copy Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Regenerate PIN for this student?')) {
+                        onRegenerateStudentPin(editingStudentId);
+                      }
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <RefreshCw size={14} /> Reset PIN
+                  </button>
                 </div>
                 <button
                   type="button"

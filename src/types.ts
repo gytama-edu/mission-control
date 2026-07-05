@@ -6,7 +6,6 @@ export interface Student {
   points: number;
   joinedAt: string;
   pin: string;
-  guardian_access_code?: string;
 }
 
 export interface Meeting {

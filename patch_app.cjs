@@ -1,12 +1,33 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/App.tsx', 'utf8');
 
-const importTarget = `import { StudentAccess } from './components/StudentAccess';`;
-if (content.includes(importTarget) && !content.includes('GuardianAccess')) {
-  content = content.replace(importTarget, importTarget + `\nimport { GuardianAccess } from './components/GuardianAccess';`);
-}
+let appCode = fs.readFileSync('src/App.tsx', 'utf8');
 
-const parentViewTarget = `  if (viewMode === 'parent') {
+// Add view mode 'parent'
+appCode = appCode.replace(
+  'const [viewMode, setViewMode] = useState<\'landing\' | \'teacher\' | \'student\'>(() => {',
+  'const [viewMode, setViewMode] = useState<\'landing\' | \'teacher\' | \'student\' | \'parent\'>(() => {'
+);
+
+appCode = appCode.replace(
+  '      if (saved === \'landing\' || saved === \'teacher\' || saved === \'student\') {',
+  '      if (saved === \'landing\' || saved === \'teacher\' || saved === \'student\' || saved === \'parent\') {'
+);
+
+appCode = appCode.replace(
+  '  const handleSetViewMode = (mode: \'landing\' | \'teacher\' | \'student\') => {',
+  '  const handleSetViewMode = (mode: \'landing\' | \'teacher\' | \'student\' | \'parent\') => {'
+);
+
+// Add Parent view rendering (placeholder)
+const landingReturn = `<Landing onSelectTeacher={() => handleSetViewMode('teacher')} onSelectStudent={() => handleSetViewMode('student')} />`;
+const newLandingReturn = `<Landing onSelectTeacher={() => handleSetViewMode('teacher')} onSelectStudent={() => handleSetViewMode('student')} onSelectParent={() => handleSetViewMode('parent')} />`;
+appCode = appCode.replace(landingReturn, newLandingReturn);
+
+const studentViewReturn = `if (viewMode === 'student') {
+    return <StudentAccess onBack={() => handleSetViewMode('landing')} />;
+  }`;
+  
+const parentViewReturn = `if (viewMode === 'parent') {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-xl">
@@ -19,22 +40,16 @@ const parentViewTarget = `  if (viewMode === 'parent') {
           </p>
           <button
             onClick={() => handleSetViewMode('landing')}
-            className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm cursor-pointer"
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors"
           >
-            <ArrowLeft size={16} />
-            Back to Home
+            Return to Main Menu
           </button>
         </div>
       </div>
     );
   }`;
 
-const parentViewReplacement = `  if (viewMode === 'parent') {
-    return <GuardianAccess onBack={() => handleSetViewMode('landing')} />;
-  }`;
+appCode = appCode.replace(studentViewReturn, studentViewReturn + '\n\n  ' + parentViewReturn);
 
-if (content.includes(parentViewTarget)) {
-  content = content.replace(parentViewTarget, parentViewReplacement);
-}
-
-fs.writeFileSync('src/App.tsx', content);
+fs.writeFileSync('src/App.tsx', appCode);
+console.log('App patched');

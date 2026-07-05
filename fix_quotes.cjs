@@ -1,6 +1,8 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/components/GuardianAccess.tsx', 'utf8');
+let code = fs.readFileSync('src/components/ClassDetail.tsx', 'utf8');
 
-content = content.replace(/\\`\\\${studentPreview.name} \\\(\\\${studentPreview.nickname}\\\)\\`/g, '`${studentPreview.name} (${studentPreview.nickname})`');
+code = code.replace(/\\'text-red-500\\'/g, "'text-red-500'");
+code = code.replace(/\\'text-white\\'/g, "'text-white'");
 
-fs.writeFileSync('src/components/GuardianAccess.tsx', content);
+fs.writeFileSync('src/components/ClassDetail.tsx', code);
+console.log("Quotes fixed");

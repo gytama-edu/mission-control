@@ -19,13 +19,3 @@ export function isPrivateClassCategory(category?: string | null | any) {
 export function shouldShowCompetitiveRank(category?: string | null | any) {
   return !isPrivateClassCategory(category);
 }
-
-
-export function generateGuardianCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid O, 0, I, 1
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
