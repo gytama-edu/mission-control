@@ -21,6 +21,8 @@ declare
   v_badge_id uuid;
   v_secret text := 'ABCDEFGHJKLMNPQRSTUV';
   v_formatted_secret text := 'ABCDEFGH-JKLM-NPQR-STUV';
+  v_rotated_secret text := 'ABCDEFGHJKLMNPQRSTWX';
+  v_formatted_rotated_secret text := 'ABCDEFGH-JKLM-NPQR-STWX';
   v_response jsonb;
   v_dashboard jsonb;
   v_session_token text;
@@ -264,13 +266,81 @@ begin
 
   update public.classes set is_archived = false where id = v_class_id;
 
+  -- Expired sessions are rejected and revoked.
+  v_response := public.guardian_begin_session(v_join_code, v_formatted_secret);
+  v_session_token := v_response->>'sessionToken';
+  v_session_hash := encode(
+    extensions.digest(convert_to(lower(v_session_token), 'UTF8'), 'sha256'),
+    'hex'
+  );
+
+  update public.guardian_sessions
+  set created_at = now() - interval '2 days',
+      expires_at = now() - interval '1 day'
+  where session_hash = v_session_hash;
+
+  v_response := public.guardian_fetch_dashboard(v_session_token);
+  if coalesce((v_response->>'ok')::boolean, false) then
+    raise exception 'Expired Guardian session unexpectedly remained valid';
+  end if;
+
+  select revoked_at into v_revoked_at
+  from public.guardian_sessions
+  where session_hash = v_session_hash;
+
+  if v_revoked_at is null then
+    raise exception 'Expired Guardian session was rejected but not revoked';
+  end if;
+
+  -- Disabling a credential immediately revokes its active sessions.
+  v_response := public.guardian_begin_session(v_join_code, v_formatted_secret);
+  v_session_token := v_response->>'sessionToken';
+
+  update public.guardian_access_credentials
+  set is_active = false
+  where id = v_credential_id;
+
+  v_response := public.guardian_fetch_dashboard(v_session_token);
+  if coalesce((v_response->>'ok')::boolean, false) then
+    raise exception 'Disabled Guardian credential left an active session valid';
+  end if;
+
+  update public.guardian_access_credentials
+  set is_active = true
+  where id = v_credential_id;
+
+  -- Rotating the password hash revokes old sessions and invalidates the old code.
+  v_response := public.guardian_begin_session(v_join_code, v_formatted_secret);
+  v_session_token := v_response->>'sessionToken';
+
+  update public.guardian_access_credentials
+  set secret_hash = extensions.crypt(v_rotated_secret, extensions.gen_salt('bf', 10)),
+      secret_hint = right(v_rotated_secret, 4)
+  where id = v_credential_id;
+
+  v_response := public.guardian_fetch_dashboard(v_session_token);
+  if coalesce((v_response->>'ok')::boolean, false) then
+    raise exception 'Credential rotation left an old Guardian session valid';
+  end if;
+
+  v_response := public.guardian_begin_session(v_join_code, v_formatted_secret);
+  if coalesce((v_response->>'ok')::boolean, false) then
+    raise exception 'Old Guardian code unexpectedly worked after rotation';
+  end if;
+
+  v_response := public.guardian_begin_session(v_join_code, v_formatted_rotated_secret);
+  if not coalesce((v_response->>'ok')::boolean, false) then
+    raise exception 'Rotated Guardian code did not authenticate';
+  end if;
+  perform public.guardian_end_session(v_response->>'sessionToken');
+
   -- Expired credentials fail generically.
   update public.guardian_access_credentials
   set created_at = now() - interval '2 days',
       expires_at = now() - interval '1 day'
   where id = v_credential_id;
 
-  v_response := public.guardian_begin_session(v_join_code, v_formatted_secret);
+  v_response := public.guardian_begin_session(v_join_code, v_formatted_rotated_secret);
   if coalesce((v_response->>'ok')::boolean, false) then
     raise exception 'Expired Guardian credential unexpectedly succeeded';
   end if;
