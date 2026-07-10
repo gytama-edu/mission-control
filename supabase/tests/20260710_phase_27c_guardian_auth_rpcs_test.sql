@@ -148,7 +148,7 @@ begin
   values (
     v_class_id,
     v_student_id,
-    'points_addition',
+    'points_changed',
     3,
     'PRIVATE TEACHER REASON MUST NOT LEAK',
     jsonb_build_object('private_key', 'PRIVATE METADATA MUST NOT LEAK')
