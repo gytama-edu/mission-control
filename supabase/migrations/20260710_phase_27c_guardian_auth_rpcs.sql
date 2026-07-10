@@ -56,6 +56,42 @@ create unique index if not exists guardian_access_credentials_lookup_key_unique_
 comment on column public.guardian_access_credentials.lookup_key is
   'Non-secret first eight characters of the normalized Guardian code. Used only to locate one credential before password-hash verification.';
 
+-- Extend the Phase 27B revocation trigger so any lookup-key change also
+-- invalidates active sessions. Future rotations may change both the lookup
+-- segment and the password hash in one update.
+create or replace function public.guardian_credential_before_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  new.updated_at := now();
+
+  if new.secret_hash is distinct from old.secret_hash then
+    if new.rotated_at is null or new.rotated_at is not distinct from old.rotated_at then
+      new.rotated_at := now();
+    end if;
+  end if;
+
+  if (
+    new.secret_hash is distinct from old.secret_hash
+    or new.lookup_key is distinct from old.lookup_key
+    or new.is_active is distinct from old.is_active
+    or new.expires_at is distinct from old.expires_at
+    or new.rotated_at is distinct from old.rotated_at
+  ) then
+    perform public.guardian_revoke_sessions_for_credential(old.id);
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.guardian_credential_before_update() from public;
+revoke all on function public.guardian_credential_before_update() from anon;
+revoke all on function public.guardian_credential_before_update() from authenticated;
+
 -- ============================================================================
 -- guardian_begin_session
 -- ============================================================================
