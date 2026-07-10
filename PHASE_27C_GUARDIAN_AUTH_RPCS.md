@@ -202,6 +202,11 @@ The test script runs inside a transaction and rolls back every fixture. It verif
 - no internal ID or PIN leakage
 - logout revocation and idempotency
 - archived-class session invalidation and revocation
+- expired-session rejection and revocation
+- disabled-credential session revocation
+- credential rotation revoking old sessions
+- old Guardian code rejection after rotation
+- rotated Guardian code authentication
 - expired-credential rejection
 
 The test must be run in a non-production Supabase environment after applying Phase 27B and Phase 27C.
