@@ -73,8 +73,30 @@ jobs:
       - name: Initialize local Supabase configuration
         run: supabase init --force
 
-      - name: Start isolated local Supabase
-        run: supabase start
+      - name: Start isolated local Supabase without auto-applying project migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          staged_migrations="$RUNNER_TEMP/mission-control-migrations"
+          startup_log="$RUNNER_TEMP/supabase-start.log"
+
+          rm -rf "$staged_migrations"
+          mv supabase/migrations "$staged_migrations"
+          mkdir -p supabase/migrations
+
+          restore_migrations() {
+            rm -rf supabase/migrations
+            mv "$staged_migrations" supabase/migrations
+          }
+          trap restore_migrations EXIT
+
+          if ! supabase start >"$startup_log" 2>&1; then
+            echo "Local Supabase failed to start. Recent diagnostics:"
+            tail -n 200 "$startup_log"
+            exit 1
+          fi
+
+          tail -n 80 "$startup_log"
 
       - name: Show local Supabase status
         run: supabase status
