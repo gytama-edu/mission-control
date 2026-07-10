@@ -149,6 +149,9 @@ begin
     where gs.credential_id = gac.id
       and gs.revoked_at is null
       and gs.expires_at > now()
+      and gac.is_active = true
+      and (gac.expires_at is null or gac.expires_at > now())
+      and (gac.locked_until is null or gac.locked_until <= now())
   ) session_counts on true
   where s.class_id = p_class_id;
 
@@ -320,6 +323,7 @@ begin
           secret_hash = extensions.crypt(v_secret, extensions.gen_salt('bf', 10)),
           secret_hint = right(v_secret, 4),
           is_active = true,
+          expires_at = null,
           failed_attempts = 0,
           locked_until = null,
           rotated_at = now()
@@ -351,7 +355,7 @@ revoke all on function public.guardian_teacher_rotate_credential(uuid) from publ
 grant execute on function public.guardian_teacher_rotate_credential(uuid) to authenticated;
 
 comment on function public.guardian_teacher_rotate_credential(uuid) is
-  'Rotates and re-enables a teacher-owned student Guardian credential, revokes old sessions through the credential trigger, and returns the new code exactly once.';
+  'Rotates and re-enables a teacher-owned student Guardian credential, clears any old expiry, revokes old sessions through the credential trigger, and returns the new code exactly once.';
 
 -- ============================================================================
 -- guardian_teacher_set_credential_active
@@ -431,5 +435,7 @@ grant execute on function public.guardian_teacher_set_credential_active(uuid, bo
 
 comment on function public.guardian_teacher_set_credential_active(uuid, boolean) is
   'Enables or disables a teacher-owned student Guardian credential. State changes revoke existing sessions through the credential trigger.';
+
+notify pgrst, 'reload schema';
 
 commit;
