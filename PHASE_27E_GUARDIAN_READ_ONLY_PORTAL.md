@@ -41,7 +41,7 @@ The frontend calls `guardian_begin_session`. Every credential rejection uses the
 - a temporarily locked credential
 - an archived class
 
-Unexpected Supabase or PostgreSQL errors are logged to the browser console for technical diagnosis but are not displayed verbatim to the Guardian.
+Unexpected Supabase or PostgreSQL errors are converted to generic public messages. Raw error objects are neither rendered in the interface nor written to the Guardian browser console.
 
 ## Session Storage
 
