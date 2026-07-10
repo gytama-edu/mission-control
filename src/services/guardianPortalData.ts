@@ -92,8 +92,8 @@ export const saveGuardianSession = (session: GuardianSession): void => {
   try {
     window.sessionStorage.setItem(GUARDIAN_SESSION_TOKEN_KEY, session.sessionToken);
     window.sessionStorage.setItem(GUARDIAN_SESSION_EXPIRY_KEY, session.expiresAt);
-  } catch (error) {
-    console.warn('Unable to save Guardian session in sessionStorage:', error);
+  } catch {
+    console.warn('Guardian session could not be saved in this browser tab.');
   }
 };
 
@@ -103,8 +103,8 @@ export const clearGuardianSession = (): void => {
   try {
     window.sessionStorage.removeItem(GUARDIAN_SESSION_TOKEN_KEY);
     window.sessionStorage.removeItem(GUARDIAN_SESSION_EXPIRY_KEY);
-  } catch (error) {
-    console.warn('Unable to clear Guardian session from sessionStorage:', error);
+  } catch {
+    console.warn('Guardian session storage could not be cleared normally.');
   }
 };
 
@@ -127,8 +127,8 @@ export const readGuardianSession = (): GuardianSession | null => {
     }
 
     return { sessionToken, expiresAt };
-  } catch (error) {
-    console.warn('Unable to read Guardian session from sessionStorage:', error);
+  } catch {
+    console.warn('Guardian session could not be restored from this browser tab.');
     return null;
   }
 };
@@ -143,7 +143,7 @@ export const beginGuardianSession = async (
   });
 
   if (error) {
-    console.error('Guardian sign-in RPC failed:', error);
+    console.error('Guardian sign-in RPC failed.');
     throw new GuardianPortalError(
       'request_failed',
       'Guardian sign-in is temporarily unavailable. Please try again.'
@@ -180,7 +180,7 @@ export const fetchGuardianDashboard = async (
   });
 
   if (error) {
-    console.error('Guardian dashboard RPC failed:', error);
+    console.error('Guardian dashboard RPC failed.');
     throw new GuardianPortalError(
       'request_failed',
       'Guardian progress is temporarily unavailable. Please try again.'
@@ -217,6 +217,6 @@ export const endGuardianSession = async (sessionToken: string): Promise<void> =>
   });
 
   if (error) {
-    console.warn('Guardian logout RPC failed; local session will still be cleared:', error);
+    console.warn('Guardian logout RPC failed; the local tab session was still cleared.');
   }
 };
