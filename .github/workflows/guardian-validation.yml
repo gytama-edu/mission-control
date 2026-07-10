@@ -1,0 +1,89 @@
+name: Guardian Portal Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - phase-27e-guardian-read-only-portal
+    paths:
+      - 'src/**'
+      - 'supabase/**'
+      - 'scripts/validate-guardian-database.sh'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - '.github/workflows/guardian-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardian-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: TypeScript and Vite build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type-check application
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: guardian-validation-placeholder
+
+      - name: Verify deployable output
+        run: |
+          test -f dist/index.html
+          test -d dist/assets
+          find dist -maxdepth 2 -type f -print
+
+  database:
+    name: Local Supabase Guardian SQL tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Initialize local Supabase configuration
+        run: supabase init --force
+
+      - name: Start isolated local Supabase
+        run: supabase start
+
+      - name: Show local Supabase status
+        run: supabase status
+
+      - name: Apply schema and run Guardian verification suites
+        env:
+          GUARDIAN_VALIDATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: bash scripts/validate-guardian-database.sh
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
