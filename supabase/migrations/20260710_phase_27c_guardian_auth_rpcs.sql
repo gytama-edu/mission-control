@@ -408,6 +408,16 @@ begin
         jsonb_build_object(
           'occurredAt', al.created_at,
           'label', case al.action_type
+            when 'points_changed' then case
+              when coalesce(al.points_delta, 0) > 0 then 'Points added'
+              when coalesce(al.points_delta, 0) < 0 then 'Points adjusted'
+              else 'Points updated'
+            end
+            when 'lives_changed' then case
+              when coalesce(al.lives_delta, 0) > 0 then 'Life restored'
+              when coalesce(al.lives_delta, 0) < 0 then 'Life adjusted'
+              else 'Lives updated'
+            end
             when 'points_addition' then 'Points added'
             when 'points_subtraction' then 'Points adjusted'
             when 'lives_addition' then 'Life restored'
@@ -439,6 +449,8 @@ begin
       and al.student_id = v_session.student_id
       and coalesce(al.undone, false) = false
       and al.action_type in (
+        'points_changed',
+        'lives_changed',
         'points_addition',
         'points_subtraction',
         'lives_addition',
