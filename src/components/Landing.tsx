@@ -1,6 +1,4 @@
-import { Rocket, GraduationCap, MonitorPlay } from 'lucide-react';
-
-import { ShieldCheck } from 'lucide-react';
+import { GraduationCap, MonitorPlay, ShieldCheck } from 'lucide-react';
 
 interface LandingProps {
   onSelectTeacher: () => void;
@@ -27,7 +25,7 @@ export function Landing({ onSelectTeacher, onSelectStudent, onSelectParent }: La
             Mission Control
           </h1>
           <p className="text-slate-400 text-sm md:text-base max-w-md mx-auto leading-relaxed">
-            A premium classroom dashboard for teachers and students.
+            A premium classroom dashboard for teachers, students, and guardians.
           </p>
         </div>
 
@@ -107,4 +105,3 @@ export function Landing({ onSelectTeacher, onSelectStudent, onSelectParent }: La
     </div>
   );
 }
-
