@@ -133,15 +133,6 @@ export const readGuardianSession = (): GuardianSession | null => {
   }
 };
 
-const getRpcErrorMessage = (error: unknown, fallback: string): string => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = String((error as { message?: unknown }).message || '').trim();
-    if (message) return message;
-  }
-
-  return fallback;
-};
-
 export const beginGuardianSession = async (
   classCode: string,
   guardianCode: string
@@ -152,9 +143,10 @@ export const beginGuardianSession = async (
   });
 
   if (error) {
+    console.error('Guardian sign-in RPC failed:', error);
     throw new GuardianPortalError(
       'request_failed',
-      getRpcErrorMessage(error, 'Guardian sign-in could not be completed.')
+      'Guardian sign-in is temporarily unavailable. Please try again.'
     );
   }
 
@@ -167,9 +159,10 @@ export const beginGuardianSession = async (
   }
 
   if (!response.sessionToken || !response.expiresAt) {
+    console.error('Guardian sign-in returned an incomplete secure session response.');
     throw new GuardianPortalError(
       'invalid_response',
-      'Guardian sign-in succeeded, but the secure session response was incomplete.'
+      'Guardian sign-in could not create a secure session. Please try again.'
     );
   }
 
@@ -187,9 +180,10 @@ export const fetchGuardianDashboard = async (
   });
 
   if (error) {
+    console.error('Guardian dashboard RPC failed:', error);
     throw new GuardianPortalError(
       'request_failed',
-      getRpcErrorMessage(error, 'Guardian progress could not be loaded.')
+      'Guardian progress is temporarily unavailable. Please try again.'
     );
   }
 
@@ -202,9 +196,10 @@ export const fetchGuardianDashboard = async (
   }
 
   if (!response.data?.class || !response.data?.student || !response.data?.access) {
+    console.error('Guardian dashboard returned an unexpected payload shape.');
     throw new GuardianPortalError(
       'invalid_response',
-      'Guardian progress was returned in an unexpected format.'
+      'Guardian progress could not be displayed safely. Please try again.'
     );
   }
 
