@@ -2,6 +2,7 @@
 set -euo pipefail
 
 DATABASE_URL="${GUARDIAN_VALIDATION_DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
+ARTIFACT_DIR="${GUARDIAN_VALIDATION_ARTIFACT_DIR:-artifacts}"
 
 if [[ "${ALLOW_NON_LOCAL_GUARDIAN_VALIDATION:-0}" != "1" ]]; then
   case "$DATABASE_URL" in
@@ -20,6 +21,7 @@ command -v psql >/dev/null 2>&1 || {
   exit 3
 }
 
+mkdir -p "$ARTIFACT_DIR"
 PSQL=(psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --no-psqlrc)
 
 run_sql_file() {
@@ -36,7 +38,13 @@ run_sql_file() {
 }
 
 run_sql_file "Apply Mission Control baseline schema" "supabase/schema.sql"
-run_sql_file "Validate read-only live inventory SQL before Guardian objects exist" "supabase/preflight/20260711_guardian_live_inventory.sql"
+
+echo "==> Validate read-only live inventory SQL before Guardian objects exist"
+"${PSQL[@]}" \
+  --no-align \
+  --field-separator='|' \
+  --file "supabase/preflight/20260711_guardian_live_inventory.sql" \
+  | tee "$ARTIFACT_DIR/guardian-live-inventory.txt"
 
 run_sql_file "Apply Phase 27B Guardian database foundation" "supabase/migrations/20260710_phase_27b_guardian_database_foundation.sql"
 run_sql_file "Apply Phase 27C Guardian authentication RPCs" "supabase/migrations/20260710_phase_27c_guardian_auth_rpcs.sql"
@@ -45,8 +53,7 @@ run_sql_file "Apply Phase 27D Guardian teacher controls" "supabase/migrations/20
 run_sql_file "Run Phase 27C authentication and leakage tests" "supabase/tests/20260710_phase_27c_guardian_auth_rpcs_test.sql"
 run_sql_file "Run Phase 27D teacher ownership and credential tests" "supabase/tests/20260710_phase_27d_guardian_teacher_controls_test.sql"
 
-POST_MIGRATION_OUTPUT="$(mktemp)"
-trap 'rm -f "$POST_MIGRATION_OUTPUT"' EXIT
+POST_MIGRATION_OUTPUT="$ARTIFACT_DIR/guardian-post-migration-verification.txt"
 
 echo "==> Run strict post-migration production verifier"
 "${PSQL[@]}" \
