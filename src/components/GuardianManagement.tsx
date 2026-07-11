@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
   Clipboard,
@@ -86,6 +87,7 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
   const [statuses, setStatuses] = useState<GuardianCredentialStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [actionStudentId, setActionStudentId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [revealedCode, setRevealedCode] = useState<RevealedCode | null>(null);
@@ -99,12 +101,16 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
     }
 
     setError('');
+
     try {
       const nextStatuses = await fetchGuardianCredentialStatuses(classData.id);
       setStatuses(nextStatuses);
-    } catch (err: any) {
+      setLoadFailed(false);
+    } catch (err: unknown) {
       console.error('Failed to load Guardian credential statuses:', err);
-      setError(err?.message || 'Unable to load Guardian access status.');
+      setStatuses([]);
+      setLoadFailed(true);
+      setError(err instanceof Error ? err.message : 'Unable to load Guardian access status.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -128,6 +134,7 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
   const handleCreate = async (status: GuardianCredentialStatus) => {
     setActionStudentId(status.studentId);
     setError('');
+
     try {
       const result = await createGuardianCredential(status.studentId);
       setRevealedCode({
@@ -138,9 +145,9 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
       });
       setCopied(false);
       await loadStatuses(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create Guardian credential:', err);
-      setError(err?.message || 'Unable to create Guardian access.');
+      setError(err instanceof Error ? err.message : 'Unable to create Guardian access.');
     } finally {
       setActionStudentId(null);
     }
@@ -155,6 +162,7 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
 
     setActionStudentId(status.studentId);
     setError('');
+
     try {
       const result = await rotateGuardianCredential(status.studentId);
       setRevealedCode({
@@ -165,9 +173,9 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
       });
       setCopied(false);
       await loadStatuses(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to rotate Guardian credential:', err);
-      setError(err?.message || 'Unable to rotate Guardian access.');
+      setError(err instanceof Error ? err.message : 'Unable to rotate Guardian access.');
     } finally {
       setActionStudentId(null);
     }
@@ -175,6 +183,7 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
 
   const handleSetActive = async (status: GuardianCredentialStatus, isActive: boolean) => {
     const studentLabel = status.studentNickname || status.studentName;
+
     if (!isActive) {
       const confirmed = window.confirm(
         `Disable Guardian access for ${studentLabel}?\n\nEvery active Guardian session will be signed out immediately.`
@@ -184,13 +193,18 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
 
     setActionStudentId(status.studentId);
     setError('');
+
     try {
       await setGuardianCredentialActive(status.studentId, isActive);
       await loadStatuses(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to update Guardian credential state:', err);
       setError(
-        err?.message || (isActive ? 'Unable to enable Guardian access.' : 'Unable to disable Guardian access.')
+        err instanceof Error
+          ? err.message
+          : isActive
+            ? 'Unable to enable Guardian access.'
+            : 'Unable to disable Guardian access.'
       );
     } finally {
       setActionStudentId(null);
@@ -199,6 +213,7 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
 
   const handleCopyCode = async () => {
     if (!revealedCode) return;
+
     try {
       await copyText(revealedCode.guardianCode);
       setCopied(true);
@@ -255,20 +270,20 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
           <div className="grid grid-cols-1 gap-px bg-slate-800 sm:grid-cols-3">
             <div className="bg-slate-900 px-6 py-4">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Students</div>
-              <div className="mt-1 text-2xl font-bold text-white">{statuses.length || classData.students.length}</div>
+              <div className="mt-1 text-2xl font-bold text-white">{classData.students.length}</div>
             </div>
             <div className="bg-slate-900 px-6 py-4">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Configured</div>
-              <div className="mt-1 text-2xl font-bold text-white">{configuredCount}</div>
+              <div className="mt-1 text-2xl font-bold text-white">{loadFailed ? '—' : configuredCount}</div>
             </div>
             <div className="bg-slate-900 px-6 py-4">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Active</div>
-              <div className="mt-1 text-2xl font-bold text-emerald-300">{activeCount}</div>
+              <div className="mt-1 text-2xl font-bold text-emerald-300">{loadFailed ? '—' : activeCount}</div>
             </div>
           </div>
         </div>
 
-        {error && (
+        {error && !loadFailed && (
           <div className="mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
             {error}
           </div>
@@ -280,6 +295,25 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
               <Loader2 className="mx-auto mb-3 animate-spin text-sky-400" size={28} />
               Loading Guardian access status...
             </div>
+          </div>
+        ) : loadFailed ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
+            <AlertTriangle className="mx-auto mb-4 text-amber-300" size={38} />
+            <h2 className="text-xl font-bold text-white">Guardian database setup required</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-amber-100/80">
+              {error || 'Guardian Access cannot load until its database functions are installed.'}
+            </p>
+            <p className="mx-auto mt-2 max-w-2xl text-xs leading-relaxed text-slate-400">
+              Your class roster is still intact. Guardian controls will appear after the database setup is completed.
+            </p>
+            <button
+              onClick={() => loadStatuses()}
+              disabled={isLoading || isRefreshing}
+              className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-sm font-bold text-amber-100 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+              Retry Setup Check
+            </button>
           </div>
         ) : statuses.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-10 text-center">
@@ -314,7 +348,8 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
                       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-400">
                         {status.secretHint && (
                           <span className="inline-flex items-center gap-1.5">
-                            <EyeOff size={13} /> Code ends in <strong className="font-mono text-slate-200">{status.secretHint}</strong>
+                            <EyeOff size={13} /> Code ends in{' '}
+                            <strong className="font-mono text-slate-200">{status.secretHint}</strong>
                           </span>
                         )}
                         <span>Last used: {formatDateTime(status.lastUsedAt)}</span>
@@ -395,7 +430,9 @@ export function GuardianManagement({ classData, onBack }: GuardianManagementProp
 
             <div className="p-5">
               <p className="text-sm leading-relaxed text-slate-400">
-                Share this code securely with the guardian of <strong className="text-white">{revealedCode.studentName}</strong>. After closing this window, Mission Control will show only the final four-character hint.
+                Share this code securely with the guardian of{' '}
+                <strong className="text-white">{revealedCode.studentName}</strong>. After closing this window,
+                Mission Control will show only the final four-character hint.
               </p>
 
               <div className="my-5 rounded-xl border border-sky-500/30 bg-slate-950 p-4 text-center">
