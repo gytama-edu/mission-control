@@ -1,12 +1,12 @@
 -- Phase 27G: Guardian Portal live database inventory
 --
 -- READ-ONLY. Safe to run before any Guardian migration.
--- Run in the Supabase SQL Editor or with psql as a database owner.
+-- Run in Supabase SQL Editor or with psql as a database owner.
 -- Save the complete result before making production changes.
 --
--- Legacy Mission Control objects are expected in public. Supabase-managed auth,
--- storage, realtime, and extensions schemas are intentionally excluded so
--- internal fields such as auth.refresh_tokens.parent are not false positives.
+-- Mission Control legacy objects are expected in public. Supabase-managed auth,
+-- storage, realtime, and extensions schemas are excluded so internal columns
+-- such as auth.refresh_tokens.parent do not become false positives.
 
 begin transaction read only;
 
@@ -26,9 +26,7 @@ from pg_extension e
 join pg_namespace n on n.oid = e.extnamespace
 where e.extname = 'pgcrypto';
 
--- Approved relation names include the Phase 27B/27C tables and indexes. Existing
--- approved names still require definition review before migration continuation.
-with approved_relation_names(object_name) as (
+with approved(object_name) as (
   values
     ('guardian_access_credentials'),
     ('guardian_sessions'),
@@ -50,13 +48,13 @@ select
     else c.relkind::text
   end as object_type,
   c.relrowsecurity as row_level_security_enabled,
-  case
-    when a.object_name is not null then 'APPROVED_NAME_REVIEW_DEFINITION'
+  case when a.object_name is not null
+    then 'APPROVED_NAME_REVIEW_DEFINITION'
     else 'BLOCKER_UNEXPECTED_OBJECT'
   end as release_status
 from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
-left join approved_relation_names a on a.object_name = c.relname
+left join approved a on a.object_name = c.relname
 where n.nspname = 'public'
   and (c.relname ilike '%guardian%' or c.relname ilike '%parent%')
 order by c.relname;
@@ -92,7 +90,7 @@ where table_schema = 'public'
   )
 order by table_name, ordinal_position;
 
-with approved_function_names(function_name) as (
+with approved(function_name) as (
   values
     ('guardian_revoke_sessions_for_credential'),
     ('guardian_credential_before_update'),
@@ -113,13 +111,13 @@ select
   pg_get_function_identity_arguments(p.oid) as identity_arguments,
   pg_get_userbyid(p.proowner) as owner_name,
   p.prosecdef as security_definer,
-  case
-    when a.function_name is not null then 'APPROVED_NAME_REVIEW_DEFINITION'
+  case when a.function_name is not null
+    then 'APPROVED_NAME_REVIEW_DEFINITION'
     else 'BLOCKER_UNEXPECTED_FUNCTION'
   end as release_status
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
-left join approved_function_names a on a.function_name = p.proname
+left join approved a on a.function_name = p.proname
 where n.nspname = 'public'
   and (p.proname ilike '%guardian%' or p.proname ilike '%parent%')
 order by p.proname, identity_arguments;
@@ -173,9 +171,8 @@ select
   grantee,
   privilege_type,
   is_grantable,
-  case
-    when grantee in ('anon', 'authenticated', 'PUBLIC')
-      then 'BLOCKER_BROWSER_TABLE_GRANT'
+  case when grantee in ('anon', 'authenticated', 'PUBLIC')
+    then 'BLOCKER_BROWSER_TABLE_GRANT'
     else 'OWNER_OR_SERVICE_GRANT_REVIEW'
   end as release_status
 from information_schema.role_table_grants
@@ -194,16 +191,19 @@ where routine_schema = 'public'
   and (routine_name ilike '%guardian%' or routine_name ilike '%parent%')
 order by routine_name, grantee;
 
--- Output migration records without assuming which columns the installed
--- Supabase CLI version uses.
+-- Catalog-only and safe even when the Supabase migration tracking relation has
+-- not been created yet. If present, inspect its records separately after saving
+-- this inventory.
 select
-  'supabase_migration_history' as section,
-  to_jsonb(sm) as migration_record
-from supabase_migrations.schema_migrations sm
-where to_jsonb(sm)->>'version' like '20260710%'
-order by to_jsonb(sm)->>'version';
+  'supabase_migration_tracking' as section,
+  to_regclass('supabase_migrations.schema_migrations')::text as tracking_relation,
+  case
+    when to_regclass('supabase_migrations.schema_migrations') is null
+      then 'NOT_PRESENT_REVIEW_DEPLOYMENT_METHOD'
+    else 'PRESENT_REVIEW_RECORDS'
+  end as release_status;
 
-with approved_relation_names(object_name) as (
+with approved_relations(object_name) as (
   values
     ('guardian_access_credentials'),
     ('guardian_sessions'),
@@ -211,7 +211,7 @@ with approved_relation_names(object_name) as (
     ('guardian_sessions_active_credential_idx'),
     ('guardian_sessions_expiry_cleanup_idx'),
     ('guardian_access_credentials_lookup_key_unique_idx')
-), approved_function_names(function_name) as (
+), approved_functions(function_name) as (
   values
     ('guardian_revoke_sessions_for_credential'),
     ('guardian_credential_before_update'),
@@ -229,7 +229,7 @@ with approved_relation_names(object_name) as (
   select c.oid
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
-  left join approved_relation_names a on a.object_name = c.relname
+  left join approved_relations a on a.object_name = c.relname
   where n.nspname = 'public'
     and (c.relname ilike '%guardian%' or c.relname ilike '%parent%')
     and a.object_name is null
@@ -243,7 +243,7 @@ with approved_relation_names(object_name) as (
   select p.oid
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
-  left join approved_function_names a on a.function_name = p.proname
+  left join approved_functions a on a.function_name = p.proname
   where n.nspname = 'public'
     and (p.proname ilike '%guardian%' or p.proname ilike '%parent%')
     and a.function_name is null
