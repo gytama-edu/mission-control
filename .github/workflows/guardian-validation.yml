@@ -1,0 +1,196 @@
+name: Guardian Portal Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - phase-27e-guardian-read-only-portal
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'supabase/**'
+      - 'scripts/validate-guardian-database.sh'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - '.github/workflows/guardian-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardian-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: TypeScript and Vite build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type-check application
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: guardian-validation-placeholder
+
+      - name: Verify deployable output
+        run: |
+          test -f dist/index.html
+          test -d dist/assets
+          find dist -maxdepth 2 -type f -print
+
+  guardian-integration:
+    name: Local Supabase SQL and Chromium E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Initialize local Supabase configuration
+        run: supabase init --force
+
+      - name: Start isolated local Supabase without auto-applying project migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          staged_migrations="$RUNNER_TEMP/mission-control-migrations"
+          startup_log="$RUNNER_TEMP/supabase-start.log"
+
+          rm -rf "$staged_migrations"
+          mv supabase/migrations "$staged_migrations"
+          mkdir -p supabase/migrations
+
+          restore_migrations() {
+            rm -rf supabase/migrations
+            mv "$staged_migrations" supabase/migrations
+          }
+          trap restore_migrations EXIT
+
+          if ! supabase start >"$startup_log" 2>&1; then
+            echo "Local Supabase failed to start. Recent diagnostics:"
+            tail -n 200 "$startup_log"
+            exit 1
+          fi
+
+          tail -n 80 "$startup_log"
+
+      - name: Show local Supabase status
+        run: supabase status
+
+      - name: Apply schema and run Guardian verification suites
+        env:
+          GUARDIAN_VALIDATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: bash scripts/validate-guardian-database.sh
+
+      - name: Seed disposable Guardian browser fixture
+        run: |
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+            --set ON_ERROR_STOP=1 \
+            --no-psqlrc \
+            --file supabase/tests/20260710_phase_27f_guardian_browser_fixture.sql
+
+      - name: Export local Supabase browser configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_env="$(supabase status -o env)"
+          eval "$status_env"
+
+          local_api_url="${API_URL:-${SUPABASE_URL:-}}"
+          local_client_key="${PUBLISHABLE_KEY:-${ANON_KEY:-}}"
+
+          if [[ -z "$local_api_url" || -z "$local_client_key" ]]; then
+            echo "Supabase status did not provide a local API URL and browser client key." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::$local_client_key"
+          echo "VITE_SUPABASE_URL=$local_api_url" >> "$GITHUB_ENV"
+          echo "VITE_SUPABASE_PUBLISHABLE_KEY=$local_client_key" >> "$GITHUB_ENV"
+
+      - name: Install application and browser-test dependencies
+        run: |
+          npm ci
+          npm install --no-save playwright
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Guardian portal against local Supabase
+        run: npm run build
+
+      - name: Start production preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          preview_log="$RUNNER_TEMP/vite-preview.log"
+          npm run preview -- --host 127.0.0.1 --port 4173 >"$preview_log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/vite-preview.pid"
+
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/mission-control/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Vite preview did not become ready."
+          cat "$preview_log"
+          exit 1
+
+      - name: Run Guardian Chromium end-to-end test
+        env:
+          GUARDIAN_E2E_BASE_URL: http://127.0.0.1:4173/mission-control/
+        run: node tests/guardian-portal.e2e.mjs
+
+      - name: Upload browser failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-e2e-failure
+          path: artifacts/guardian-e2e-failure.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop production preview
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/vite-preview.pid" ]]; then
+            kill "$(cat "$RUNNER_TEMP/vite-preview.pid")" 2>/dev/null || true
+          fi
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
