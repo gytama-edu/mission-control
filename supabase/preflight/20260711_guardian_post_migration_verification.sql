@@ -1,11 +1,10 @@
 -- Phase 27G: Guardian Portal post-migration production verification
 --
--- READ-ONLY. Run only after applying Phase 27B, 27C, and 27D in order.
--- Every critical_check row must return PASS before deploying the frontend.
+-- READ-ONLY. Run only after applying Phase 27B, Phase 27C, and Phase 27D
+-- in order. Every critical row must pass before frontend deployment.
 
 begin transaction read only;
 
--- Critical object checks.
 with checks(check_name, passed, detail) as (
   values
     (
@@ -30,18 +29,27 @@ with checks(check_name, passed, detail) as (
     ),
     (
       'credentials_rls_enabled',
-      coalesce((select relrowsecurity from pg_class where oid = to_regclass('public.guardian_access_credentials')), false),
+      coalesce((
+        select relrowsecurity
+        from pg_class
+        where oid = to_regclass('public.guardian_access_credentials')
+      ), false),
       'RLS must be enabled on credentials'
     ),
     (
       'sessions_rls_enabled',
-      coalesce((select relrowsecurity from pg_class where oid = to_regclass('public.guardian_sessions')), false),
+      coalesce((
+        select relrowsecurity
+        from pg_class
+        where oid = to_regclass('public.guardian_sessions')
+      ), false),
       'RLS must be enabled on sessions'
     ),
     (
       'no_guardian_table_policies',
       not exists (
-        select 1 from pg_policies
+        select 1
+        from pg_policies
         where schemaname = 'public'
           and tablename in ('guardian_access_credentials', 'guardian_sessions')
       ),
@@ -49,22 +57,38 @@ with checks(check_name, passed, detail) as (
     ),
     (
       'anon_has_no_credentials_table_access',
-      not has_table_privilege('anon', 'public.guardian_access_credentials', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'),
+      not has_table_privilege(
+        'anon',
+        'public.guardian_access_credentials',
+        'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+      ),
       'anon must have no direct credential-table privileges'
     ),
     (
       'authenticated_has_no_credentials_table_access',
-      not has_table_privilege('authenticated', 'public.guardian_access_credentials', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'),
+      not has_table_privilege(
+        'authenticated',
+        'public.guardian_access_credentials',
+        'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+      ),
       'authenticated must have no direct credential-table privileges'
     ),
     (
       'anon_has_no_sessions_table_access',
-      not has_table_privilege('anon', 'public.guardian_sessions', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'),
+      not has_table_privilege(
+        'anon',
+        'public.guardian_sessions',
+        'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+      ),
       'anon must have no direct session-table privileges'
     ),
     (
       'authenticated_has_no_sessions_table_access',
-      not has_table_privilege('authenticated', 'public.guardian_sessions', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'),
+      not has_table_privilege(
+        'authenticated',
+        'public.guardian_sessions',
+        'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+      ),
       'authenticated must have no direct session-table privileges'
     ),
     (
@@ -118,21 +142,28 @@ select
 from checks
 order by check_name;
 
--- Expected function definitions and SECURITY DEFINER posture.
-with expected(function_name, identity_arguments, public_surface) as (
+-- Only functions that read or mutate protected Guardian data require
+-- SECURITY DEFINER. guardian_format_secret_internal is a pure immutable string
+-- formatter and must remain invoker-security with no browser EXECUTE grant.
+with expected(
+  function_name,
+  identity_arguments,
+  public_surface,
+  requires_security_definer
+) as (
   values
-    ('guardian_revoke_sessions_for_credential', 'p_credential_id uuid', 'internal'),
-    ('guardian_credential_before_update', '', 'internal'),
-    ('guardian_cleanup_expired_sessions', 'p_retention interval', 'internal'),
-    ('guardian_begin_session', 'p_class_code text, p_guardian_secret text', 'guardian'),
-    ('guardian_fetch_dashboard', 'p_session_token text', 'guardian'),
-    ('guardian_end_session', 'p_session_token text', 'guardian'),
-    ('guardian_generate_secret_internal', '', 'internal'),
-    ('guardian_format_secret_internal', 'p_secret text', 'internal'),
-    ('guardian_teacher_list_credentials', 'p_class_id uuid', 'teacher'),
-    ('guardian_teacher_create_credential', 'p_student_id uuid', 'teacher'),
-    ('guardian_teacher_rotate_credential', 'p_student_id uuid', 'teacher'),
-    ('guardian_teacher_set_credential_active', 'p_student_id uuid, p_is_active boolean', 'teacher')
+    ('guardian_revoke_sessions_for_credential', 'p_credential_id uuid', 'internal', true),
+    ('guardian_credential_before_update', '', 'internal', true),
+    ('guardian_cleanup_expired_sessions', 'p_retention interval', 'internal', true),
+    ('guardian_begin_session', 'p_class_code text, p_guardian_secret text', 'guardian', true),
+    ('guardian_fetch_dashboard', 'p_session_token text', 'guardian', true),
+    ('guardian_end_session', 'p_session_token text', 'guardian', true),
+    ('guardian_generate_secret_internal', '', 'internal', true),
+    ('guardian_format_secret_internal', 'p_secret text', 'internal', false),
+    ('guardian_teacher_list_credentials', 'p_class_id uuid', 'teacher', true),
+    ('guardian_teacher_create_credential', 'p_student_id uuid', 'teacher', true),
+    ('guardian_teacher_rotate_credential', 'p_student_id uuid', 'teacher', true),
+    ('guardian_teacher_set_credential_active', 'p_student_id uuid, p_is_active boolean', 'teacher', true)
 ), actual as (
   select
     p.proname as function_name,
@@ -152,9 +183,14 @@ select
   e.public_surface,
   case
     when a.oid is null then 'FAIL_MISSING'
-    when not a.security_definer then 'FAIL_NOT_SECURITY_DEFINER'
-    when not coalesce(a.proconfig @> array['search_path=public, pg_temp'], false)
-      then 'FAIL_SEARCH_PATH'
+    when e.requires_security_definer and not a.security_definer
+      then 'FAIL_NOT_SECURITY_DEFINER'
+    when not e.requires_security_definer and a.security_definer
+      then 'FAIL_UNEXPECTED_SECURITY_DEFINER'
+    when not coalesce(
+      a.proconfig @> array['search_path=public, pg_temp'],
+      false
+    ) then 'FAIL_SEARCH_PATH'
     else 'PASS'
   end as status
 from expected e
@@ -163,8 +199,11 @@ left join actual a
  and a.identity_arguments = e.identity_arguments
 order by e.public_surface, e.function_name;
 
--- Browser execution grants. These are the only approved public surfaces.
-with expected_grants(function_signature, anon_execute, authenticated_execute) as (
+with expected_grants(
+  function_signature,
+  anon_execute,
+  authenticated_execute
+) as (
   values
     ('public.guardian_begin_session(text,text)', true, true),
     ('public.guardian_fetch_dashboard(text)', true, true),
@@ -184,18 +223,29 @@ select
   function_signature,
   case
     when has_function_privilege('anon', function_signature, 'EXECUTE') = anon_execute
-      and has_function_privilege('authenticated', function_signature, 'EXECUTE') = authenticated_execute
+      and has_function_privilege(
+        'authenticated',
+        function_signature,
+        'EXECUTE'
+      ) = authenticated_execute
       then 'PASS'
     else 'FAIL'
   end as status,
   anon_execute as expected_anon_execute,
-  has_function_privilege('anon', function_signature, 'EXECUTE') as actual_anon_execute,
+  has_function_privilege(
+    'anon',
+    function_signature,
+    'EXECUTE'
+  ) as actual_anon_execute,
   authenticated_execute as expected_authenticated_execute,
-  has_function_privilege('authenticated', function_signature, 'EXECUTE') as actual_authenticated_execute
+  has_function_privilege(
+    'authenticated',
+    function_signature,
+    'EXECUTE'
+  ) as actual_authenticated_execute
 from expected_grants
 order by function_signature;
 
--- Exact Guardian-table columns. Additional columns require explicit review.
 with expected_columns(table_name, column_name) as (
   values
     ('guardian_access_credentials', 'id'),
@@ -240,9 +290,6 @@ full join actual_columns a
  and a.column_name = e.column_name
 order by table_name, column_name;
 
--- Counts should normally be zero immediately after initial production migration
--- and before a teacher generates the first family code. Non-zero values require
--- explicit confirmation, not automatic deletion.
 select
   'data_count_review' as section,
   (select count(*) from public.guardian_access_credentials) as credential_rows,
@@ -254,27 +301,51 @@ select
     else 'REVIEW_EXISTING_ROWS'
   end as status;
 
--- One-row final summary. FAIL must be zero before frontend deployment.
 with critical_failures as (
   select count(*) as failure_count
   from (
-    select not coalesce((select relrowsecurity from pg_class where oid = to_regclass('public.guardian_access_credentials')), false) as failed
+    select not coalesce((
+      select relrowsecurity
+      from pg_class
+      where oid = to_regclass('public.guardian_access_credentials')
+    ), false) as failed
     union all
-    select not coalesce((select relrowsecurity from pg_class where oid = to_regclass('public.guardian_sessions')), false)
+    select not coalesce((
+      select relrowsecurity
+      from pg_class
+      where oid = to_regclass('public.guardian_sessions')
+    ), false)
     union all
     select exists (
-      select 1 from pg_policies
+      select 1
+      from pg_policies
       where schemaname = 'public'
         and tablename in ('guardian_access_credentials', 'guardian_sessions')
     )
     union all
-    select has_table_privilege('anon', 'public.guardian_access_credentials', 'SELECT,INSERT,UPDATE,DELETE')
+    select has_table_privilege(
+      'anon',
+      'public.guardian_access_credentials',
+      'SELECT,INSERT,UPDATE,DELETE'
+    )
     union all
-    select has_table_privilege('authenticated', 'public.guardian_access_credentials', 'SELECT,INSERT,UPDATE,DELETE')
+    select has_table_privilege(
+      'authenticated',
+      'public.guardian_access_credentials',
+      'SELECT,INSERT,UPDATE,DELETE'
+    )
     union all
-    select has_table_privilege('anon', 'public.guardian_sessions', 'SELECT,INSERT,UPDATE,DELETE')
+    select has_table_privilege(
+      'anon',
+      'public.guardian_sessions',
+      'SELECT,INSERT,UPDATE,DELETE'
+    )
     union all
-    select has_table_privilege('authenticated', 'public.guardian_sessions', 'SELECT,INSERT,UPDATE,DELETE')
+    select has_table_privilege(
+      'authenticated',
+      'public.guardian_sessions',
+      'SELECT,INSERT,UPDATE,DELETE'
+    )
   ) failures
   where failed
 )
