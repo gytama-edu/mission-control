@@ -40,6 +40,45 @@ interface GuardianRpcResponse {
   isActive?: boolean;
 }
 
+interface GuardianRpcErrorLike {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+}
+
+const DATABASE_NOT_READY_MESSAGE =
+  'Guardian Access database setup is not complete yet. Apply the Guardian database migrations, then refresh this page.';
+
+const getSafeGuardianRpcError = (error: unknown, fallbackMessage: string): Error => {
+  const rpcError = (error || {}) as GuardianRpcErrorLike;
+  const combinedMessage = [rpcError.message, rpcError.details, rpcError.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const isMissingGuardianRpc =
+    rpcError.code === 'PGRST202' ||
+    combinedMessage.includes('could not find the function public.guardian_') ||
+    (combinedMessage.includes('guardian_') && combinedMessage.includes('schema cache'));
+
+  if (isMissingGuardianRpc) {
+    return new Error(DATABASE_NOT_READY_MESSAGE);
+  }
+
+  if (rpcError.code === '42501' || combinedMessage.includes('permission denied')) {
+    return new Error('You do not have permission to manage Guardian access for this class.');
+  }
+
+  return new Error(fallbackMessage);
+};
+
+const throwIfRpcError = (error: unknown, fallbackMessage: string): void => {
+  if (error) {
+    throw getSafeGuardianRpcError(error, fallbackMessage);
+  }
+};
+
 const requireSuccessfulResponse = (data: GuardianRpcResponse | null, fallbackMessage: string): GuardianRpcResponse => {
   if (!data?.ok) {
     const reasonMessages: Record<string, string> = {
@@ -61,7 +100,7 @@ export const fetchGuardianCredentialStatuses = async (
     p_class_id: classId
   });
 
-  if (error) throw error;
+  throwIfRpcError(error, 'Unable to load Guardian access status. Please try again.');
 
   const response = requireSuccessfulResponse(
     data as GuardianRpcResponse | null,
@@ -78,7 +117,7 @@ export const createGuardianCredential = async (
     p_student_id: studentId
   });
 
-  if (error) throw error;
+  throwIfRpcError(error, 'Unable to create Guardian access. Please try again.');
 
   const response = requireSuccessfulResponse(
     data as GuardianRpcResponse | null,
@@ -104,7 +143,7 @@ export const rotateGuardianCredential = async (
     p_student_id: studentId
   });
 
-  if (error) throw error;
+  throwIfRpcError(error, 'Unable to rotate Guardian access. Please try again.');
 
   const response = requireSuccessfulResponse(
     data as GuardianRpcResponse | null,
@@ -132,7 +171,12 @@ export const setGuardianCredentialActive = async (
     p_is_active: isActive
   });
 
-  if (error) throw error;
+  throwIfRpcError(
+    error,
+    isActive
+      ? 'Unable to enable Guardian access. Please try again.'
+      : 'Unable to disable Guardian access. Please try again.'
+  );
 
   requireSuccessfulResponse(
     data as GuardianRpcResponse | null,
